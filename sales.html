@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Report - Pablo's Peri Peri</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        // Hide restricted navigation immediately on page load (runs before page renders)
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const userRole = staffSession.role || '';
+                    if (userRole !== 'Owner' && userRole !== 'Admin') {
+                        const style = document.createElement('style');
+                        style.id = 'restrict-admin-profile';
+                        style.textContent = 'a[href*="admin-profile.html"] { display: none !important; }';
+                        (document.head || document.documentElement).appendChild(style);
+                        
+                        const hideNavItem = function() {
+                            const links = document.querySelectorAll('a[href*="admin-profile.html"]');
+                            links.forEach(link => {
+                                const navItem = link.closest('.nav-item');
+                                if (navItem) {
+                                    navItem.style.display = 'none';
+                                }
+                            });
+                        };
+                        
+                        if (document.body) {
+                            hideNavItem();
+                        }
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', hideNavItem);
+                        } else {
+                            setTimeout(hideNavItem, 0);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not hide navigation immediately:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="periperilogo.png" alt="Pablo's Peri Peri Logo" class="logo-image">
+                    </div>
+                </div>
+                <div class="brand-text">
+                    <h1>PABLO'S</h1>
+                    <p>PERI PERI</p>
+                    <span>Administrator Side</span>
+                </div>
+            </div>
+            
+            <nav class="navigation">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="adminindex.html" class="nav-link">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>Orders</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="drivers.html" class="nav-link">
+                            <i class="fas fa-car"></i>
+                            <span>Drivers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="menu.html" class="nav-link">
+                            <i class="fas fa-shopping-basket"></i>
+                            <span>Menu</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="customer.html" class="nav-link">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Customer</span>
+                        </a>
+                    </li>
+                    <li class="nav-item active">
+                        <a href="sales.html" class="nav-link">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Sales</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="admin-profile.html" class="nav-link">
+                            <i class="fas fa-user"></i>
+                            <span>Admin Profile</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="activity-logs.html" class="nav-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Activity Logs</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="content-header">
+                <div class="page-title">
+                    <div class="title-bar"></div>
+                    <h2>Sales Report</h2>
+                </div>
+                <div class="user-profile">
+                    <button class="profile-btn" onclick="toggleDropdown('adminDropdown')">
+                        <i class="fas fa-user"></i>
+                        <span id="profileName"></span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="adminDropdown">
+                        <a href="#" class="dropdown-item">Profile Settings</a>
+                        <a href="#" class="dropdown-item">Account Settings</a>
+                        <a href="#" class="dropdown-item">Logout</a>
+                    </div>
+                </div>
+            </header>
+
+            <script>
+                // Update profile name immediately on page load
+                (function() {
+                    try {
+                        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                        if (session) {
+                            const staffSession = JSON.parse(session);
+                            const profileName = document.getElementById('profileName');
+                            if (profileName) {
+                                if (staffSession.firstName && staffSession.lastName) {
+                                    let displayName = staffSession.firstName + ' ' + staffSession.lastName;
+                                    if (staffSession.suffix) {
+                                        displayName += ' ' + staffSession.suffix;
+                                    }
+                                    profileName.textContent = displayName;
+                                } else if (staffSession.email) {
+                                    const emailName = staffSession.email.split('@')[0];
+                                    profileName.textContent = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                                } else if (staffSession.staffId) {
+                                    profileName.textContent = staffSession.staffId;
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.warn('Could not update profile name immediately:', e);
+                    }
+                })();
+            </script>
+
+            <!-- Search and Filter Bar -->
+            <div class="search-filter-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search by ID">
+                </div>
+                <button class="filter-btn" onclick="toggleDropdown('filterDropdown')">
+                    <i class="fas fa-filter"></i>
+                    Filter
+                </button>
+                <div class="dropdown-menu" id="filterDropdown">
+                    <a href="#" class="dropdown-item">All Categories</a>
+                    <a href="#" class="dropdown-item">Meat</a>
+                    <a href="#" class="dropdown-item">Rice Meal</a>
+                    <a href="#" class="dropdown-item">Pasta</a>
+                    <a href="#" class="dropdown-item">Sides</a>
+                </div>
+            </div>
+
+            <!-- Sales Activity Tabs -->
+            <div class="sales-activity-tabs">
+                <div class="tab-navigation">
+                    <button class="tab-btn active" onclick="switchReport('weekly')">Weekly</button>
+                    <button class="tab-btn" onclick="switchReport('monthly')">Monthly</button>
+                    <button class="tab-btn" onclick="switchReport('yearly')">Yearly</button>
+                </div>
+            </div>
+
+            <!-- Inventory Overview -->
+            <div class="inventory-overview">
+                <h3>Inventory Overview</h3>
+                <div class="inventory-cards">
+                    <div class="inventory-card blue">
+                        <div class="card-icon">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div class="card-content">
+                            <h4>Total Category</h4>
+                            <span class="card-value">70</span>
+                        </div>
+                    </div>
+                    <div class="inventory-card orange">
+                        <div class="card-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="card-content">
+                            <h4>Low Stock</h4>
+                            <span class="card-value">14</span>
+                        </div>
+                    </div>
+                    <div class="inventory-card light-green">
+                        <div class="card-icon">
+                            <i class="fas fa-arrow-up"></i>
+                        </div>
+                        <div class="card-content">
+                            <h4>High Stock</h4>
+                            <span class="card-value">90</span>
+                        </div>
+                    </div>
+                    <div class="inventory-card dark-green">
+                        <div class="card-icon">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <div class="card-content">
+                            <h4>Items to Reorder</h4>
+                            <span class="card-value">90</span>
+                        </div>
+                    </div>
+                    <div class="inventory-card purple">
+                        <div class="card-icon">
+                            <i class="fas fa-hand-holding"></i>
+                        </div>
+                        <div class="card-content">
+                            <h4>In Hand</h4>
+                            <span class="card-value">60</span>
+                        </div>
+                    </div>
+                    <div class="inventory-card light-blue">
+                        <div class="card-icon">
+                            <i class="fas fa-calendar-day"></i>
+                        </div>
+                        <div class="card-content">
+                            <h4>Out Items/day</h4>
+                            <span class="card-value">90</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Inventory Table -->
+                <div class="inventory-table-section">
+                    <div class="inventory-table-header">
+                        <h4>Current Inventory</h4>
+                        <button class="export-btn" onclick="exportInventoryReport()">
+                            <i class="fas fa-download"></i>
+                            Export Inventory Report
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="orders-table">
+                            <thead>
+                                <tr>
+                                    <th>Menu ID</th>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>ID01</td>
+                                    <td>Grilled Chicken</td>
+                                    <td>Meat</td>
+                                    <td>45</td>
+                                    <td>P150.00</td>
+                                    <td><span class="status low-stock">Low Stock</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ID02</td>
+                                    <td>Chicken Rice Meal</td>
+                                    <td>Rice Meal</td>
+                                    <td>120</td>
+                                    <td>P180.00</td>
+                                    <td><span class="status high-stock">High Stock</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ID03</td>
+                                    <td>Spaghetti</td>
+                                    <td>Pasta</td>
+                                    <td>85</td>
+                                    <td>P120.00</td>
+                                    <td><span class="status normal">Normal</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ID04</td>
+                                    <td>Shawarma</td>
+                                    <td>Meat</td>
+                                    <td>25</td>
+                                    <td>P200.00</td>
+                                    <td><span class="status low-stock">Low Stock</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ID05</td>
+                                    <td>BBQ Ribs</td>
+                                    <td>Limited Time</td>
+                                    <td>95</td>
+                                    <td>P250.00</td>
+                                    <td><span class="status high-stock">High Stock</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ID06</td>
+                                    <td>French Fries</td>
+                                    <td>Sides</td>
+                                    <td>60</td>
+                                    <td>P80.00</td>
+                                    <td><span class="status normal">Normal</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ID07</td>
+                                    <td>Utensils</td>
+                                    <td>Packaging</td>
+                                    <td>200</td>
+                                    <td>P2.00</td>
+                                    <td><span class="status high-stock">High Stock</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ID08</td>
+                                    <td>Take-out Box</td>
+                                    <td>Packaging</td>
+                                    <td>15</td>
+                                    <td>P5.00</td>
+                                    <td><span class="status low-stock">Low Stock</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Restaurant Activity -->
+            <div class="restaurant-activity">
+                <h3>Here is what's happening with your restaurant</h3>
+                <div class="activity-content">
+                    <div class="activity-metrics">
+                        <div class="metric-card light-green">
+                            <h4>Average Sale Value</h4>
+                            <span class="metric-value">P0.00</span>
+                        </div>
+                        <div class="metric-card light-green">
+                            <h4>Avg. Items Per Sale</h4>
+                            <span class="metric-value">P0.00</span>
+                        </div>
+                    </div>
+                    <div class="activity-chart">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h4>Sales Performance</h4>
+                            </div>
+                            <div class="chart-placeholder">
+                                <div class="chart-bars">
+                                    <div class="chart-bar" style="height: 20%"></div>
+                                    <div class="chart-bar" style="height: 45%"></div>
+                                    <div class="chart-bar" style="height: 30%"></div>
+                                    <div class="chart-bar" style="height: 60%"></div>
+                                    <div class="chart-bar" style="height: 35%"></div>
+                                    <div class="chart-bar" style="height: 25%"></div>
+                                    <div class="chart-bar" style="height: 50%"></div>
+                                </div>
+                                <div class="chart-labels">
+                                    <span>Date</span>
+                                    <span>Date</span>
+                                    <span>Date</span>
+                                    <span>Date</span>
+                                    <span>Date</span>
+                                    <span>Date</span>
+                                    <span>Date</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-metrics">
+                            <div class="chart-metric">
+                                <h5>Sales Target</h5>
+                                <span>P0.00</span>
+                            </div>
+                            <div class="chart-metric">
+                                <h5>Avg. Sales Target</h5>
+                                <span>P0.00</span>
+                            </div>
+                            <div class="chart-metric">
+                                <h5>Avg. Items per Sale</h5>
+                                <span>P0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- In-depth View Section -->
+            <div class="in-depth-section">
+                <div class="in-depth-header">
+                    <h3>In-depth view</h3>
+                    <button class="export-btn" onclick="exportReport()">
+                        <i class="fas fa-download"></i>
+                        Export Sales Report
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table class="orders-table">
+                        <thead>
+                            <tr>
+                                <th>Stock ID</th>
+                                <th>Product Name</th>
+                                <th>Category</th>
+                                <th>Dish Sold</th>
+                                <th>Price</th>
+                                <th>Sum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>ID0111</td>
+                                <td>Grilled Chicken</td>
+                                <td>Meat</td>
+                                <td>100</td>
+                                <td>P10.000</td>
+                                <td>P1000.00</td>
+                            </tr>
+                            <tr>
+                                <td>ID0222</td>
+                                <td>Chicken Burgers</td>
+                                <td>Meat</td>
+                                <td>33</td>
+                                <td>P10.000</td>
+                                <td>P330.00</td>
+                            </tr>
+                            <tr>
+                                <td>ID0333</td>
+                                <td>Spaghetti</td>
+                                <td>Pasta</td>
+                                <td>55</td>
+                                <td>P10.000</td>
+                                <td>P550.00</td>
+                            </tr>
+                            <tr>
+                                <td>ID0444</td>
+                                <td>Shawarma</td>
+                                <td>Shawarma</td>
+                                <td>24</td>
+                                <td>P10.000</td>
+                                <td>P240.00</td>
+                            </tr>
+                            <tr>
+                                <td>ID0555</td>
+                                <td>BBQ Ribs</td>
+                                <td>Limited Time</td>
+                                <td>78</td>
+                                <td>P10.000</td>
+                                <td>P780.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="table-footer">
+                    <div class="pagination">
+                        <button class="page-btn" onclick="changePage(1)">1</button>
+                        <button class="page-btn" onclick="changePage('prev')">&lt;</button>
+                        <button class="page-btn active" onclick="changePage(2)">2</button>
+                        <button class="page-btn" onclick="changePage('next')">&gt;</button>
+                        <button class="page-btn" onclick="changePage(3)">3</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Firebase Initialization -->
+    <script type="module" src="firebase-init.js"></script>
+    
+    <!-- Session Check - Must be after Firebase init -->
+    <script src="session-check.js"></script>
+    
+    <!-- Update User Profile Display -->
+    <script src="update-user-profile.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>

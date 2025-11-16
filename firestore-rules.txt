@@ -1,0 +1,58 @@
+// Firestore Security Rules
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isValidRole(role) {
+      return role in ['Staff', 'Admin', 'Manager', 'Owner', 'System_Admin'];
+    }
+    
+    function isValidStatus(status) {
+      return status in ['active', 'suspended', 'inactive', 'deleted'];
+    }
+
+// CUSTOMERS COLLECTION
+    match /customers/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+// STAFF COLLECTION
+    match /staff/{staffId} {
+      // Allow creation without authentication (for registration page) - KEEP AS IS
+      allow create: if true;
+
+      // Allow read without authentication (needed for duplicate checking) - KEEP AS IS
+      allow read: if true;
+
+      // Allow updates by admins (field restrictions enforced)
+      // Note: JavaScript code enforces admin-only access, Firestore rules enforce field restrictions
+      allow update: if (
+        // PREVENT changing staffId (immutable - admins cannot change this)
+        request.resource.data.staffId == resource.data.staffId &&
+        
+        // PREVENT changing password directly (admins cannot change password, only send reset links)
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['password']) ||
+         request.resource.data.password == resource.data.password) &&
+        
+        // Validate fields that are being updated (only validate if field is being changed)
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['firstName']) || 
+         (request.resource.data.firstName is string && request.resource.data.firstName.size() > 0)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastName']) || 
+         (request.resource.data.lastName is string && request.resource.data.lastName.size() > 0)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']) || 
+         (request.resource.data.email is string && request.resource.data.email.matches('.*@.*\\..*'))) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) || 
+         (request.resource.data.role is string && isValidRole(request.resource.data.role))) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) || 
+         (request.resource.data.status is string && isValidStatus(request.resource.data.status)))
+      );
+
+      // Prevent deletion
+      allow delete: if false;
+    }
+  }
+}
