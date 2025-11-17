@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - PABLO'S PERI PERI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="settings-page">
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle"></i>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <i class="fas fa-user"></i>
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item"><span>Orders</span></a>
+          <a href="settings.html" class="profile-item"><span>Settings</span></a>
+          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <a href="menu.html" class="back-button">
+      <i class="fas fa-arrow-left"></i>
+      <span>Back to Menu</span>
+    </a>
+
+    <section class="review-section settings-section" style="max-width: 900px;">
+      <div class="review-header" style="align-items:center;">
+        <h2 class="section-title">Settings</h2>
+      </div>
+
+      <div class="rating-section" style="text-align:left; align-items:stretch; gap:16px;">
+        <h4>Preferences</h4>
+        <label class="anonymous-toggle" style="justify-content:space-between; width:100%;">
+          <span class="toggle-label" style="color:#333; font-weight:600;">Order notifications</span>
+          <input type="checkbox" id="notifToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+        <label class="anonymous-toggle" style="justify-content:space-between; width:100%;">
+          <span class="toggle-label" style="color:#333; font-weight:600;">Promotional emails</span>
+          <input type="checkbox" id="promoToggle">
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="profile-divider"></div>
+        <div class="restaurant-form-group">
+          <label class="restaurant-form-label">Preferred spice level</label>
+          <div class="spice-buttons">
+            <button class="spice-btn" data-level="Mild">Mild</button>
+            <button class="spice-btn active" data-level="Medium">Medium</button>
+            <button class="spice-btn" data-level="Hot">Hot</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rating-section" style="text-align:left; align-items:stretch; gap:12px;">
+        <h4>Addresses</h4>
+        <div class="review-item" style="border-color:#e0e0e0;">
+          <div class="review-header">
+            <div class="reviewer-info">
+              <div class="reviewer-avatar"><i class="fas fa-location-dot"></i></div>
+              <div class="reviewer-details">
+                <div class="reviewer-name">Home</div>
+                <div class="review-date">123 Main St, Barangay 1, QC</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="filter-btn" onclick="editAddress('home')">Edit</button>
+              <button class="filter-btn" onclick="removeAddress('home')">Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="write-review-toggle" id="addAddressBtn" type="button">
+          <i class="fas fa-plus"></i>
+          <span>Add new address</span>
+        </button>
+      </div>
+
+      <div class="rating-section" style="text-align:left; align-items:stretch; gap:12px;">
+        <h4>Payment methods</h4>
+        <div class="review-item" style="border-color:#e0e0e0;">
+          <div class="review-header">
+            <div class="reviewer-info">
+              <div class="reviewer-avatar"><i class="fas fa-credit-card"></i></div>
+              <div class="reviewer-details">
+                <div class="reviewer-name">Visa ending in 1234</div>
+                <div class="review-date">Expires 09/28</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="filter-btn" onclick="setDefaultPayment()">Set default</button>
+              <button class="filter-btn" onclick="removePayment()">Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="write-review-toggle" id="addPaymentBtn" type="button">
+          <i class="fas fa-plus"></i>
+          <span>Add payment method</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function goHome(){ window.location.href = 'menu.html'; }
+    function goToCart(){ window.location.href = 'cart_review.html'; }
+
+    // Profile dropdown logic
+    (function initProfileDropdown(){
+      const btn = document.getElementById('profileButton');
+      const dropdown = document.getElementById('profileDropdown');
+      if (!btn || !dropdown) return;
+      function toggleDropdown(e){ e.stopPropagation(); dropdown.classList.toggle('show'); }
+      function handleOutside(e){ if (!dropdown.classList.contains('show')) return; if (!dropdown.contains(e.target) && !btn.contains(e.target)) { dropdown.classList.remove('show'); } }
+      btn.addEventListener('click', toggleDropdown);
+      document.addEventListener('click', handleOutside);
+      document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') dropdown.classList.remove('show'); });
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function(){ dropdown.classList.remove('show'); alert('You have been logged out.'); setTimeout(()=>{ window.location.href = 'login.html'; }, 300); });
+    })();
+
+    // Interactions
+    document.querySelectorAll('.spice-btn').forEach(btn => {
+      btn.addEventListener('click', function(){
+        document.querySelectorAll('.spice-btn').forEach(b=>b.classList.remove('active'));
+        this.classList.add('active');
+        alert('Preferred spice level: ' + this.dataset.level);
+      });
+    });
+
+    function editAddress(id){ alert('Edit address: ' + id); }
+    function removeAddress(id){ if (confirm('Remove this address?')) alert('Address removed'); }
+    document.getElementById('addAddressBtn').addEventListener('click', ()=>alert('Add address form'));
+
+    function setDefaultPayment(){ alert('Payment method set as default'); }
+    function removePayment(){ if (confirm('Remove payment method?')) alert('Payment removed'); }
+    document.getElementById('addPaymentBtn').addEventListener('click', ()=>alert('Add payment method form'));
+  </script>
+</body>
+</html>
+

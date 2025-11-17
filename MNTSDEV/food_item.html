@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PABLO'S PERI PERI - Food Item</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle"></i>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <i class="fas fa-user"></i>
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item"><span>Orders</span></a>
+          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <a href="menu.html" class="back-button">
+      <i class="fas fa-arrow-left"></i>
+      <span>Back to Menu</span>
+    </a>
+
+    <div class="food-item-container">
+      <div class="food-image-container">
+        <img src="food_img.png" alt="Whole Chicken Meal" class="food-image" decoding="async" loading="eager" srcset="food_img.png 1x, food_img.png 2x"/>
+        <div class="image-overlay" title="Add to Favorites" onclick="toggleFavorite()">
+          <i class="far fa-heart" id="favorite-icon"></i>
+        </div>
+        <div class="food-badge">
+          <i class="fas fa-fire"></i>
+          <span>Popular</span>
+        </div>
+      </div>
+
+      <div class="food-details">
+        <div class="rating-badge">
+          <div class="stars-container">
+            <span class="stars">★★★★★</span>
+            <span class="rating-text">0.0 (0 reviews)</span>
+          </div>
+          <span class="popular-tag">Most Popular</span>
+        </div>
+
+        <h1 class="food-title">Baby Back Ribs</h1>
+        <div class="food-price">₱150.00</div>
+        <p class="food-description">
+          Tender, fall-off-the-bone pork ribs glazed in our signature smoky-sweet barbecue sauce, 
+          grilled to perfection. Served with your choice of sides and our famous peri-peri sauce.
+        </p>
+
+        <div class="food-features">
+          <div class="feature-item">
+            <i class="fas fa-clock"></i>
+            <span>Ready in 15-20 min</span>
+          </div>
+          <div class="feature-item">
+            <i class="fas fa-utensils"></i>
+            <span>Good for 1 people</span>
+          </div>
+        </div>
+
+        <div class="quantity-section">
+          <h3 class="section-subtitle">Quantity</h3>
+          <div class="quantity-controls">
+            <button class="quantity-btn minus-btn" onclick="changeQty(-1)">
+              <i class="fas fa-minus"></i>
+            </button>
+            <span class="quantity-display" id="qty">1</span>
+            <button class="quantity-btn plus-btn" onclick="changeQty(1)">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+        </div>
+
+        <button class="add-to-cart-btn" onclick="addToCart()">
+          <i class="fas fa-shopping-cart"></i>
+          <span>Add to Cart</span>
+          <span class="total-price">₱150.00</span>
+        </button>
+      </div>
+    </div>
+
+    <section class="review-section">
+      <div class="review-header">
+        <h2 class="section-title">Reviews & Ratings</h2>
+        <div class="review-stats">
+          <div class="overall-rating">
+            <div class="rating-circle">
+              <span class="rating-number">0.0</span>
+              <span class="rating-max">/5</span>
+            </div>
+            <div class="rating-details">
+              <div class="stars-large">★★★★★</div>
+              <span class="review-count">0 reviews</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rating-section">
+        <h4>Rate this Dish</h4>
+        <p class="rating-instruction">Tell others what you think about this dish</p>
+        <div class="star-rating" onclick="setRating(event)">
+          <span class="star" data-rating="1">
+            <i class="far fa-star"></i>
+          </span>
+          <span class="star" data-rating="2">
+            <i class="far fa-star"></i>
+          </span>
+          <span class="star" data-rating="3">
+            <i class="far fa-star"></i>
+          </span>
+          <span class="star" data-rating="4">
+            <i class="far fa-star"></i>
+          </span>
+          <span class="star" data-rating="5">
+            <i class="far fa-star"></i>
+          </span>
+        </div>
+
+        <button class="write-review-toggle" onclick="toggleReviewForm()">
+          <i id="toggle-icon" class="fas fa-chevron-down"></i>
+          <span>Write a Review</span>
+        </button>
+
+        <div class="review-form" id="review-form" style="display: none;">
+          <div class="review-textarea-container">
+            <textarea 
+              class="review-textarea" 
+              placeholder="Tell us what you think about this dish..."
+              rows="4"
+            ></textarea>
+          </div>
+
+          <div class="review-options">
+            <label class="anonymous-toggle">
+              <input type="checkbox" id="anonymous-review">
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Post anonymously</span>
+            </label>
+          </div>
+        </div>
+
+        <button class="submit-review-btn" onclick="submitReview()">
+          <i class="fas fa-paper-plane"></i>
+          <span>Submit Review</span>
+        </button>
+      </div>
+
+      <div class="reviews-list">
+        <div class="no-reviews">
+          <i class="fas fa-comment-slash"></i>
+          <h3>No reviews yet</h3>
+          <p>Be the first to share your experience with this dish!</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let currentRating = 0;
+    let currentQty = 1;
+    let isFavorite = false;
+
+    function changeQty(delta) {
+      const qtyElem = document.getElementById('qty');
+      currentQty = Math.max(1, currentQty + delta);
+      qtyElem.textContent = currentQty;
+      
+      // Update add to cart button
+      const addBtn = document.querySelector('.add-to-cart-btn');
+      const price = 150;
+      const totalPrice = price * currentQty;
+      addBtn.querySelector('.total-price').textContent = `₱${totalPrice}.00`;
+    }
+
+    function setRating(event) {
+      const star = event.target.closest('.star');
+      if (star) {
+        const rating = parseInt(star.dataset.rating);
+        currentRating = rating;
+        
+        // Update star display
+        const stars = document.querySelectorAll('.star');
+        stars.forEach((s, index) => {
+          const icon = s.querySelector('i');
+          if (index < rating) {
+            icon.className = 'fas fa-star';
+            icon.style.color = '#ffc107';
+          } else {
+            icon.className = 'far fa-star';
+            icon.style.color = '#ddd';
+          }
+        });
+      }
+    }
+
+    function toggleFavorite() {
+      const icon = document.getElementById('favorite-icon');
+      isFavorite = !isFavorite;
+      
+      if (isFavorite) {
+        icon.className = 'fas fa-heart';
+        icon.style.color = '#e53935';
+        showNotification('Added to favorites!');
+      } else {
+        icon.className = 'far fa-heart';
+        icon.style.color = '#e53935';
+        showNotification('Removed from favorites');
+      }
+    }
+
+    function addToCart() {
+      // Add animation feedback
+      const btn = document.querySelector('.add-to-cart-btn');
+      const originalContent = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-check"></i><span>Added to Cart!</span>';
+      btn.style.background = '#4caf50';
+      btn.disabled = true;
+      
+      // Update cart badge
+      const cartBadge = document.querySelector('.cart-badge');
+      const currentCount = parseInt(cartBadge.textContent) + currentQty;
+      cartBadge.textContent = currentCount;
+      
+      setTimeout(() => {
+        // Redirect to drink page after showing feedback
+        window.location.href = 'drink_page.html';
+      }, 1500);
+    }
+
+    function toggleReviewForm() {
+      const form = document.getElementById('review-form');
+      const toggleIcon = document.getElementById('toggle-icon');
+      const isVisible = form.style.display !== 'none';
+      
+      if (isVisible) {
+        form.style.display = 'none';
+        toggleIcon.className = 'fas fa-chevron-down';
+        form.style.animation = 'slideUp 0.3s ease';
+      } else {
+        form.style.display = 'block';
+        toggleIcon.className = 'fas fa-chevron-up';
+        form.style.animation = 'slideDown 0.3s ease';
+      }
+    }
+
+    function submitReview() {
+      const textarea = document.querySelector('.review-textarea');
+      const isAnonymous = document.getElementById('anonymous-review').checked;
+      const reviewText = textarea.value.trim();
+      
+      if (currentRating === 0) {
+        showNotification('Please select a rating');
+        return;
+      }
+      
+      if (reviewText === '') {
+        showNotification('Please write a review');
+        return;
+      }
+      
+      // Show success message
+      showNotification('Review submitted successfully!');
+      
+      // Reset form
+      textarea.value = '';
+      currentRating = 0;
+      const stars = document.querySelectorAll('.star');
+      stars.forEach(s => {
+        const icon = s.querySelector('i');
+        icon.className = 'far fa-star';
+        icon.style.color = '#ddd';
+      });
+      document.getElementById('anonymous-review').checked = false;
+      
+      // Hide the form after submission
+      toggleReviewForm();
+    }
+
+    function showNotification(message) {
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.className = 'notification';
+      notification.innerHTML = `
+        <i class="fas fa-info-circle"></i>
+        <span>${message}</span>
+      `;
+      document.body.appendChild(notification);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        notification.remove();
+      }, 3000);
+    }
+
+    function goHome() {
+      window.location.href = 'menu.html';
+    }
+
+    function goToCart() {
+      window.location.href = 'cart_review.html';
+    }
+
+    // Profile dropdown logic
+    (function initProfileDropdown(){
+      const btn = document.getElementById('profileButton');
+      const dropdown = document.getElementById('profileDropdown');
+      if (!btn || !dropdown) return;
+
+      function toggleDropdown(e){
+        e.stopPropagation();
+        dropdown.classList.toggle('show');
+      }
+
+      function handleOutside(e){
+        if (!dropdown.classList.contains('show')) return;
+        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+          dropdown.classList.remove('show');
+        }
+      }
+
+      btn.addEventListener('click', toggleDropdown);
+      document.addEventListener('click', handleOutside);
+      document.addEventListener('keydown', (e)=>{
+        if (e.key === 'Escape') dropdown.classList.remove('show');
+      });
+
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', function(){
+          dropdown.classList.remove('show');
+          showNotification('You have been logged out.');
+          setTimeout(()=>{ window.location.href = 'login.html'; }, 800);
+        });
+      }
+    })();
+
+    // Initialize
+    changeQty(0);
+  </script>
+
+  <style>
+    :root {
+      --brand: #e53935;
+      --brand-dark: #c62828;
+      --ink: #222;
+      --ink-soft: #666;
+      --surface: #fff;
+      --surface-muted: #f8f9fa;
+      --border: #e0e0e0;
+      --shadow-1: 0 4px 20px rgba(0, 0, 0, 0.08);
+      --shadow-2: 0 8px 32px rgba(0, 0, 0, 0.12);
+    }
+
+    /* Page container sizing override for this page */
+    .main-container {
+      max-width: 1280px;
+      padding: 24px 24px;
+    }
+    /* Food item layout & image sizing */
+    .food-image-container {
+      position: relative;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: var(--shadow-2);
+      background: var(--surface);
+      aspect-ratio: 1 / 1;
+    }
+
+    .food-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.4s ease;
+    }
+
+    .food-image-container:hover .food-image {
+      transform: scale(1.02);
+    }
+
+    /* Ensure the primary CTA keeps full-width layout on this page */
+    .food-details .add-to-cart-btn {
+      width: 100%;
+      height: auto;
+      padding: 18px 20px;
+      border-radius: 16px;
+      font-size: 1.15em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    /* Ensure feature text colors are readable on this page */
+    .food-features .feature-item,
+    .food-features .feature-item span {
+      color: #333;
+    }
+    .food-features .feature-item i {
+      color: #e53935;
+    }
+
+    /* Overhauled details card and features */
+    .food-details {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow-1);
+    }
+
+    .food-features {
+      background: var(--surface-muted);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .food-features .feature-item {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      justify-content: center;
+    }
+
+    .notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #e53935;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 1000;
+      animation: slideIn 0.3s ease;
+      box-shadow: 0 4px 12px rgba(229, 57, 53, 0.3);
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+        max-height: 0;
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 1000px;
+      }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 1000px;
+      }
+      to {
+        opacity: 0;
+        transform: translateY(-20px);
+        max-height: 0;
+      }
+    }
+
+    .food-item-container {
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      margin-top: 16px;
+    }
+
+    .review-section {
+      background: #fff;
+      padding: 32px;
+      border-radius: 20px;
+      box-shadow: var(--shadow-1);
+      margin-top: 32px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .review-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .review-stats {
+      display: flex;
+      align-items: center;
+    }
+
+    .overall-rating {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .rating-circle {
+      background: linear-gradient(135deg, #e53935, #c62828);
+      color: #fff;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(229, 57, 53, 0.3);
+    }
+
+    .rating-number {
+      font-size: 1.8em;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .rating-max {
+      font-size: 0.9em;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+
+    .rating-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stars-large {
+      color: #ffc107;
+      font-size: 1.3em;
+      letter-spacing: 2px;
+    }
+
+    .review-count {
+      font-size: 0.9em;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .rating-section {
+      text-align: center;
+      margin-bottom: 32px;
+      padding: 32px 24px;
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e0e0e0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .rating-section h4 {
+      font-size: 1.4em;
+      color: #222;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .star-rating {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .star-rating .star {
+      font-size: 2em;
+      color: #ddd;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .star-rating .star:hover {
+      color: #ffc107;
+      transform: scale(1.1);
+    }
+
+    .star-rating .star i {
+      transition: all 0.3s ease;
+    }
+
+    .reviews-list {
+      margin-bottom: 32px;
+    }
+
+    .no-reviews {
+      text-align: center;
+      padding: 48px 24px;
+      color: #666;
+    }
+
+    .no-reviews i {
+      font-size: 3em;
+      color: #ddd;
+      margin-bottom: 16px;
+    }
+
+    .no-reviews h3 {
+      font-size: 1.4em;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .no-reviews p {
+      font-size: 1em;
+      color: #666;
+    }
+
+
+
+    .write-review-toggle {
+      background: #fff;
+      color: var(--brand);
+      border: 2px solid var(--brand);
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 2px 8px rgba(229, 57, 53, 0.15);
+    }
+    .write-review-toggle i { color: var(--brand); }
+
+    .write-review-toggle:hover {
+      background: rgba(229, 57, 53, 0.08);
+      color: var(--brand);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(229, 57, 53, 0.15);
+    }
+
+    .write-review-toggle:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(229, 57, 53, 0.2);
+    }
+
+    .review-form {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      margin-top: 24px;
+      padding: 32px;
+      background: #f8f9fa;
+      border-radius: 16px;
+      border: 2px solid #e0e0e0;
+      width: 100%;
+      max-width: 820px;
+    }
+
+
+
+    .review-textarea-container {
+      width: 100%;
+    }
+
+    .review-textarea {
+      width: 100%;
+      padding: 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      font-size: 1em;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 220px;
+      transition: all 0.3s ease;
+    }
+
+    .review-textarea:focus {
+      outline: none;
+      border-color: #e53935;
+      box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.1);
+    }
+
+    .review-options {
+      display: flex;
+      justify-content: center;
+    }
+
+    .anonymous-toggle {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      font-size: 1em;
+      color: #333;
+    }
+
+    .anonymous-toggle input[type="checkbox"] {
+      display: none;
+    }
+
+    .toggle-slider {
+      width: 48px;
+      height: 24px;
+      background: #e0e0e0;
+      border-radius: 12px;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .toggle-slider:before {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .anonymous-toggle input[type="checkbox"]:checked + .toggle-slider {
+      background: #e53935;
+    }
+
+    .anonymous-toggle input[type="checkbox"]:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+
+    .submit-review-btn {
+      background: linear-gradient(135deg, #e53935, #c62828);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 16px 24px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(229, 57, 53, 0.3);
+      align-self: center;
+      margin-top: 8px;
+    }
+
+    .submit-review-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(229, 57, 53, 0.4);
+    }
+
+    .rating-instruction {
+      font-size: 0.9em;
+      color: #666;
+      margin-bottom: 20px;
+      padding: 0 20px;
+    }
+
+    @media (min-width: 768px) {
+      .food-item-container {
+        display: flex;
+        flex-direction: column;
+        gap: 36px;
+        max-width: 1100px;
+        margin: 24px auto 0 auto;
+        align-items: stretch;
+      }
+
+      .food-image-container {
+        aspect-ratio: 4 / 3;
+        align-self: center;
+        justify-self: center;
+        width: 100%;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .food-details {
+        padding: 40px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .food-features {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .review-section {
+        max-width: 1100px;
+        margin: 32px auto 0 auto;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .food-item-container {
+        max-width: 1200px;
+        gap: 40px;
+      }
+      .food-details {
+        position: static;
+        top: auto;
+      }
+      .review-section {
+        max-width: 1200px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .food-details .add-to-cart-btn {
+        font-size: 1.05em;
+        padding: 16px;
+      }
+    }
+  </style>
+</body>
+</html>
+

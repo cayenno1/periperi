@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Orders - PABLO'S PERI PERI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="orders-page">
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+        <span class="profile-text" id="profileText">Sign In</span>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item"><span>Orders</span></a>
+          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <a href="menu.html" class="back-button">
+      <i class="fas fa-arrow-left"></i>
+      <span>Back to Menu</span>
+    </a>
+
+    <section class="review-section orders-section" style="max-width: 1000px;">
+      <div class="review-header" style="align-items:center;">
+        <h2 class="section-title">My Orders</h2>
+        <div class="menu-filters">
+          <button class="filter-btn active" data-status="all">All</button>
+          <button class="filter-btn" data-status="ongoing">Ongoing</button>
+          <button class="filter-btn" data-status="completed">Completed</button>
+        </div>
+      </div>
+
+      <div class="reviews-list orders-list" id="ordersList" style="gap:16px;">
+        <!-- Order cards inserted by JS -->
+      </div>
+
+      <button class="load-more-reviews-btn" id="loadMoreOrders">
+        <i class="fas fa-rotate"></i>
+        <span>Load more</span>
+      </button>
+    </section>
+  </main>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA4N_Q6hTfKGBdnSkZxWRyyYxeJNFncOKw",
+      authDomain: "pablo-s-peri-peri-database.firebaseapp.com",
+      projectId: "pablo-s-peri-peri-database",
+      storageBucket: "pablo-s-peri-peri-database.firebasestorage.app",
+      messagingSenderId: "862159042861",
+      appId: "1:862159042861:web:b9215e4f7fbea8c44ffba4",
+      measurementId: "G-76TEJYQHQN"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    window.firebaseAuth = auth;
+    window.firebaseDb = db;
+    window.signOut = signOut;
+    window.onAuthStateChanged = onAuthStateChanged;
+    window.getDoc = getDoc;
+    window.doc = doc;
+  </script>
+
+  <script>
+    function goHome() { window.location.href = 'menu.html'; }
+    function goToCart() { window.location.href = 'cart_review.html'; }
+
+    // Check authentication state and update profile UI
+    async function updateProfileUI(user) {
+      const profileText = document.getElementById('profileText');
+      const profileIcon = document.getElementById('profileIcon');
+      const profileName = document.getElementById('profileName');
+      const profileEmail = document.getElementById('profileEmail');
+      const profileButton = document.getElementById('profileButton');
+
+      if (!profileText || !profileIcon || !profileButton) return;
+
+      if (user) {
+        profileButton.classList.add('logged-in');
+        profileIcon.style.display = '';
+        profileText.style.display = '';
+        
+        try {
+          const userDoc = await window.getDoc(window.doc(window.firebaseDb, "customers", user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User';
+            const email = userData.email || user.email || '';
+            if (profileName) profileName.textContent = fullName;
+            if (profileEmail) profileEmail.textContent = email;
+          } else {
+            if (profileName) profileName.textContent = user.displayName || 'User';
+            if (profileEmail) profileEmail.textContent = user.email || '';
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          if (profileName) profileName.textContent = user.displayName || 'User';
+          if (profileEmail) profileEmail.textContent = user.email || '';
+        }
+      } else {
+        profileButton.classList.remove('logged-in');
+        profileIcon.style.display = '';
+        profileText.style.display = '';
+        if (profileText) profileText.textContent = 'Sign In';
+        if (profileName) profileName.textContent = 'Your Account';
+        if (profileEmail) profileEmail.textContent = 'user@example.com';
+      }
+    }
+
+    // Profile dropdown logic
+    (function initProfileDropdown(){
+      const btn = document.getElementById('profileButton');
+      const dropdown = document.getElementById('profileDropdown');
+      if (!btn || !dropdown) return;
+
+      function toggleDropdown(e){
+        e.stopPropagation();
+        const user = window.firebaseAuth?.currentUser;
+        if (!user) {
+          window.location.href = 'login.html';
+          return;
+        }
+        dropdown.classList.toggle('show');
+      }
+
+      function handleOutside(e){
+        if (!dropdown.classList.contains('show')) return;
+        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+          dropdown.classList.remove('show');
+        }
+      }
+
+      btn.addEventListener('click', toggleDropdown);
+      document.addEventListener('click', handleOutside);
+      document.addEventListener('keydown', (e)=>{
+        if (e.key === 'Escape') dropdown.classList.remove('show');
+      });
+
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async function(){
+          try {
+            await window.signOut(window.firebaseAuth);
+            dropdown.classList.remove('show');
+            localStorage.removeItem('ppp_user');
+            await updateProfileUI(null);
+            window.location.href = 'login.html';
+          } catch (error) {
+            console.error('Error signing out:', error);
+            alert('Error signing out. Please try again.');
+          }
+        });
+      }
+
+      function initAuthListener() {
+        if (!window.firebaseAuth) {
+          setTimeout(initAuthListener, 100);
+          return;
+        }
+        window.onAuthStateChanged(window.firebaseAuth, async (user) => {
+          await updateProfileUI(user);
+        });
+      }
+
+      initAuthListener();
+    })();
+
+    // Sample orders
+    const orders = [
+      {
+        id: 'PP-20250910-0001',
+        date: 'Sep 10, 2025',
+        total: 599,
+        status: 'completed',
+        items: [ 'Peri Peri Chicken (Whole)', 'Iced Tea (Large)' ],
+        service: { type: 'dine-in', table: 'B12' },
+        payment: { method: 'GCash', pointsUsed: 20, amountPaid: 579 }
+      },
+      {
+        id: 'PP-20250909-0007',
+        date: 'Sep 9, 2025',
+        total: 299,
+        status: 'ongoing',
+        items: [ 'Baby Back Ribs Meal' ],
+        service: { type: 'delivery' },
+        payment: { method: 'GCash', pointsUsed: 0, amountPaid: 299 }
+      },
+      
+  
+    ];
+
+    let visible = 3; let currentFilter = 'all';
+
+    function renderOrders() {
+      const container = document.getElementById('ordersList');
+      container.innerHTML = orders
+        .filter(o => o.status !== 'cancelled')
+        .filter(o => currentFilter==='all' || o.status===currentFilter)
+        .slice(0, visible)
+        .map(order => `
+          <div class="review-item" data-status="${order.status}">
+            <div class="review-header">
+              <div class="reviewer-info">
+                <div class="reviewer-avatar"><i class="fas fa-receipt"></i></div>
+                <div class="reviewer-details">
+                  <div class="reviewer-name">Order ${order.id}</div>
+                  <div class="review-date">${order.date} • ${order.items.length} item(s)</div>
+                </div>
+              </div>
+              <span class="popular-tag" style="text-transform:capitalize;">${order.status}</span>
+            </div>
+            <div class="review-text" style="font-style:normal;">
+              ${order.items.map(i=>`<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`).join('')} 
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div class="card-price">₱${order.total}.00</div>
+              <div style="display:flex; gap:8px;">
+                <button class="filter-btn" onclick="viewDetails('${order.id}')"><span>View details</span></button>
+                <button class="filter-btn" onclick="reorder('${order.id}')"><span>Reorder</span></button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      document.getElementById('loadMoreOrders').style.display = (visible < orders.filter(o => currentFilter==='all' || o.status===currentFilter).length) ? 'flex' : 'none';
+    }
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', function(){
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        currentFilter = this.dataset.status || 'all';
+        visible = 3;
+        renderOrders();
+      });
+    });
+
+    document.getElementById('loadMoreOrders').addEventListener('click', function(){ visible += 3; renderOrders(); });
+
+    function viewDetails(id){
+      const first = orders[0];
+      const second = orders[1];
+      const allowed = (first && id === first.id) || (second && id === second.id && second.status === 'ongoing');
+      if (!allowed) { alert('Only the first order and the ongoing order can be opened.'); return; }
+      const order = orders.find(o => o.id === id);
+      if (order) {
+        try {
+          localStorage.setItem('selectedOrder', JSON.stringify(order));
+        } catch (e) {}
+        window.location.href = 'order_details.html';
+      } else {
+        alert('Order not found');
+      }
+    }
+    function reorder(id){ alert('Reordered ' + id); }
+
+    renderOrders();
+  </script>
+</body>
+<!-- Keep inline styles minimal; main theme comes from style.css colors/components -->
+</html>
+

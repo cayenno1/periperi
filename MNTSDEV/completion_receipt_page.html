@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Complete - Pablo's Peri Peri</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon account-icon" title="Account" onclick="goToAccount()">
+        <i class="fas fa-user"></i>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <div class="cart-review-container">
+      <!-- Header Section -->
+      <div class="cart-header">
+        <div class="cart-title-section">
+          <h2 class="cart-title">Your Order</h2>
+          <p class="cart-subtitle">Review your items before checkout</p>
+        </div>
+        <div class="cart-status">
+          <div class="status-indicator completed">
+            <i class="fas fa-shopping-cart"></i>
+            <span>Cart</span>
+          </div>
+          <div class="status-line completed"></div>
+          <div class="status-indicator completed">
+            <i class="fas fa-credit-card"></i>
+            <span>Checkout & Payment</span>
+          </div>
+          <div class="status-line completed"></div>
+          <div class="status-indicator active">
+            <i class="fas fa-check-circle"></i>
+            <span>Complete</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Success Section -->
+      <div class="success-section">
+        <div class="checkmark-circle">
+          <i class="fas fa-check checkmark-icon"></i>
+        </div>
+        <h1 class="success-title">Order Placed Successfully!</h1>
+        <p class="success-subtitle">Your dine-in order has been received</p>
+      </div>
+
+      <!-- Receipt Section -->
+      <div class="receipt-section">
+        <div class="receipt-header">
+          <h2 class="receipt-title">Order Receipt</h2>
+          <div class="receipt-number">Order #<span id="orderNumber">1234</span></div>
+        </div>
+        
+        <div class="receipt-content">
+          <div class="receipt-info">
+            <div class="info-row">
+              <span class="info-label">Service Type:</span>
+              <span class="info-value">Dine-In</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Table Number:</span>
+              <span class="info-value" id="tableNumber">5</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Payment Method:</span>
+              <span class="info-value" id="paymentMethod">Cash Payment</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Order Time:</span>
+              <span class="info-value" id="orderTime">12:30 PM</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Estimated Ready:</span>
+              <span class="info-value">10-15 minutes</span>
+            </div>
+          </div>
+
+          <div class="order-items">
+            <h3 class="items-title">Order Items</h3>
+            <div class="item-row">
+              <span class="item-name">Baby Back Ribs</span>
+              <span class="item-price">₱150.00</span>
+            </div>
+            <div class="item-row">
+              <span class="item-name">Iced Tea - Large</span>
+              <span class="item-price">₱101.00</span>
+            </div>
+          </div>
+
+          <div class="total-section">
+            <div class="total-row">
+              <span class="total-label">Sub-Total</span>
+              <span class="total-value">₱251.00</span>
+            </div>
+            <div class="total-row discount">
+              <span class="total-label">Points Applied</span>
+              <span class="total-value">-₱30.00</span>
+            </div>
+            <div class="total-row final-total">
+              <span class="total-label">Total</span>
+              <span class="total-value">₱221.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="receipt-message">
+          <p>Your order has been received and will be prepared shortly.</p>
+          <p>Please proceed to the counter to complete your payment.</p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-buttons">
+        <button class="add-more-btn" onclick="goToMenu()">
+          <i class="fas fa-home"></i>
+          <span>Back to Menu</span>
+        </button>
+        <button class="proceed-btn" onclick="printReceipt()">
+          <i class="fas fa-print"></i>
+          <span>Print Receipt</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Generate random order number
+    document.getElementById('orderNumber').textContent = Math.floor(Math.random() * 9000) + 1000;
+    
+    // Set current time
+    const now = new Date();
+    document.getElementById('orderTime').textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+    // Get URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Get payment method from URL parameter
+    const paymentMethod = urlParams.get('payment') || 'Cash Payment';
+    document.getElementById('paymentMethod').textContent = paymentMethod;
+
+    // Get table number from URL parameter (for dine-in)
+    const tableNumber = urlParams.get('table') || '5';
+    if (tableNumber) {
+      document.getElementById('tableNumber').textContent = tableNumber;
+    }
+
+    // Get delivery address from URL parameter (for delivery)
+    const deliveryAddress = urlParams.get('address');
+    if (deliveryAddress) {
+      // Add delivery address row if it exists
+      const receiptInfo = document.querySelector('.receipt-info');
+      const addressRow = document.createElement('div');
+      addressRow.className = 'info-row';
+      addressRow.innerHTML = `
+        <span class="info-label">Delivery Address:</span>
+        <span class="info-value">${deliveryAddress}</span>
+      `;
+      // Insert after table number row
+      const tableRow = document.querySelector('.info-row:nth-child(2)');
+      if (tableRow) {
+        tableRow.parentNode.insertBefore(addressRow, tableRow.nextSibling);
+      }
+    }
+
+    // Get contact number from URL parameter (for delivery)
+    const contactNumber = urlParams.get('contact');
+    if (contactNumber) {
+      // Add contact number row if it exists
+      const receiptInfo = document.querySelector('.receipt-info');
+      const contactRow = document.createElement('div');
+      contactRow.className = 'info-row';
+      contactRow.innerHTML = `
+        <span class="info-label">Contact Number:</span>
+        <span class="info-value">${contactNumber}</span>
+      `;
+      // Insert after address row or table number row
+      const addressRow = document.querySelector('.info-row:nth-child(3)');
+      const insertAfter = addressRow || document.querySelector('.info-row:nth-child(2)');
+      if (insertAfter) {
+        insertAfter.parentNode.insertBefore(contactRow, insertAfter.nextSibling);
+      }
+    }
+
+    // Get store location from URL parameter (for pickup)
+    const storeLocation = urlParams.get('store');
+    if (storeLocation) {
+      // Add store location row if it exists
+      const receiptInfo = document.querySelector('.receipt-info');
+      const storeRow = document.createElement('div');
+      storeRow.className = 'info-row';
+      storeRow.innerHTML = `
+        <span class="info-label">Store Location:</span>
+        <span class="info-value">${storeLocation}</span>
+      `;
+      // Insert after table number row
+      const tableRow = document.querySelector('.info-row:nth-child(2)');
+      if (tableRow) {
+        tableRow.parentNode.insertBefore(storeRow, tableRow.nextSibling);
+      }
+    }
+
+    // Update service type based on URL parameters
+    const serviceType = document.querySelector('.info-row:first-child .info-value');
+    if (deliveryAddress) {
+      serviceType.textContent = 'Delivery';
+    } else if (storeLocation) {
+      serviceType.textContent = 'Pickup';
+    } else {
+      serviceType.textContent = 'Dine-In';
+    }
+
+    // Update estimated time based on service type
+    const estimatedTime = document.querySelector('.info-row:last-child .info-value');
+    if (deliveryAddress) {
+      estimatedTime.textContent = '30-45 minutes';
+    } else if (storeLocation) {
+      estimatedTime.textContent = '15-20 minutes';
+    } else {
+      estimatedTime.textContent = '10-15 minutes';
+    }
+
+    function goHome() {
+      window.location.href = 'menu.html';
+    }
+
+    function goToAccount() {
+      window.location.href = 'account.html';
+    }
+
+    function goToMenu() {
+      window.location.href = 'menu.html';
+    }
+
+    function printReceipt() {
+      window.print();
+    }
+  </script>
+
+  <style>
+    .success-section {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 40px 20px;
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      border-radius: 16px;
+      margin: 20px 0 40px 0;
+    }
+
+    .checkmark-circle {
+      width: 120px;
+      height: 120px;
+      background: linear-gradient(135deg, #4caf50, #45a049);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
+    }
+
+    .checkmark-icon {
+      font-size: 48px;
+      color: white;
+    }
+
+    .success-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .success-subtitle {
+      font-size: 16px;
+      color: #666;
+      margin: 0;
+    }
+
+    .receipt-section {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      margin-bottom: 32px;
+    }
+
+    .receipt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .receipt-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+    }
+
+    .receipt-number {
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .receipt-info {
+      margin-bottom: 24px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .info-label {
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .info-value {
+      font-size: 14px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .order-items {
+      margin-bottom: 24px;
+    }
+
+    .items-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 16px;
+    }
+
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .item-name {
+      font-size: 14px;
+      color: #333;
+    }
+
+    .item-price {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .total-section {
+      border-top: 2px solid #f0f0f0;
+      padding-top: 16px;
+      margin-bottom: 24px;
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .total-label {
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .total-value {
+      font-size: 14px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .total-row.discount .total-value {
+      color: #4caf50;
+    }
+
+    .total-row.final-total {
+      border-top: 1px solid #e0e0e0;
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+
+    .total-row.final-total .total-label,
+    .total-row.final-total .total-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .receipt-message {
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid #2196f3;
+    }
+
+    .receipt-message p {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .receipt-message p:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Status indicator styles - exact copy from style.css */
+    .cart-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #f8f9fa;
+      padding: 16px 20px;
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .status-indicator {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: #999;
+      font-size: 0.9em;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .status-indicator.active {
+      color: #e53935;
+    }
+
+    .status-indicator i {
+      font-size: 1.2em;
+      background: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .status-indicator.active i {
+      background: #e53935;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(229, 57, 53, 0.3);
+    }
+
+    .status-line {
+      width: 40px;
+      height: 2px;
+      background: #e0e0e0;
+      border-radius: 1px;
+    }
+
+    @media print {
+      .header,
+      .action-buttons {
+        display: none;
+      }
+      
+      .cart-status {
+        display: none;
+      }
+      
+      .receipt-section {
+        box-shadow: none;
+        border: 2px solid #333;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .receipt-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+    }
+  </style>
+</body>
+</html> 

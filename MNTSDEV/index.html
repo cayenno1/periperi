@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pablo's Peri Peri - Home</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="profile-instant.js"></script>
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo-container">
+            <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+            <div class="brand-name">PABLO'S<br>PERI PERI</div>
+        </div>
+        <div class="nav-icons">
+            <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+                <i class="fas fa-shopping-bag"></i>
+                <span class="cart-badge">0</span>
+            </div>
+            <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+                <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+                <span class="profile-text" id="profileText">Sign In</span>
+                <div class="profile-dropdown" id="profileDropdown">
+                    <div class="profile-dropdown-header">
+                        <div class="profile-meta">
+                            <span class="profile-name" id="profileName">Your Account</span>
+                            <span class="profile-email" id="profileEmail">user@example.com</span>
+                        </div>
+                    </div>
+                    <a href="account.html" class="profile-item"><span>Manage account</span></a>
+                    <a href="orders.html" class="profile-item"><span>Orders</span></a>
+                    <a href="help.html" class="profile-item"><span>Help & support</span></a>
+                    <div class="profile-divider"></div>
+                    <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+                        <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Banner -->
+    <div class="header-banner">
+        <div class="banner-content">
+            <i class="fas fa-fire banner-icon"></i>
+            <span>Tara na sa Pablo's Maiba naman!</span>
+        </div>
+    </div>
+
+    
+
+    <!-- Main Banner Section -->
+    <section class="hero-section" id="main-content">
+        <div class="hero-background"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+            <div class="hero-branding">
+                <div class="hero-logo">
+                    <div class="hero-chicken-logo">
+                        <div class="hero-chicken-head"></div>
+                        <div class="hero-chicken-wings">
+                            <div class="hero-wing-left"></div>
+                            <div class="hero-wing-right"></div>
+                        </div>
+                        <div class="hero-chicken-body"></div>
+                    </div>
+                </div>
+                <div class="hero-text">
+                    <h1 class="hero-title">PABLO'S</h1>
+                    <h2 class="hero-subtitle">PERI PERI</h2>
+                    <p class="hero-description">Experience the authentic taste of Peri Peri chicken</p>
+                </div>
+            </div>
+            
+            <div class="hero-buttons">
+                <button class="hero-btn menu-btn" onclick="goToMenu()">
+                    <i class="fas fa-utensils"></i>
+                    <span>Explore Menu</span>
+                </button>
+            </div>
+
+            <div class="hero-features">
+                <div class="feature-item">
+                    <i class="fas fa-fire"></i>
+                    <span>Flame Grilled</span>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-leaf"></i>
+                    <span>Fresh Ingredients</span>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-clock"></i>
+                    <span>Quick Service</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" aria-label="How it works">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">How it works</h2>
+                <p class="section-subtitle">Peri peri goodness in three easy steps</p>
+            </div>
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-icon"><i class="fas fa-list"></i></div>
+                    <h3>1. Explore</h3>
+                    <p>Browse our favorites and limited offers</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-icon"><i class="fas fa-fire"></i></div>
+                    <h3>2. Grill</h3>
+                    <p>We flame-grill to perfection with our spice blend</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-icon"><i class="fas fa-face-smile"></i></div>
+                    <h3>3. Enjoy</h3>
+                    <p>Served hot—dine in or take it to-go</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Our Story -->
+    <section class="our-story" aria-label="Our story">
+        <div class="container story-grid">
+            <div class="story-media">
+                <img src="new.jpg" alt="Grilled peri peri chicken" />
+            </div>
+            <div class="story-content">
+                <h2>Our story</h2>
+                <p>Born from a love of Peri-Peri style flavors, Pablo's blends to bring a unique spice that keeps you coming back.</p>
+                <ul class="story-list">
+                    <li><i class="fas fa-check"></i> Fresh</li>
+                    <li><i class="fas fa-check"></i> Own Recipe</li>
+                    <li><i class="fas fa-check"></i> Home-made Sauces</li>
+                </ul>
+                <div class="story-cta">
+                    <a href="menu.html" class="hero-btn menu-btn"><i class="fas fa-utensils"></i><span>See the menu</span></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Featured Dishes Section -->
+    <section class="featured-section">
+        <div class="container">
+            <div class="bestsellers-header">
+                <div class="header-content">
+                    <h2 class="bestsellers-title">Customer Favorites</h2>
+                </div>
+                <a href="menu.html" class="view-all-link">
+                    <span>View All</span>
+                    <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+            
+            <div class="bestsellers-carousel">
+                <button class="carousel-arrow carousel-prev" onclick="scrollCarousel('prev')">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                
+                <div class="bestsellers-container">
+                    <div class="bestseller-card">
+                        <div class="bestseller-image">
+                            <img src="food_img.png" alt="Peri Peri Chicken" class="food-image">
+                            <div class="card-overlay">
+                                <div class="popular-badge">
+                                    <i class="fas fa-fire"></i>
+                                    <span>Most Popular</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bestseller-content">
+                            <div class="rating-section">
+                                <div class="stars">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                                <span class="rating-text">4.8 (120 reviews)</span>
+                            </div>
+                            <h3 class="bestseller-title">Peri Peri Chicken</h3>
+                            <p class="bestseller-description">Flame-grilled chicken with our signature peri peri sauce</p>
+                            <div class="price-section">
+                                <p class="bestseller-price">₱299.00</p>
+                                <button class="add-to-cart-btn" onclick="addToCart('peri-peri-chicken')">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bestseller-card">
+                        <div class="bestseller-image">
+                            <img src="new_dish.png" alt="Special Combo Meal" class="food-image">
+                            <div class="card-overlay">
+                                <div class="new-badge">
+                                    <i class="fas fa-sparkles"></i>
+                                    <span>New</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bestseller-content">
+                            <div class="rating-section">
+                                <div class="stars">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                                <span class="rating-text">4.9 (85 reviews)</span>
+                            </div>
+                            <h3 class="bestseller-title">Special Combo Meal</h3>
+                            <p class="bestseller-description">Complete meal with chicken, sides, and refreshing drink</p>
+                            <div class="price-section">
+                                <p class="bestseller-price">₱399.00</p>
+                                <button class="add-to-cart-btn" onclick="addToCart('special-combo')">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bestseller-card">
+                        <div class="bestseller-image">
+                            <img src="coke.png" alt="Refreshing Drinks" class="food-image">
+                            <div class="card-overlay">
+                                <div class="refreshing-badge">
+                                    <i class="fas fa-snowflake"></i>
+                                    <span>Refreshing</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bestseller-content">
+                            <div class="rating-section">
+                                <div class="stars">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                                <span class="rating-text">4.7 (95 reviews)</span>
+                            </div>
+                            <h3 class="bestseller-title">Refreshing Drinks</h3>
+                            <p class="bestseller-description">Perfect complement to your spicy peri peri meal</p>
+                            <div class="price-section">
+                                <p class="bestseller-price">₱89.00</p>
+                                <button class="add-to-cart-btn" onclick="addToCart('drinks')">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bestseller-card featured">
+                        <div class="bestseller-image">
+                            <img src="tea.png" alt="Hot Tea Selection" class="food-image">
+                            <div class="card-overlay">
+                                <div class="featured-badge">
+                                    <i class="fas fa-crown"></i>
+                                    <span>Featured</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bestseller-content">
+                            <div class="rating-section">
+                                <div class="stars">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                                <span class="rating-text">4.6 (78 reviews)</span>
+                            </div>
+                            <h3 class="bestseller-title">Hot Tea Selection</h3>
+                            <p class="bestseller-description">Premium tea varieties to soothe your palate</p>
+                            <div class="price-section">
+                                <p class="bestseller-price">₱75.00</p>
+                                <button class="add-to-cart-btn" onclick="addToCart('hot-tea')">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="carousel-arrow carousel-next" onclick="scrollCarousel('next')">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    
+
+    <!-- Testimonials -->
+    <section class="testimonials" aria-label="Testimonials">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">What guests say</h2>
+            </div>
+            <div class="testimonials-grid">
+                <div class="testimonial-card">
+                    <div class="testimonial-stars">
+                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
+                    </div>
+                    <p class="testimonial-text">“Yummers”</p>
+                    <div class="testimonial-author">
+                        <div class="avatar"><i class="fas fa-user"></i></div>
+                        <span>sef</span>
+                    </div>
+                </div>
+                <div class="testimonial-card">
+                    <div class="testimonial-stars">
+                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star-half-alt"></i>
+                    </div>
+                    <p class="testimonial-text">“Malinis”</p>
+                    <div class="testimonial-author">
+                        <div class="avatar"><i class="fas fa-user"></i></div>
+                        <span>ez</span>
+                    </div>
+                </div>
+                <div class="testimonial-card">
+                    <div class="testimonial-stars">
+                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
+                    </div>
+                    <p class="testimonial-text">“Masarap ang food at malinis ang resto”</p>
+                    <div class="testimonial-author">
+                        <div class="avatar"><i class="fas fa-user"></i></div>
+                        <span>ron</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Visit us strip -->
+    <section class="visit-strip" aria-label="Visit us">
+        <div class="container visit-grid">
+            <div class="visit-item">
+                <i class="fas fa-location-dot"></i>
+                <div>
+                    <strong>Find us</strong>
+                    <p>Zabarte Road, Brgy. Kaligayahan, Quezon City</p>
+                </div>
+            </div>
+            <div class="visit-item">
+                <i class="fas fa-clock"></i>
+                <div>
+                    <strong>Open daily</strong>
+                    <p>10:00 AM – 10:00 PM</p>
+                </div>
+            </div>
+   
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="footer-logo">
+                    <div class="footer-brand-name">PABLO'S PERI PERI</div>
+                </div>
+                <div class="footer-social">
+                    <p>Follow us on social media</p>
+                    <div class="social-links">
+                        <a href="#" class="social-link facebook">
+                            <i class="fab fa-facebook"></i>
+                        </a>
+                    
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Back to top button -->
+    <button class="back-to-top" aria-label="Back to top" title="Back to top">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <script type="module" src="firebase-init.js"></script>
+    <script src="profile-auth.js"></script>
+
+    <script>
+        // Navigation
+        function goToCart() {
+            window.location.href = 'cart.html';
+        }
+
+        function goToMenu() {
+            window.location.href = 'menu.html';
+        }
+
+        // Carousel
+        function scrollCarousel(direction) {
+            const container = document.querySelector('.bestsellers-container');
+            const scrollAmount = 320;
+            
+            if (direction === 'next') {
+                container.scrollBy({
+                    left: scrollAmount,
+                    behavior: 'smooth'
+                });
+            } else {
+                container.scrollBy({
+                    left: -scrollAmount,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        // Add to cart
+        function addToCart(itemId) {
+            const cartBadge = document.querySelector('.cart-badge');
+            const currentCount = parseInt(cartBadge.textContent);
+            cartBadge.textContent = currentCount + 1;
+            
+            const button = event.target.closest('.add-to-cart-btn');
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-check"></i>';
+            button.style.background = '#28a745';
+            
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.style.background = '#e53935';
+            }, 1000);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Back to top
+            const backToTop = document.querySelector('.back-to-top');
+            const toggleBackToTop = () => {
+                if (window.scrollY > 400) backToTop.classList.add('show');
+                else backToTop.classList.remove('show');
+            };
+            window.addEventListener('scroll', toggleBackToTop, { passive: true });
+            backToTop.addEventListener('click', () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            // Search input
+            const searchInput = document.getElementById('homeSearch');
+            const searchClear = document.getElementById('homeSearchClear');
+            if (searchInput) {
+                const updateClear = () => {
+                    if (searchInput.value.trim().length) {
+                        searchClear.style.display = 'flex';
+                    } else {
+                        searchClear.style.display = 'none';
+                    }
+                };
+                searchInput.addEventListener('input', updateClear);
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && searchInput.value.trim()) {
+                        goToSearch(searchInput.value.trim());
+                    }
+                });
+                searchClear.addEventListener('click', () => {
+                    searchInput.value = '';
+                    updateClear();
+                    searchInput.focus();
+                });
+                updateClear();
+            }
+
+            window.subscribeNewsletter = function(e) {
+                e.preventDefault();
+                const email = document.getElementById('newsletterEmail').value.trim();
+                if (!email) return;
+                e.target.reset();
+            };
+            
+            // Scroll reveal animation
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver(function(entries) {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, observerOptions);
+
+            document.querySelectorAll('.bestseller-card, .info-card').forEach(el => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(30px)';
+                el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+                observer.observe(el);
+            });
+        });
+    </script>
+</body>
+</html> 

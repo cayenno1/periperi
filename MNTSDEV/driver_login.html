@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Login - Pablo's Peri Peri</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="restaurant-login-body">
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+    </div>
+  </header>
+
+  <div class="header-banner">
+    <div class="banner-content">
+      <i class="fas fa-fire banner-icon"></i>
+      <span>Driver Login</span>
+    </div>
+  </div>
+
+  <div class="restaurant-auth-container">
+    <div class="restaurant-auth-card">
+      <div class="restaurant-auth-header">
+        <h1 class="restaurant-auth-title">Welcome, Driver</h1>
+        <p class="restaurant-auth-subtitle">Sign in to access your dashboard</p>
+      </div>
+
+      <form class="restaurant-auth-form" id="driverLoginForm">
+        <div class="restaurant-form-group">
+          <label for="driverUser" class="restaurant-form-label">Username</label>
+          <input type="text" id="driverUser" class="restaurant-form-input" placeholder="Enter your username" required>
+        </div>
+        <div class="restaurant-form-group">
+          <label for="driverPass" class="restaurant-form-label">Password</label>
+          <div class="password-input-container">
+            <input type="password" id="driverPass" class="restaurant-form-input" placeholder="Enter your password" required>
+            <button type="button" class="password-toggle" id="driverPassToggle"><i class="fas fa-eye"></i></button>
+          </div>
+        </div>
+        <button type="submit" class="restaurant-auth-button">
+          <span>Sign In</span>
+          <i class="fas fa-arrow-right"></i>
+        </button>
+      </form>
+
+      <div class="restaurant-auth-footer" style="margin-top:14px; text-align:center;">
+        <p>Are you a customer? <a href="login.html" class="restaurant-auth-link">Sign in here</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function goHome(){ window.location.href = 'index.html'; }
+
+    const driverPassToggle = document.getElementById('driverPassToggle');
+    const driverPassInput = document.getElementById('driverPass');
+    const driverPassIcon = driverPassToggle.querySelector('i');
+    driverPassToggle.addEventListener('click', function(){
+      if (driverPassInput.type === 'password') { driverPassInput.type = 'text'; driverPassIcon.classList.replace('fa-eye','fa-eye-slash'); }
+      else { driverPassInput.type = 'password'; driverPassIcon.classList.replace('fa-eye-slash','fa-eye'); }
+    });
+
+    document.getElementById('driverLoginForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      const user = document.getElementById('driverUser').value.trim().toLowerCase();
+      const pass = document.getElementById('driverPass').value;
+      if (user === 'relez' && pass === '123') {
+        try { localStorage.setItem('ppp_user', JSON.stringify({ id: user, role: 'driver' })); } catch (e) {}
+        window.location.href = 'driver.html';
+      } else {
+        alert('Invalid username or password');
+      }
+    });
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PABLO'S PERI PERI - Menu</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="profile-instant.js"></script>
+
+
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+        <span class="profile-text" id="profileText">Sign In</span>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item"><span>Orders</span></a>
+          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="header-banner">
+    <div class="banner-content">
+      <i class="fas fa-fire banner-icon"></i>
+      <span>Tara na sa Pablo's Maiba naman!</span>
+    </div>
+  </div>
+
+  <nav class="menu-nav" aria-label="Menu navigation">
+    <div class="search-container">
+      <div class="search-box">
+        <i class="fas fa-search search-icon" aria-hidden="true"></i>
+        <input id="menuSearch" type="search" placeholder="Search for your favorite dishes..." class="search-input" aria-label="Search menu">
+        <button class="search-clear" id="menuSearchClear" type="button" aria-label="Clear search">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    
+    <div class="category-tabs" role="tablist" aria-label="Categories">
+      <button class="tab-btn active" role="tab" aria-selected="true" data-category="hot">
+        <i class="fas fa-fire tab-icon"></i>
+        <span class="tab-text">Hot</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-category="limited">
+        <i class="fas fa-star tab-icon"></i>
+        <span class="tab-text">Limited Offer</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-category="chicken">
+        <i class="fas fa-drumstick-bite tab-icon"></i>
+        <span class="tab-text">Chicken</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-category="rice">
+        <i class="fas fa-utensils tab-icon"></i>
+        <span class="tab-text">Rice Meal</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-category="beverages">
+        <i class="fas fa-glass-martini-alt tab-icon"></i>
+        <span class="tab-text">Beverages</span>
+      </button>
+    </div>
+  </nav>
+
+  <main class="main-container">
+    <div class="content-wrapper">
+      <section class="featured-section" id="featuredSection">
+        <div class="section-header">
+          <h1 class="section-title">Check What's New</h1>
+        </div>
+        <div class="featured-card" id="featuredDish">
+          <div class="featured-image-container">
+            <img src="new_dish.png" alt="Featured Dish" class="featured-image">
+            <div class="featured-badge">
+              <i class="fas fa-crown"></i>
+              <span>New</span>
+            </div>
+          </div>
+          <div class="featured-overlay">
+            <h3 class="featured-title">New Special Dish</h3>
+            <p class="featured-desc">Try our latest creation!</p>
+            <button class="featured-btn">
+              <i class="fas fa-arrow-right"></i>
+              <span>Explore</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="menu-section">
+        <div class="menu-header">
+          <h2 class="menu-title">Our Menu</h2>
+          <div class="menu-filters">
+            <button class="filter-btn active" data-filter="all">
+              <i class="fas fa-th-large"></i>
+              <span>All</span>
+            </button>
+            <button class="filter-btn" data-filter="popular">
+              <i class="fas fa-heart"></i>
+              <span>Popular</span>
+            </button>
+          </div>
+        </div>
+        <div class="menu-grid" id="menuContent" aria-live="polite"></div>
+        <div id="emptyState" class="empty-state" hidden>
+          <i class="fas fa-magnifying-glass"></i>
+          <h4>No matches found</h4>
+          <p>Try a different search or clear filters.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Floating Cart Preview -->
+  <div class="floating-cart" id="floatingCart">
+    <div class="cart-preview" onclick="goToCart()" title="View cart">
+      <i class="fas fa-shopping-bag"></i>
+      <span class="cart-count" id="cartCount">0</span>
+    </div>
+  </div>
+
+  <script type="module" src="firebase-init.js"></script>
+  <script src="profile-auth.js"></script>
+
+  <script>
+    const menus = {
+      hot: [
+        { name: "Whole Chicken", price: "P120.00", img: "food_img.png", rating: 4.5, reviews: 128, popular: true },
+        { name: "Baby Back Ribs", price: "P120.00", img: "food_img.png", rating: 4.3, reviews: 95, popular: false },
+        { name: "Rib Rice Meal", price: "P120.00", img: "food_img.png", rating: 4.7, reviews: 156, popular: true },
+        { name: "Chicken Rice Meal", price: "P120.00", img: "food_img.png", rating: 4.2, reviews: 89, popular: false },
+        { name: "Steak", price: "P120.00", img: "food_img.png", rating: 4.6, reviews: 112, popular: true },
+        { name: "Pork Rice Meal", price: "P120.00", img: "food_img.png", rating: 4.1, reviews: 73, popular: false }
+      ],
+      limited: [
+        { name: "Sizzling Sisig", price: "P150.00", img: "food_img.png", rating: 4.8, reviews: 203, badge: "Limited", popular: true },
+        { name: "Shawarma Buy 1 Take 2", price: "P130.00", img: "food_img.png", rating: 4.4, reviews: 167, badge: "Promo", popular: true }
+      ],
+      chicken: [
+        { name: "Grilled Chicken", price: "P110.00", img: "food_img.png", rating: 4.3, reviews: 134, popular: false },
+        { name: "Whole Chicken", price: "P100.00", img: "food_img.png", rating: 4.5, reviews: 198, popular: true }
+      ],
+      rice: [
+        { name: "Chicken Rice Meal", price: "P90.00", img: "food_img.png", rating: 4.2, reviews: 87, popular: false },
+        { name: "Ribs Rice Meal", price: "P120.00", img: "food_img.png", rating: 4.6, reviews: 145, popular: true }
+      ],
+      beverages: [
+        { name: "Iced Tea Regular", price: "₱79.00", img: "tea.png", popular: false },
+        { name: "Iced Tea Medium", price: "₱90.00", img: "tea.png", popular: true },
+        { name: "Iced Tea Large", price: "₱101.00", img: "tea.png", popular: false },
+      ]
+    };
+
+    let currentFilter = 'all';
+    let currentCategory = 'hot';
+    let cartItemsCount = 0;
+
+    function renderMenu(menuKey) {
+      currentCategory = menuKey;
+      const menuContent = document.getElementById('menuContent');
+      const featuredSection = document.getElementById('featuredSection');
+      
+      // Show/hide featured section
+      featuredSection.style.display = (menuKey === 'hot') ? 'block' : 'none';
+      
+      if (menuKey === 'beverages') {
+        menuContent.innerHTML = menus.beverages.map(item => `
+          <div class="menu-card" data-popular="${item.popular}">
+            <div class="card-image-container">
+              <img src="${item.img || 'placeholder.png'}" alt="${item.name}" class="card-image">
+            </div>
+            <div class="card-content">
+              <h3 class="card-title">${item.name}</h3>
+              <div class="price-row">
+                <div class="card-price">${item.price}</div>
+                <button class="add-plus-btn" onclick="addToCart('${item.name}')">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+        updateEmptyState();
+        return;
+      }
+      
+      menuContent.innerHTML = menus[menuKey].map(item => `
+        <div class="menu-card" data-popular="${item.popular}">
+          <div class="card-image-container">
+            <img src="${item.img}" alt="${item.name}" class="card-image" onclick="openFoodItem('${item.name}')">
+            ${item.badge ? `<div class="badge"><i class="fas fa-star"></i> ${item.badge}</div>` : ''}
+          </div>
+          <div class="card-content">
+            <h3 class="card-title">${item.name}</h3>
+            <div class="card-rating">
+              <div class="stars-container">
+                <span class="stars">${'★'.repeat(Math.floor(item.rating))}${'☆'.repeat(5-Math.floor(item.rating))}</span>
+                <span class="rating-text">${item.rating} (${item.reviews})</span>
+              </div>
+              ${item.popular ? '<span class="popular-tag">Popular</span>' : ''}
+            </div>
+            <div class="price-row">
+              <div class="card-price">${item.price}</div>
+              <button class="add-plus-btn" onclick="addToCart('${item.name}')">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      
+      applyFilter();
+      updateEmptyState();
+    }
+
+    function applyFilter() {
+      const cards = document.querySelectorAll('.menu-card');
+      cards.forEach(card => {
+        const isPopular = card.dataset.popular === 'true';
+        if (currentFilter === 'all' || (currentFilter === 'popular' && isPopular)) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+      updateEmptyState();
+    }
+
+    function openFoodItem(itemName) {
+      window.location.href = 'food_item.html';
+    }
+
+    function addToCart(itemName) {
+      event.stopPropagation();
+      const btn = event.target.closest('.add-plus-btn');
+      if (!btn) return;
+      btn.innerHTML = '<i class="fas fa-check"></i>';
+      btn.setAttribute('aria-pressed', 'true');
+    }
+
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.tab-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-selected', 'false');
+        });
+        this.classList.add('active');
+        this.setAttribute('aria-selected', 'true');
+        const category = this.dataset.category;
+        renderMenu(category);
+      });
+    });
+
+    // Filters
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        currentFilter = this.dataset.filter;
+        applyFilter();
+      });
+    });
+
+    // Search
+    const searchInput = document.getElementById('menuSearch');
+    const searchClear = document.getElementById('menuSearchClear');
+    
+    searchInput.addEventListener('input', function() {
+      const searchTerm = this.value.toLowerCase();
+      const cards = document.querySelectorAll('.menu-card');
+      searchClear.style.display = searchTerm ? 'flex' : 'none';
+      
+      cards.forEach(card => {
+        const title = card.querySelector('.card-title').textContent.toLowerCase();
+        if (title.includes(searchTerm)) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+      updateEmptyState();
+    });
+    
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+    
+    searchClear.addEventListener('click', function() {
+      searchInput.value = '';
+      searchInput.focus();
+      this.style.display = 'none';
+      const cards = document.querySelectorAll('.menu-card');
+      cards.forEach(card => {
+        card.style.display = 'block';
+      });
+      applyFilter();
+    });
+
+    function updateEmptyState() {
+      const emptyState = document.getElementById('emptyState');
+      const anyVisible = Array.from(document.querySelectorAll('.menu-card')).some(card => card.style.display !== 'none');
+      if (!anyVisible) {
+        emptyState.hidden = false;
+        emptyState.classList.add('show');
+      } else {
+        emptyState.hidden = true;
+        emptyState.classList.remove('show');
+      }
+    }
+
+
+
+    function goToCart() {
+      window.location.href = 'cart_review.html';
+    }
+
+    renderMenu('hot');
+  </script>
+</body>
+</html>

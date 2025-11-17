@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Account - PABLO'S PERI PERI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="account-page">
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon logged-in" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+        <span class="profile-text" id="profileText">Sign In</span>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item profile-manage-account"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item"><span>Orders</span></a>
+          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <section class="review-section account-section" style="max-width: 1000px;">
+      <div class="account-header">
+        <div class="account-hero">
+          <div class="account-avatar"><i class="fas fa-user"></i></div>
+          <div class="account-identity">
+            <div class="account-name-container">
+              <div class="account-name" id="displayName">
+                <span class="loading-text" id="nameLoading">User</span>
+                <span class="name-content" id="nameContent" style="display: none;"></span>
+              </div>
+              <button class="edit-name-btn" id="editProfileBtn" title="Edit Profile">
+                <i class="fas fa-pen"></i>
+              </button>
+            </div>
+            <div class="account-email" id="displayEmail">
+              <span class="loading-text" id="emailLoading">User</span>
+              <span class="email-content" id="emailContent" style="display: none;"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="account-grid-2col">
+        <section id="address" class="account-card">
+          <h3 class="account-card-title">Addresses</h3>
+          <div class="address-list" id="addressList">
+
+          </div>
+          <div class="account-actions">
+            <button class="write-review-toggle" type="button" onclick="addAddress()"><i class="fas fa-plus"></i><span>Add address</span></button>
+          </div>
+        </section>
+
+        <section id="security" class="account-card">
+          <h3 class="account-card-title">Security</h3>
+          
+          <!-- Change Password Form -->
+          <div class="password-change-section">
+            <h4 class="password-section-title">Change Password</h4>
+            <form class="password-change-form" id="passwordChangeForm">
+              <div class="restaurant-form-group">
+                <label for="currentPassword" class="restaurant-form-label">Current Password</label>
+                <div class="password-input-container">
+                  <input type="password" id="currentPassword" name="currentPassword" class="restaurant-form-input" placeholder="Enter your current password" required>
+                  <button type="button" class="password-toggle" id="currentPasswordToggle" aria-label="Toggle password visibility">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <span class="error-message" id="currentPasswordError"></span>
+              </div>
+
+              <div class="restaurant-form-group">
+                <label for="newPassword" class="restaurant-form-label">New Password</label>
+                <div class="password-input-container">
+                  <input type="password" id="newPassword" name="newPassword" class="restaurant-form-input" placeholder="Enter your new password" required>
+                  <button type="button" class="password-toggle" id="newPasswordToggle" aria-label="Toggle password visibility">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <div class="password-strength" id="newPasswordStrength">
+                  <div class="password-strength-bar">
+                    <div class="password-strength-fill" id="newPasswordStrengthFill"></div>
+                  </div>
+                  <span class="password-strength-text" id="newPasswordStrengthText"></span>
+                </div>
+                <span class="error-message" id="newPasswordError"></span>
+              </div>
+
+              <div class="restaurant-form-group">
+                <label for="confirmNewPassword" class="restaurant-form-label">Confirm New Password</label>
+                <div class="password-input-container">
+                  <input type="password" id="confirmNewPassword" name="confirmNewPassword" class="restaurant-form-input" placeholder="Confirm your new password" required>
+                  <button type="button" class="password-toggle" id="confirmNewPasswordToggle" aria-label="Toggle password visibility">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <span class="error-message" id="confirmNewPasswordError"></span>
+              </div>
+
+              <div class="password-change-actions">
+                <button type="submit" class="restaurant-auth-button" id="savePasswordBtn">
+                  <span id="savePasswordBtnText">Save Changes</span>
+                  <i class="fas fa-check"></i>
+                </button>
+              </div>
+            </form>
+            
+            <!-- Success Message -->
+            <div class="password-success-message" id="passwordSuccessMessage" style="display: none;">
+              <i class="fas fa-check-circle"></i>
+              <span>Password updated successfully!</span>
+            </div>
+          </div>
+
+          <!-- Delete Account Section -->
+          <div class="account-divider"></div>
+          <div class="delete-account-section">
+            <h4 class="password-section-title">Delete Account</h4>
+            <p class="delete-account-description">Delete your account and all your data forever. This cannot be undone.</p>
+            <button class="profile-item logout danger-action" type="button" id="deleteAccountBtn">
+              <i class="fas fa-triangle-exclamation"></i><span>Delete account</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <!-- Profile Edit Modal -->
+  <div class="modal-overlay" id="profileEditModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Edit Profile</h3>
+        <button class="modal-close" id="closeProfileModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <form class="modal-form" id="profileEditForm">
+        <div class="restaurant-form-group">
+          <label for="editFirstName" class="restaurant-form-label">First Name</label>
+          <input type="text" id="editFirstName" name="firstName" class="restaurant-form-input" placeholder="Enter first name" required>
+          <span class="error-message" id="editFirstNameError"></span>
+        </div>
+        <div class="restaurant-form-group">
+          <label for="editLastName" class="restaurant-form-label">Last Name</label>
+          <input type="text" id="editLastName" name="lastName" class="restaurant-form-input" placeholder="Enter last name" required>
+          <span class="error-message" id="editLastNameError"></span>
+        </div>
+        <div class="restaurant-form-group">
+          <label for="editPhone" class="restaurant-form-label">Phone Number</label>
+          <input type="tel" id="editPhone" name="phone" class="restaurant-form-input" placeholder="09123456789">
+          <span class="error-message" id="editPhoneError"></span>
+        </div>
+        <div class="account-actions modal-actions">
+          <button type="submit" class="restaurant-auth-button modal-save-btn">
+            <span>Save Changes</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Address Modal -->
+  <div class="modal-overlay" id="addressModal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 id="addressModalTitle">Add Address</h3>
+        <button class="modal-close" id="closeAddressModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <form class="modal-form" id="addressForm">
+        <div class="restaurant-form-group">
+          <label for="addressLabel" class="restaurant-form-label">Label</label>
+          <select id="addressLabel" name="label" class="restaurant-form-input" required>
+            <option value="">Select a label</option>
+            <option value="Home">Home</option>
+            <option value="Work">Work</option>
+            <option value="Other">Other</option>
+          </select>
+          <span class="error-message" id="addressLabelError"></span>
+        </div>
+        <div class="restaurant-form-group">
+          <label for="addressStreet" class="restaurant-form-label">Street Address</label>
+          <input type="text" id="addressStreet" name="street" class="restaurant-form-input" placeholder="Street address" required>
+          <span class="error-message" id="addressStreetError"></span>
+        </div>
+        <div class="restaurant-form-group">
+          <label for="addressCity" class="restaurant-form-label">City</label>
+          <input type="text" id="addressCity" name="city" class="restaurant-form-input" placeholder="City" required>
+          <span class="error-message" id="addressCityError"></span>
+        </div>
+        <div class="restaurant-form-group">
+          <label for="addressBarangay" class="restaurant-form-label">Barangay</label>
+          <input type="text" id="addressBarangay" name="barangay" class="restaurant-form-input" placeholder="Barangay" required>
+          <span class="error-message" id="addressBarangayError"></span>
+        </div>
+        <div class="restaurant-form-group">
+          <label for="addressPostal" class="restaurant-form-label">Postal Code</label>
+          <input type="text" id="addressPostal" name="postal" class="restaurant-form-input" placeholder="Postal code" required>
+          <span class="error-message" id="addressPostalError"></span>
+        </div>
+        <input type="hidden" id="addressId" name="addressId">
+        <div class="account-actions modal-actions">
+          <button type="submit" class="restaurant-auth-button modal-save-btn">
+            <span id="addressSubmitText">Save Address</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3 id="confirmModalTitle">Confirm Action</h3>
+        <button class="modal-close" id="closeConfirmModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 0 0 24px 0;">
+        <p id="confirmModalMessage" style="margin: 0; color: #333; line-height: 1.6;">Are you sure you want to proceed?</p>
+      </div>
+      <div class="account-actions modal-actions" style="margin-top: 0;">
+        <button type="button" class="profile-item logout danger-action" id="confirmModalYes" style="width: 100%; justify-content: center;">
+          <span id="confirmModalYesText">Yes</span>
+        </button>
+        <button type="button" class="write-review-toggle" id="confirmModalNo" style="width: 100%; justify-content: center;">
+          <span>Cancel</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password Prompt Modal for Account Deletion -->
+  <div class="modal-overlay" id="deleteAccountPasswordModal" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3>Confirm Password</h3>
+        <button class="modal-close" id="closeDeletePasswordModal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <form class="modal-form" id="deleteAccountPasswordForm">
+        <div class="restaurant-form-group">
+          <label for="deleteAccountPassword" class="restaurant-form-label">Enter your password to confirm</label>
+          <div class="password-input-container">
+            <input type="password" id="deleteAccountPassword" name="password" class="restaurant-form-input" placeholder="Enter your password" required autocomplete="current-password">
+            <button type="button" class="password-toggle" id="deleteAccountPasswordToggle" aria-label="Toggle password visibility">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+          <span class="error-message" id="deleteAccountPasswordError"></span>
+        </div>
+        <div class="account-actions modal-actions">
+          <button type="submit" class="profile-item logout danger-action" id="confirmDeleteAccountBtn" style="width: 100%; justify-content: center;">
+            <span id="confirmDeleteAccountBtnText">Delete Account</span>
+          </button>
+          <button type="button" class="write-review-toggle" id="cancelDeleteAccountBtn" style="width: 100%; justify-content: center;">
+            <span>Cancel</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="firebase-init.js"></script>
+  <script src="profile-auth.js"></script>
+
+  <script>
+    function goHome() {
+      window.location.href = 'menu.html';
+    }
+    function goToCart() {
+      window.location.href = 'cart_review.html';
+    }
+
+    // Addresses
+    const addressModal = document.getElementById('addressModal');
+    const addressForm = document.getElementById('addressForm');
+    const addressModalTitle = document.getElementById('addressModalTitle');
+    const addressSubmitText = document.getElementById('addressSubmitText');
+    const closeAddressModal = document.getElementById('closeAddressModal');
+    let editingAddressId = null;
+
+    // Add address modal
+    function openAddAddressModal() {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user) {
+        return;
+      }
+
+      editingAddressId = null;
+      addressModalTitle.textContent = 'Add Address';
+      addressSubmitText.textContent = 'Save Address';
+      addressForm.reset();
+      document.getElementById('addressId').value = '';
+      
+      // Clear all error messages
+      document.querySelectorAll('#addressForm .error-message').forEach(el => {
+        el.textContent = '';
+      });
+
+      addressModal.style.display = 'flex';
+    }
+
+    // Edit address modal
+    function openEditAddressModal(addressId) {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user) return;
+
+      const addressItem = document.querySelector(`.address-item[data-id="${addressId}"]`);
+      if (!addressItem) return;
+
+      // Get address data from data attributes
+      const addressData = {
+        id: addressId,
+        label: addressItem.dataset.label,
+        street: addressItem.dataset.street,
+        city: addressItem.dataset.city,
+        barangay: addressItem.dataset.barangay,
+        postal: addressItem.dataset.postal
+      };
+
+      editingAddressId = addressId;
+      addressModalTitle.textContent = 'Edit Address';
+      addressSubmitText.textContent = 'Update Address';
+
+      // Populate form fields
+      document.getElementById('addressId').value = addressData.id;
+      document.getElementById('addressLabel').value = addressData.label;
+      document.getElementById('addressStreet').value = addressData.street;
+      document.getElementById('addressCity').value = addressData.city;
+      document.getElementById('addressBarangay').value = addressData.barangay;
+      document.getElementById('addressPostal').value = addressData.postal;
+
+      // Clear error messages
+      document.querySelectorAll('#addressForm .error-message').forEach(el => {
+        el.textContent = '';
+      });
+
+      addressModal.style.display = 'flex';
+    }
+
+    // Close address modal
+    function closeAddressModalFunc() {
+      addressModal.style.display = 'none';
+      editingAddressId = null;
+      addressForm.reset();
+      document.getElementById('addressId').value = '';
+      
+      // Clear error messages
+      document.querySelectorAll('#addressForm .error-message').forEach(el => {
+        el.textContent = '';
+      });
+    }
+
+    // Save address
+    async function saveAddress() {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user) {
+        return;
+      }
+
+      const label = document.getElementById('addressLabel').value.trim();
+      const street = document.getElementById('addressStreet').value.trim();
+      const city = document.getElementById('addressCity').value.trim();
+      const barangay = document.getElementById('addressBarangay').value.trim();
+      const postal = document.getElementById('addressPostal').value.trim();
+
+      // Check inputs
+      let hasError = false;
+      if (!label) {
+        document.getElementById('addressLabelError').textContent = 'Please select a label';
+        hasError = true;
+      }
+      if (!street) {
+        document.getElementById('addressStreetError').textContent = 'Street address is required';
+        hasError = true;
+      }
+      if (!city) {
+        document.getElementById('addressCityError').textContent = 'City is required';
+        hasError = true;
+      }
+      if (!barangay) {
+        document.getElementById('addressBarangayError').textContent = 'Barangay is required';
+        hasError = true;
+      }
+      if (!postal) {
+        document.getElementById('addressPostalError').textContent = 'Postal code is required';
+        hasError = true;
+      }
+
+      if (hasError) return;
+
+      try {
+        const userDocRef = window.doc(window.firebaseDb, 'customers', user.uid);
+        const userDoc = await window.getDoc(userDocRef);
+        
+        const addressData = {
+          id: editingAddressId || `addr-${Date.now()}`,
+          label: label,
+          street: street,
+          city: city,
+          barangay: barangay,
+          postal: postal,
+          fullAddress: `${street}, ${city}, ${barangay} ${postal}`,
+          updatedAt: new Date().toISOString()
+        };
+
+        let addresses = [];
+        if (userDoc.exists()) {
+          addresses = userDoc.data().addresses || [];
+        }
+
+        if (editingAddressId) {
+          // Update existing address
+          const index = addresses.findIndex(addr => addr.id === editingAddressId);
+          if (index !== -1) {
+            addresses[index] = addressData;
+          }
+        } else {
+          // Add new address
+          addresses.push(addressData);
+        }
+
+        // Save to database
+        await window.setDoc(userDocRef, { addresses: addresses }, { merge: true });
+
+        closeAddressModalFunc();
+        // Address list updates automatically
+      } catch (error) {
+        console.error('Error saving address:', error);
+      }
+    }
+
+    // Delete address
+    async function deleteAddress(addressId) {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user) {
+        return;
+      }
+
+      // Show custom confirmation modal
+      const confirmed = await showConfirmModal(
+        'Are you sure you want to delete this address? This action cannot be undone.',
+        'Delete Address',
+        'Yes, Delete'
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        const userDocRef = window.doc(window.firebaseDb, 'customers', user.uid);
+        const userDoc = await window.getDoc(userDocRef);
+        
+        if (!userDoc.exists()) {
+          return;
+        }
+
+        let addresses = userDoc.data().addresses || [];
+        const addressToDelete = addresses.find(addr => addr.id === addressId);
+        
+        if (!addressToDelete) {
+          return;
+        }
+
+        addresses = addresses.filter(addr => addr.id !== addressId);
+
+        // Save to database
+        await window.setDoc(userDocRef, { addresses: addresses }, { merge: true });
+
+        // Address list updates automatically
+        console.log('Address deleted successfully');
+      } catch (error) {
+        console.error('Error deleting address:', error);
+        
+        // Show error message
+        let errorMessage = 'An error occurred while deleting the address. Please try again.';
+        
+        if (error.code === 'network-request-failed' || error.message?.includes('network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        // Show error using the confirmation modal
+        await showConfirmModal(
+          errorMessage,
+          'Error',
+          'OK'
+        );
+      }
+    }
+
+    // Render addresses
+    function renderAddresses(addresses) {
+      const addressList = document.getElementById('addressList');
+      if (!addressList) return;
+
+      if (!addresses || addresses.length === 0) {
+        addressList.innerHTML = '<div class="address-empty-state" style="text-align: center; padding: 32px; color: #999;">No addresses.</div>';
+        return;
+      }
+
+      addressList.innerHTML = addresses.map(address => {
+        const addressId = address.id || `addr-${Date.now()}`;
+        // Handle backward compatibility: use barangay if available, otherwise province
+        const barangay = address.barangay || address.province || '';
+        const fullAddr = address.fullAddress || `${address.street}, ${address.city}, ${barangay} ${address.postal}`;
+        return `
+          <div class="address-item" 
+               data-id="${addressId}"
+               data-label="${address.label || 'Other'}"
+               data-street="${address.street || ''}"
+               data-city="${address.city || ''}"
+               data-barangay="${barangay}"
+               data-postal="${address.postal || ''}">
+            <div>
+              <span class="address-chip">${address.label || 'Other'}</span>
+              <div class="address-text">${fullAddr}</div>
+            </div>
+            <div class="address-actions">
+              <button class="write-review-toggle" type="button" onclick="openEditAddressModal('${addressId}')">
+                <i class="fas fa-pen"></i><span>Edit</span>
+              </button>
+              <button class="profile-item logout danger-action" type="button" onclick="deleteAddress('${addressId}')">
+                <i class="fas fa-trash"></i><span>Delete</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Address modal events
+    closeAddressModal.addEventListener('click', closeAddressModalFunc);
+    addressModal.addEventListener('click', function(e) {
+      if (e.target === addressModal) {
+        closeAddressModalFunc();
+      }
+    });
+
+    addressForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      saveAddress();
+    });
+
+    ['addressLabel', 'addressStreet', 'addressCity', 'addressBarangay', 'addressPostal'].forEach(id => {
+      const field = document.getElementById(id);
+      if (field) {
+        field.addEventListener('input', () => {
+          const errorEl = document.getElementById(id + 'Error');
+          if (errorEl) errorEl.textContent = '';
+        });
+      }
+    });
+
+    // Confirmation modal
+    const confirmModal = document.getElementById('confirmModal');
+    const confirmModalTitle = document.getElementById('confirmModalTitle');
+    const confirmModalMessage = document.getElementById('confirmModalMessage');
+    const confirmModalYes = document.getElementById('confirmModalYes');
+    const confirmModalYesText = document.getElementById('confirmModalYesText');
+    const confirmModalNo = document.getElementById('confirmModalNo');
+    const closeConfirmModal = document.getElementById('closeConfirmModal');
+    let confirmCallback = null;
+
+    // Show confirm dialog
+    function showConfirmModal(message, title = 'Confirm Action', confirmText = 'Yes') {
+      return new Promise((resolve) => {
+        confirmModalTitle.textContent = title;
+        confirmModalMessage.textContent = message;
+        confirmModalYesText.textContent = confirmText;
+        confirmCallback = resolve;
+        confirmModal.style.display = 'flex';
+      });
+    }
+
+    // Close confirm dialog
+    function closeConfirmModalFunc() {
+      confirmModal.style.display = 'none';
+      if (confirmCallback) {
+        confirmCallback(false);
+        confirmCallback = null;
+      }
+    }
+
+    // Confirmation modal event listeners
+    confirmModalYes.addEventListener('click', function() {
+      confirmModal.style.display = 'none';
+      if (confirmCallback) {
+        confirmCallback(true);
+        confirmCallback = null;
+      }
+    });
+
+    confirmModalNo.addEventListener('click', closeConfirmModalFunc);
+    closeConfirmModal.addEventListener('click', closeConfirmModalFunc);
+    
+    confirmModal.addEventListener('click', function(e) {
+      if (e.target === confirmModal) {
+        closeConfirmModalFunc();
+      }
+    });
+
+    window.addAddress = openAddAddressModal;
+    window.openEditAddressModal = openEditAddressModal;
+    window.deleteAddress = deleteAddress;
+
+    // Profile edit modal
+    const profileEditModal = document.getElementById('profileEditModal');
+    const editProfileBtn = document.getElementById('editProfileBtn');
+    const closeProfileModal = document.getElementById('closeProfileModal');
+    const profileEditForm = document.getElementById('profileEditForm');
+    const editFirstName = document.getElementById('editFirstName');
+    const editLastName = document.getElementById('editLastName');
+    const editPhone = document.getElementById('editPhone');
+
+    // Open profile edit modal
+    async function openProfileEditModal() {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user) {
+        return;
+      }
+
+      try {
+        // Load user data from database
+        const userDoc = await window.getDoc(window.doc(window.firebaseDb, 'customers', user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          editFirstName.value = userData.firstName || '';
+          editLastName.value = userData.lastName || '';
+          editPhone.value = userData.phone || '';
+        } else {
+          // If no data exists, use empty values
+          editFirstName.value = '';
+          editLastName.value = '';
+          editPhone.value = '';
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        editFirstName.value = '';
+        editLastName.value = '';
+        editPhone.value = '';
+      }
+
+      profileEditModal.style.display = 'flex';
+    }
+
+    // Close profile edit modal
+    function closeProfileEditModal() {
+      profileEditModal.style.display = 'none';
+      // Clear errors
+      document.querySelectorAll('#profileEditForm .error-message').forEach(el => {
+        el.textContent = '';
+      });
+    }
+
+    // Save profile changes
+    async function saveProfileChanges() {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user) {
+        return;
+      }
+
+      const firstName = editFirstName.value.trim();
+      const lastName = editLastName.value.trim();
+      const phone = editPhone.value.trim();
+
+      // Check inputs
+      if (!firstName) {
+        document.getElementById('editFirstNameError').textContent = 'First name is required';
+        return;
+      }
+      if (!lastName) {
+        document.getElementById('editLastNameError').textContent = 'Last name is required';
+        return;
+      }
+
+      try {
+        // Save to database
+        await window.setDoc(
+          window.doc(window.firebaseDb, 'customers', user.uid),
+          {
+            firstName: firstName,
+            lastName: lastName,
+            phone: phone || '',
+            email: user.email || '',
+            updatedAt: new Date()
+          },
+          { merge: true }
+        );
+
+        // Display updates automatically
+        closeProfileEditModal();
+      } catch (error) {
+        console.error('Error saving profile:', error);
+      }
+    }
+
+    editProfileBtn.addEventListener('click', openProfileEditModal);
+    closeProfileModal.addEventListener('click', closeProfileEditModal);
+    
+    profileEditModal.addEventListener('click', function(e) {
+      if (e.target === profileEditModal) {
+        closeProfileEditModal();
+      }
+    });
+
+    profileEditForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      saveProfileChanges();
+    });
+
+    editFirstName.addEventListener('input', () => {
+      document.getElementById('editFirstNameError').textContent = '';
+    });
+    editLastName.addEventListener('input', () => {
+      document.getElementById('editLastNameError').textContent = '';
+    });
+    editPhone.addEventListener('input', () => {
+      document.getElementById('editPhoneError').textContent = '';
+    });
+
+    // Track user data changes
+    let stopUserDataListener = null;
+
+    // Update user display
+    function updateUserDisplay(userData, authUser) {
+      const nameLoading = document.getElementById('nameLoading');
+      const nameContent = document.getElementById('nameContent');
+      const emailLoading = document.getElementById('emailLoading');
+      const emailContent = document.getElementById('emailContent');
+
+      // Update name
+      if (userData) {
+        const firstName = userData.firstName || '';
+        const lastName = userData.lastName || '';
+        const fullName = `${firstName} ${lastName}`.trim() || authUser?.displayName || 'User';
+        nameContent.textContent = fullName;
+      } else {
+        nameContent.textContent = authUser?.displayName || 'User';
+      }
+
+      // Update email
+      const email = userData?.email || authUser?.email || 'user@example.com';
+      emailContent.textContent = email;
+
+      // Hide loading, show content
+      if (nameLoading) nameLoading.style.display = 'none';
+      if (nameContent) nameContent.style.display = '';
+      if (emailLoading) emailLoading.style.display = 'none';
+      if (emailContent) emailContent.style.display = '';
+    }
+
+    // Show error state
+    function showErrorState(authUser) {
+      const nameLoading = document.getElementById('nameLoading');
+      const nameContent = document.getElementById('nameContent');
+      const emailLoading = document.getElementById('emailLoading');
+      const emailContent = document.getElementById('emailContent');
+
+      // Use fallback values
+      nameContent.textContent = authUser?.displayName || 'User';
+      emailContent.textContent = authUser?.email || 'user@example.com';
+
+      // Hide loading, show content
+      if (nameLoading) nameLoading.style.display = 'none';
+      if (nameContent) nameContent.style.display = '';
+      if (emailLoading) emailLoading.style.display = 'none';
+      if (emailContent) emailContent.style.display = '';
+    }
+
+    // Track user data
+    function setupUserDataListener(user) {
+      if (!user || !user.uid) {
+        showErrorState(null);
+        renderAddresses([]);
+        return;
+      }
+
+      try {
+        const userDocRef = window.doc(window.firebaseDb, 'customers', user.uid);
+
+        // Track changes
+        stopUserDataListener = window.onSnapshot(
+          userDocRef,
+          (snapshot) => {
+            if (snapshot.exists()) {
+              const userData = snapshot.data();
+              updateUserDisplay(userData, user);
+              
+              // Update addresses
+              const addresses = userData.addresses || [];
+              renderAddresses(addresses);
+            } else {
+              // No data found, use auth user info
+              updateUserDisplay(null, user);
+              renderAddresses([]);
+            }
+          },
+          (error) => {
+            console.error('Error listening to user data:', error);
+            // Show error state with fallback values
+            showErrorState(user);
+            renderAddresses([]);
+          }
+        );
+      } catch (error) {
+        console.error('Error setting up user data listener:', error);
+        showErrorState(user);
+        renderAddresses([]);
+      }
+    }
+
+    // Stop tracking changes
+    function stopUserDataListenerFunc() {
+      if (stopUserDataListener) {
+        stopUserDataListener();
+        stopUserDataListener = null;
+      }
+    }
+
+    // Setup user data
+    function initUserData() {
+      if (!window.firebaseAuth || !window.firebaseReady) {
+        setTimeout(initUserData, 100);
+        return;
+      }
+
+      // Track login changes
+      window.onAuthStateChanged(window.firebaseAuth, (user) => {
+        stopUserDataListenerFunc();
+
+        if (user) {
+          // User is logged in, start tracking data
+          setupUserDataListener(user);
+        } else {
+          // User is not logged in, show default
+          showErrorState(null);
+          renderAddresses([]);
+        }
+      });
+    }
+
+    initUserData();
+    window.addEventListener('beforeunload', stopUserDataListenerFunc);
+
+    // Password change
+    // Password toggle
+    function setupPasswordToggle(toggleId, inputId) {
+      const toggle = document.getElementById(toggleId);
+      const input = document.getElementById(inputId);
+      if (!toggle || !input) return;
+      
+      const icon = toggle.querySelector('i');
+      toggle.addEventListener('click', function() {
+        if (input.type === 'password') {
+          input.type = 'text';
+          icon.classList.remove('fa-eye');
+          icon.classList.add('fa-eye-slash');
+        } else {
+          input.type = 'password';
+          icon.classList.remove('fa-eye-slash');
+          icon.classList.add('fa-eye');
+        }
+      });
+    }
+
+    // Setup password toggles
+    setupPasswordToggle('currentPasswordToggle', 'currentPassword');
+    setupPasswordToggle('newPasswordToggle', 'newPassword');
+    setupPasswordToggle('confirmNewPasswordToggle', 'confirmNewPassword');
+
+    // Password strength
+    function checkPasswordStrength(password) {
+      let strength = 0;
+      if (password.length >= 8) strength++;
+      if (/[a-z]/.test(password)) strength++;
+      if (/[A-Z]/.test(password)) strength++;
+      if (/[0-9]/.test(password)) strength++;
+      if (/[^a-zA-Z0-9]/.test(password)) strength++;
+      return strength;
+    }
+
+    function updatePasswordStrength(password) {
+      const strengthFill = document.getElementById('newPasswordStrengthFill');
+      const strengthText = document.getElementById('newPasswordStrengthText');
+      const strengthContainer = document.getElementById('newPasswordStrength');
+
+      if (!password) {
+        strengthContainer.style.display = 'none';
+        return;
+      }
+
+      strengthContainer.style.display = 'block';
+      const strength = checkPasswordStrength(password);
+      const percentage = (strength / 5) * 100;
+      strengthFill.style.width = percentage + '%';
+
+      if (strength <= 1) {
+        strengthFill.style.backgroundColor = '#e53935';
+        strengthText.textContent = 'Weak';
+        strengthText.style.color = '#e53935';
+      } else if (strength <= 3) {
+        strengthFill.style.backgroundColor = '#ff9800';
+        strengthText.textContent = 'Medium';
+        strengthText.style.color = '#ff9800';
+      } else {
+        strengthFill.style.backgroundColor = '#4caf50';
+        strengthText.textContent = 'Strong';
+        strengthText.style.color = '#4caf50';
+      }
+    }
+
+    // Error handling
+    function showPasswordError(fieldId, message) {
+      const errorElement = document.getElementById(fieldId + 'Error');
+      const inputElement = document.getElementById(fieldId);
+      if (errorElement) {
+        errorElement.textContent = message;
+      }
+      if (inputElement) {
+        inputElement.classList.add('error');
+      }
+    }
+
+    function clearPasswordError(fieldId) {
+      const errorElement = document.getElementById(fieldId + 'Error');
+      const inputElement = document.getElementById(fieldId);
+      if (errorElement) {
+        errorElement.textContent = '';
+      }
+      if (inputElement) {
+        inputElement.classList.remove('error');
+      }
+    }
+
+    function clearAllPasswordErrors() {
+      clearPasswordError('currentPassword');
+      clearPasswordError('newPassword');
+      clearPasswordError('confirmNewPassword');
+    }
+
+    // Check inputs
+    function validateCurrentPassword(value) {
+      if (!value) {
+        return 'Current password is required';
+      }
+      return '';
+    }
+
+    function validateNewPassword(value) {
+      if (!value) {
+        return 'New password is required';
+      }
+      if (value.length < 6) {
+        return 'Password must be at least 6 characters';
+      }
+      const strength = checkPasswordStrength(value);
+      if (strength < 2) {
+        return 'Password is too weak. Use a mix of letters, numbers, and special characters';
+      }
+      return '';
+    }
+
+    function validateConfirmPassword(value, newPassword) {
+      if (!value) {
+        return 'Please confirm your new password';
+      }
+      if (value !== newPassword) {
+        return 'Passwords do not match';
+      }
+      return '';
+    }
+
+    // Check inputs as user types
+    const currentPasswordInput = document.getElementById('currentPassword');
+    const newPasswordInput = document.getElementById('newPassword');
+    const confirmNewPasswordInput = document.getElementById('confirmNewPassword');
+
+    if (currentPasswordInput) {
+      currentPasswordInput.addEventListener('input', () => clearPasswordError('currentPassword'));
+      currentPasswordInput.addEventListener('blur', function() {
+        const error = validateCurrentPassword(this.value);
+        if (error) {
+          showPasswordError('currentPassword', error);
+        }
+      });
+    }
+
+    if (newPasswordInput) {
+      newPasswordInput.addEventListener('input', function() {
+        const password = this.value;
+        updatePasswordStrength(password);
+        clearPasswordError('newPassword');
+        
+        // Validate confirm password if it has a value
+        const confirmPassword = confirmNewPasswordInput.value;
+        if (confirmPassword) {
+          const confirmError = validateConfirmPassword(confirmPassword, password);
+          if (confirmError) {
+            showPasswordError('confirmNewPassword', confirmError);
+          } else {
+            clearPasswordError('confirmNewPassword');
+          }
+        }
+      });
+      newPasswordInput.addEventListener('blur', function() {
+        const error = validateNewPassword(this.value);
+        if (error) {
+          showPasswordError('newPassword', error);
+        }
+      });
+    }
+
+    if (confirmNewPasswordInput) {
+      confirmNewPasswordInput.addEventListener('input', function() {
+        clearPasswordError('confirmNewPassword');
+        const newPassword = newPasswordInput.value;
+        if (this.value && this.value === newPassword) {
+          clearPasswordError('confirmNewPassword');
+        }
+      });
+      confirmNewPasswordInput.addEventListener('blur', function() {
+        const newPassword = newPasswordInput.value;
+        const error = validateConfirmPassword(this.value, newPassword);
+        if (error) {
+          showPasswordError('confirmNewPassword', error);
+        }
+      });
+    }
+
+    // Form state
+    let isChangingPassword = false;
+
+    function setPasswordFormState(submitting) {
+      isChangingPassword = submitting;
+      const saveBtn = document.getElementById('savePasswordBtn');
+      const saveBtnText = document.getElementById('savePasswordBtnText');
+      
+      if (submitting) {
+        saveBtn.disabled = true;
+        saveBtn.classList.add('disabled');
+        saveBtnText.textContent = 'Updating...';
+      } else {
+        saveBtn.disabled = false;
+        saveBtn.classList.remove('disabled');
+        saveBtnText.textContent = 'Save Changes';
+      }
+    }
+
+    // Show success
+    function showPasswordSuccess() {
+      const successMessage = document.getElementById('passwordSuccessMessage');
+      if (successMessage) {
+        successMessage.style.display = 'flex';
+        setTimeout(() => {
+          successMessage.style.display = 'none';
+        }, 5000);
+      }
+    }
+
+    // Change password
+    async function changePassword(currentPassword, newPassword) {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user || !user.email) {
+        showPasswordError('currentPassword', 'You must be logged in to change your password');
+        return;
+      }
+
+      try {
+        // Check current password
+        const credential = window.EmailAuthProvider.credential(user.email, currentPassword);
+        await window.reauthenticateWithCredential(user, credential);
+        // Update to new password
+        await window.updatePassword(user, newPassword);
+        showPasswordSuccess();
+        document.getElementById('passwordChangeForm').reset();
+        clearAllPasswordErrors();
+        document.getElementById('newPasswordStrength').style.display = 'none';
+
+      } catch (error) {
+        console.error('Error changing password:', error);
+        
+        let errorMessage = 'An error occurred while changing your password. Please try again.';
+        let errorField = 'currentPassword';
+
+        switch (error.code) {
+          case 'auth/wrong-password':
+            errorMessage = 'Current password is incorrect. Please try again.';
+            errorField = 'currentPassword';
+            break;
+          case 'auth/weak-password':
+            errorMessage = 'New password is too weak. Please use a stronger password.';
+            errorField = 'newPassword';
+            break;
+          case 'auth/requires-recent-login':
+            errorMessage = 'For security, please log out and log back in before changing your password.';
+            errorField = 'currentPassword';
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = 'Network error. Please check your internet connection and try again.';
+            errorField = 'currentPassword';
+            break;
+          default:
+            errorMessage = error.message || errorMessage;
+        }
+
+        showPasswordError(errorField, errorMessage);
+        setPasswordFormState(false);
+      }
+    }
+
+    // Form submission
+    const passwordChangeForm = document.getElementById('passwordChangeForm');
+    if (passwordChangeForm) {
+      passwordChangeForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (isChangingPassword) {
+          return;
+        }
+
+        clearAllPasswordErrors();
+
+        const currentPassword = currentPasswordInput.value;
+        const newPassword = newPasswordInput.value;
+        const confirmPassword = confirmNewPasswordInput.value;
+
+        // Check inputs
+        let hasErrors = false;
+
+        const currentPasswordError = validateCurrentPassword(currentPassword);
+        if (currentPasswordError) {
+          showPasswordError('currentPassword', currentPasswordError);
+          hasErrors = true;
+        }
+
+        const newPasswordError = validateNewPassword(newPassword);
+        if (newPasswordError) {
+          showPasswordError('newPassword', newPasswordError);
+          hasErrors = true;
+        }
+
+        const confirmPasswordError = validateConfirmPassword(confirmPassword, newPassword);
+        if (confirmPasswordError) {
+          showPasswordError('confirmNewPassword', confirmPasswordError);
+          hasErrors = true;
+        }
+
+        // Check if new password is same as current
+        if (currentPassword && newPassword && currentPassword === newPassword) {
+          showPasswordError('newPassword', 'New password must be different from current password');
+          hasErrors = true;
+        }
+
+        if (hasErrors) {
+          return;
+        }
+
+        setPasswordFormState(true);
+        await changePassword(currentPassword, newPassword);
+        setPasswordFormState(false);
+      });
+    }
+
+    // Account deletion
+    // Password modal elements
+    const deleteAccountPasswordModal = document.getElementById('deleteAccountPasswordModal');
+    const deleteAccountPasswordForm = document.getElementById('deleteAccountPasswordForm');
+    const deleteAccountPasswordInput = document.getElementById('deleteAccountPassword');
+    const deleteAccountPasswordError = document.getElementById('deleteAccountPasswordError');
+    const closeDeletePasswordModal = document.getElementById('closeDeletePasswordModal');
+    const cancelDeleteAccountBtn = document.getElementById('cancelDeleteAccountBtn');
+    const confirmDeleteAccountBtn = document.getElementById('confirmDeleteAccountBtn');
+    const confirmDeleteAccountBtnText = document.getElementById('confirmDeleteAccountBtnText');
+    let isDeletingAccount = false;
+
+    setupPasswordToggle('deleteAccountPasswordToggle', 'deleteAccountPassword');
+
+    // Close password modal
+    function closeDeletePasswordModalFunc() {
+      deleteAccountPasswordModal.style.display = 'none';
+      deleteAccountPasswordForm.reset();
+      deleteAccountPasswordError.textContent = '';
+      isDeletingAccount = false;
+    }
+
+    closeDeletePasswordModal.addEventListener('click', closeDeletePasswordModalFunc);
+    cancelDeleteAccountBtn.addEventListener('click', closeDeletePasswordModalFunc);
+    deleteAccountPasswordModal.addEventListener('click', function(e) {
+      if (e.target === deleteAccountPasswordModal) {
+        closeDeletePasswordModalFunc();
+      }
+    });
+
+    deleteAccountPasswordInput.addEventListener('input', () => {
+      deleteAccountPasswordError.textContent = '';
+    });
+
+    // Delete account
+    async function deleteAccount(password) {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user || !user.email) {
+        throw new Error('User not found');
+      }
+
+      try {
+        // Check password before deleting
+        const credential = window.EmailAuthProvider.credential(user.email, password);
+        await window.reauthenticateWithCredential(user, credential);
+
+        const userId = user.uid;
+        const userDocRef = window.doc(window.firebaseDb, 'customers', userId);
+        
+        try {
+          const userDoc = await window.getDoc(userDocRef);
+          if (userDoc.exists()) {
+            await window.deleteDoc(userDocRef);
+          }
+        } catch (firestoreError) {
+          console.error('Error deleting user data:', firestoreError);
+        }
+
+        await window.deleteUser(user);
+        localStorage.removeItem('ppp_user');
+        await window.signOut(window.firebaseAuth);
+        closeDeletePasswordModalFunc();
+        window.location.href = 'index.html';
+      } catch (error) {
+        console.error('Error deleting account:', error);
+        throw error;
+      }
+    }
+
+    // Handle password form submission
+    deleteAccountPasswordForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      if (isDeletingAccount) {
+        return;
+      }
+
+      const password = deleteAccountPasswordInput.value.trim();
+
+      if (!password) {
+        deleteAccountPasswordError.textContent = 'Password is required';
+        return;
+      }
+
+      isDeletingAccount = true;
+      confirmDeleteAccountBtn.disabled = true;
+      confirmDeleteAccountBtnText.textContent = 'Deleting...';
+
+      try {
+        await deleteAccount(password);
+      } catch (error) {
+        isDeletingAccount = false;
+        confirmDeleteAccountBtn.disabled = false;
+        confirmDeleteAccountBtnText.textContent = 'Delete Account';
+
+        let errorMessage = 'An error occurred while deleting your account. Please try again.';
+        
+        switch (error.code) {
+          case 'auth/wrong-password':
+            errorMessage = 'Incorrect password. Please try again.';
+            break;
+          case 'auth/invalid-credential':
+            errorMessage = 'Wrong password. Please try again.';
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = 'Network error. Please check your internet connection and try again.';
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = 'Too many failed attempts. Please try again later.';
+            break;
+          default:
+            errorMessage = error.message || errorMessage;
+        }
+
+        deleteAccountPasswordError.textContent = errorMessage;
+      }
+    });
+
+    // Delete user account
+    async function deleteUserAccount() {
+      const user = window.firebaseAuth?.currentUser;
+      if (!user) {
+        await showConfirmModal(
+          'You must be logged in to delete your account.',
+          'Error',
+          'OK'
+        );
+        return;
+      }
+
+      const confirmed = await showConfirmModal(
+        'Are you sure you want to delete your account? This will delete all your data forever and cannot be undone.',
+        'Delete Account',
+        'Yes, Delete Account'
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      deleteAccountPasswordModal.style.display = 'flex';
+      deleteAccountPasswordInput.focus();
+    }
+
+    document.getElementById('deleteAccountBtn').addEventListener('click', deleteUserAccount);
+  </script>
+</body>
+</html>
+

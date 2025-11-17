@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drinks - PABLO'S PERI PERI</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle"></i>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <i class="fas fa-user"></i>
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item"><span>Orders</span></a>
+          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <a href="food_item.html" class="back-button">
+    <i class="fas fa-arrow-left"></i>
+    <span>Back</span>
+  </a>
+
+  <main class="drink-main-container">
+    <div class="drink-header">
+      <h1 class="drink-page-title">Choose Your Drinks</h1>
+    </div>
+    
+    <div class="drinks-container">
+      <div class="drink-item">
+        <div class="drink-image-container">
+          <img src="tea.png" alt="Iced Tea" class="drink-image">
+          <div class="drink-badge">
+          </div>
+        </div>
+        <div class="drink-details">
+          <div class="drink-info">
+            <h3 class="drink-name">Iced Tea</h3>
+          </div>
+          <div class="drink-options">
+            <div class="size-selector">
+              <label class="size-label">Size:</label>
+              <select class="size-select" id="size-icetea">
+                <option value="Large">Large</option>
+                <option value="Regular">Regular</option>
+              </select>
+            </div>
+          </div>
+          <div class="drink-price-section">
+            <div class="drink-price" id="price-icetea">₱101.00</div>
+            <div class="price-per-unit">₱101.00 each</div>
+          </div>
+        </div>
+        <div class="drink-quantity-controls">
+          <button class="drink-qty-btn minus-btn" onclick="changeQty('icetea', -1)" aria-label="Decrease Iced Tea">
+            <i class="fas fa-minus"></i>
+          </button>
+          <span class="drink-qty-value" id="qty-icetea">1</span>
+          <button class="drink-qty-btn plus-btn" onclick="changeQty('icetea', 1)" aria-label="Increase Iced Tea">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="drink-item">
+        <div class="drink-image-container">
+          <img src="coke.png" alt="Coke" class="drink-image">
+          <div class="drink-badge special">
+          </div>
+        </div>
+        <div class="drink-details">
+          <div class="drink-info">
+            <h3 class="drink-name">Coke</h3>
+          </div>
+          <div class="drink-price-section">
+            <div class="drink-price" id="price-coke">₱79.00</div>
+            <div class="price-per-unit">₱79.00 each</div>
+          </div>
+        </div>
+        <div class="drink-quantity-controls">
+          <button class="drink-qty-btn minus-btn" onclick="changeQty('coke', -1)" aria-label="Decrease Coke">
+            <i class="fas fa-minus"></i>
+          </button>
+          <span class="drink-qty-value" id="qty-coke">0</span>
+          <button class="drink-qty-btn plus-btn" onclick="changeQty('coke', 1)" aria-label="Increase Coke">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="drink-no-thanks" onclick="skipDrinks()">
+        <i class="fas fa-times-circle"></i>
+        <span>No Thanks!</span>
+      </div>
+      
+      <button class="drink-add-button" onclick="addToOrder()">
+        <i class="fas fa-plus"></i>
+        <span>Add to Order</span>
+        <span class="total-amount" id="total-amount">₱101.00</span>
+      </button>
+    </div>
+  </main>
+
+  <script>
+    const prices = {
+      icetea: { Large: 101, Regular: 90 },
+      coke: 79
+    };
+    
+    let qty = { icetea: 1, coke: 0 };
+    
+    function changeQty(drink, delta) {
+      qty[drink] = Math.max(0, qty[drink] + delta);
+      document.getElementById('qty-' + drink).textContent = qty[drink];
+      updateTotal();
+    }
+    
+    function updateTotal() {
+      const iceteaSize = document.getElementById('size-icetea').value;
+      const iceteaPrice = prices.icetea[iceteaSize];
+      const cokePrice = prices.coke;
+      
+      const total = (iceteaPrice * qty.icetea) + (cokePrice * qty.coke);
+      document.getElementById('total-amount').textContent = `₱${total}.00`;
+    }
+    
+    document.getElementById('size-icetea').addEventListener('change', function() {
+      const price = prices.icetea[this.value];
+      document.getElementById('price-icetea').textContent = `₱${price}.00`;
+      document.querySelector('#price-icetea').nextElementSibling.textContent = `₱${price}.00 each`;
+      updateTotal();
+    });
+
+    function skipDrinks() {
+      // Check if any drinks are selected
+      const totalDrinks = qty.icetea + qty.coke;
+      
+      if (totalDrinks === 0) {
+        // No drinks selected, go to menu
+        window.location.href = 'menu.html';
+      } else {
+        // Drinks selected, go to cart
+        window.location.href = 'cart_review.html';
+      }
+    }
+
+    function addToOrder() {
+      // Check if any drinks are selected
+      const totalDrinks = qty.icetea + qty.coke;
+      
+      if (totalDrinks === 0) {
+        return;
+      }
+      
+      // Show big notification
+      showBigNotification();
+      
+      // Navigate to cart after showing notification
+      setTimeout(() => {
+        window.location.href = 'cart_review.html';
+      }, 1500);
+    }
+
+    function showBigNotification() {
+      // Create big notification overlay
+      const overlay = document.createElement('div');
+      overlay.className = 'big-notification-overlay';
+      overlay.innerHTML = `
+        <div class="big-notification">
+          <div class="checkmark-circle">
+            <i class="fas fa-check"></i>
+          </div>
+          <h2>Added to Order!</h2>
+          <p>Your drinks have been added successfully</p>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      
+      // Remove after animation
+      setTimeout(() => {
+        overlay.remove();
+      }, 1500);
+    }
+
+    function goHome() {
+      window.location.href = 'menu.html';
+    }
+
+    function goToCart() {
+      window.location.href = 'cart_review.html';
+    }
+
+    // Profile dropdown logic
+    (function initProfileDropdown(){
+      const btn = document.getElementById('profileButton');
+      const dropdown = document.getElementById('profileDropdown');
+      if (!btn || !dropdown) return;
+
+      function toggleDropdown(e){
+        e.stopPropagation();
+        dropdown.classList.toggle('show');
+      }
+
+      function handleOutside(e){
+        if (!dropdown.classList.contains('show')) return;
+        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+          dropdown.classList.remove('show');
+        }
+      }
+
+      btn.addEventListener('click', toggleDropdown);
+      document.addEventListener('click', handleOutside);
+      document.addEventListener('keydown', (e)=>{
+        if (e.key === 'Escape') dropdown.classList.remove('show');
+      });
+
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', function(){
+          dropdown.classList.remove('show');
+          alert('You have been logged out.');
+          setTimeout(()=>{ window.location.href = 'login.html'; }, 300);
+        });
+      }
+    })();
+
+    // Initialize total
+    updateTotal();
+  </script>
+
+  <style>
+    .big-notification-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .big-notification {
+      background: white;
+      padding: 40px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      animation: scaleIn 0.4s ease;
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .checkmark-circle {
+      width: 80px;
+      height: 80px;
+      background: #4caf50;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      animation: checkmarkPulse 0.6s ease;
+    }
+
+    .checkmark-circle i {
+      color: white;
+      font-size: 40px;
+      font-weight: bold;
+    }
+
+    .big-notification h2 {
+      color: #333;
+      margin: 0 0 10px 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .big-notification p {
+      color: #666;
+      margin: 0;
+      font-size: 16px;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes scaleIn {
+      from {
+        transform: scale(0.8);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    @keyframes checkmarkPulse {
+      0% {
+        transform: scale(0);
+      }
+      50% {
+        transform: scale(1.1);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+  </style>
+
+</body>
+</html>

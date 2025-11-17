@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Pablo's Peri Peri</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+
+</head>
+<body class="restaurant-login-body">
+    <!-- Header -->
+    <header class="header">
+        <div class="logo-container">
+            <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+            <div class="brand-name">PABLO'S<br>PERI PERI</div>
+        </div>
+        <div class="nav-icons">
+            <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+                <i class="fas fa-home"></i>
+            </div>
+        </div>
+    </header>
+
+    <div class="header-banner">
+        <div class="banner-content">
+            <i class="fas fa-fire banner-icon"></i>
+            <span>Tara na sa Pablo's Maiba naman!</span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="restaurant-auth-container">
+        <div class="restaurant-auth-card">
+            <div class="restaurant-auth-header">
+                <h1 class="restaurant-auth-title">Create Account</h1>
+            </div>
+
+            <form class="restaurant-auth-form" id="registerForm">
+                <div class="form-row">
+                    <div class="restaurant-form-group">
+                        <label for="firstName" class="restaurant-form-label">First Name</label>
+                        <input type="text" id="firstName" name="firstName" class="restaurant-form-input" placeholder="Enter first name" required>
+                        <span class="error-message" id="firstNameError"></span>
+                    </div>
+                    <div class="restaurant-form-group">
+                        <label for="lastName" class="restaurant-form-label">Last Name</label>
+                        <input type="text" id="lastName" name="lastName" class="restaurant-form-input" placeholder="Enter last name" required>
+                        <span class="error-message" id="lastNameError"></span>
+                    </div>
+                </div>
+
+                <div class="restaurant-form-group">
+                    <label for="email" class="restaurant-form-label">Email Address</label>
+                    <input type="email" id="email" name="email" class="restaurant-form-input" placeholder="Enter your email" required>
+                    <span class="error-message" id="emailError"></span>
+                </div>
+
+                <div class="restaurant-form-group">
+                    <label for="phone" class="restaurant-form-label">Phone Number</label>
+                    <input type="tel" id="phone" name="phone" class="restaurant-form-input" placeholder="Enter phone number" required>
+                    <span class="error-message" id="phoneError"></span>
+                </div>
+
+                <div class="restaurant-form-group">
+                    <label for="password" class="restaurant-form-label">Password</label>
+                    <div class="password-input-container">
+                        <input type="password" id="password" name="password" class="restaurant-form-input" placeholder="Create a password" required>
+                        <button type="button" class="password-toggle" id="passwordToggle">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="password-strength" id="passwordStrength">
+                        <div class="password-strength-bar">
+                            <div class="password-strength-fill" id="passwordStrengthFill"></div>
+                        </div>
+                        <span class="password-strength-text" id="passwordStrengthText"></span>
+                    </div>
+                    <span class="error-message" id="passwordError"></span>
+                </div>
+
+                <div class="restaurant-form-group">
+                    <label for="confirmPassword" class="restaurant-form-label">Confirm Password</label>
+                    <div class="password-input-container">
+                        <input type="password" id="confirmPassword" name="confirmPassword" class="restaurant-form-input" placeholder="Confirm your password" required>
+                        <button type="button" class="password-toggle" id="confirmPasswordToggle">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <span class="error-message" id="confirmPasswordError"></span>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="terms" name="terms" required>
+                        <span class="checkmark"></span>
+                        I agree to the<a href="#" class="terms-link">Terms of Service</a>
+                    </label>
+                    <span class="error-message" id="termsError"></span>
+                </div>
+
+                <button type="submit" class="restaurant-auth-button" id="submitButton">
+                    <span id="submitButtonText">Create Account</span>
+                </button>
+            </form>
+
+            <div class="restaurant-auth-footer">
+                <p>Already have an account? <a href="login.html" class="restaurant-auth-link">Sign in</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div class="success-modal" id="successModal">
+        <div class="success-modal-content">
+            <div class="success-checkmark">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h2 class="success-title">Account Created Successfully!</h2>
+            <p class="success-message">Redirecting to login page</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA4N_Q6hTfKGBdnSkZxWRyyYxeJNFncOKw",
+            authDomain: "pablo-s-peri-peri-database.firebaseapp.com",
+            projectId: "pablo-s-peri-peri-database",
+            storageBucket: "pablo-s-peri-peri-database.firebasestorage.app",
+            messagingSenderId: "862159042861",
+            appId: "1:862159042861:web:b9215e4f7fbea8c44ffba4",
+            measurementId: "G-76TEJYQHQN"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.setDoc = setDoc;
+        window.doc = doc;
+    </script>
+
+    <script>
+        // Navigation
+        function goHome() {
+            window.location.href = 'index.html';
+        }
+
+        // Password toggle
+        function setupPasswordToggle(toggleId, inputId) {
+            const passwordToggle = document.getElementById(toggleId);
+            const passwordInput = document.getElementById(inputId);
+            const passwordIcon = passwordToggle.querySelector('i');
+
+            passwordToggle.addEventListener('click', function() {
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    passwordIcon.classList.remove('fa-eye');
+                    passwordIcon.classList.add('fa-eye-slash');
+                } else {
+                    passwordInput.type = 'password';
+                    passwordIcon.classList.remove('fa-eye-slash');
+                    passwordIcon.classList.add('fa-eye');
+                }
+            });
+        }
+
+        setupPasswordToggle('passwordToggle', 'password');
+        setupPasswordToggle('confirmPasswordToggle', 'confirmPassword');
+
+        // Error handling
+        function showError(fieldId, message) {
+            const errorElement = document.getElementById(fieldId + 'Error');
+            const inputElement = document.getElementById(fieldId);
+            if (errorElement) {
+                errorElement.textContent = message;
+            }
+            if (inputElement) {
+                inputElement.classList.add('error');
+            }
+        }
+
+        function clearError(fieldId) {
+            const errorElement = document.getElementById(fieldId + 'Error');
+            const inputElement = document.getElementById(fieldId);
+            if (errorElement) {
+                errorElement.textContent = '';
+            }
+            if (inputElement) {
+                inputElement.classList.remove('error');
+            }
+        }
+
+        function clearAllErrors() {
+            clearError('firstName');
+            clearError('lastName');
+            clearError('email');
+            clearError('phone');
+            clearError('password');
+            clearError('confirmPassword');
+            clearError('terms');
+        }
+
+        // Form state
+        let isSubmitting = false;
+
+        function setFormState(submitting) {
+            isSubmitting = submitting;
+            const submitButton = document.getElementById('submitButton');
+            const submitButtonText = document.getElementById('submitButtonText');
+            
+            if (submitting) {
+                submitButton.disabled = true;
+                submitButton.classList.add('disabled');
+                submitButtonText.textContent = 'Creating Account...';
+            } else {
+                submitButton.disabled = false;
+                submitButton.classList.remove('disabled');
+                submitButtonText.textContent = 'Create Account';
+            }
+        }
+
+        // Password strength
+        function checkPasswordStrength(password) {
+            let strength = 0;
+            let feedback = [];
+
+            if (password.length >= 8) strength++;
+            else feedback.push('At least 8 characters');
+
+            if (/[a-z]/.test(password)) strength++;
+            else feedback.push('lowercase letter');
+
+            if (/[A-Z]/.test(password)) strength++;
+            else feedback.push('uppercase letter');
+
+            if (/[0-9]/.test(password)) strength++;
+            else feedback.push('number');
+
+            if (/[^a-zA-Z0-9]/.test(password)) strength++;
+            else feedback.push('special character');
+
+            return { strength, feedback };
+        }
+
+        function updatePasswordStrength(password) {
+            const strengthFill = document.getElementById('passwordStrengthFill');
+            const strengthText = document.getElementById('passwordStrengthText');
+            const strengthContainer = document.getElementById('passwordStrength');
+
+            if (!password) {
+                strengthContainer.style.display = 'none';
+                return;
+            }
+
+            strengthContainer.style.display = 'block';
+            const { strength, feedback } = checkPasswordStrength(password);
+
+            // Update strength bar
+            const percentage = (strength / 5) * 100;
+            strengthFill.style.width = percentage + '%';
+
+            // Update colors and text
+            if (strength <= 1) {
+                strengthFill.style.backgroundColor = '#e53935';
+                strengthText.textContent = 'Weak';
+                strengthText.style.color = '#e53935';
+            } else if (strength <= 3) {
+                strengthFill.style.backgroundColor = '#ff9800';
+                strengthText.textContent = 'Medium';
+                strengthText.style.color = '#ff9800';
+            } else {
+                strengthFill.style.backgroundColor = '#4caf50';
+                strengthText.textContent = 'Strong';
+                strengthText.style.color = '#4caf50';
+            }
+        }
+
+        // Check inputs
+        function validateFirstName(value) {
+            if (!value.trim()) {
+                return 'First name is required';
+            }
+            if (value.trim().length < 2) {
+                return 'First name must be at least 2 characters';
+            }
+            if (!/^[a-zA-Z\s'-]+$/.test(value.trim())) {
+                return 'First name can only contain letters, spaces, hyphens, and apostrophes';
+            }
+            return '';
+        }
+
+        function validateLastName(value) {
+            if (!value.trim()) {
+                return 'Last name is required';
+            }
+            if (value.trim().length < 2) {
+                return 'Last name must be at least 2 characters';
+            }
+            if (!/^[a-zA-Z\s'-]+$/.test(value.trim())) {
+                return 'Last name can only contain letters, spaces, hyphens, and apostrophes';
+            }
+            return '';
+        }
+
+        function validateEmail(value) {
+            if (!value.trim()) {
+                return 'Email is required';
+            }
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(value.trim())) {
+                return 'Please enter a valid email address';
+            }
+            return '';
+        }
+
+        function validatePhone(value) {
+            if (!value.trim()) {
+                return 'Phone number is required';
+            }
+            // Remove common formatting characters
+            const phoneDigits = value.replace(/[\s\-\(\)]/g, '');
+            if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+                return 'Please enter a valid phone number';
+            }
+            return '';
+        }
+
+        function validatePassword(value) {
+            if (!value) {
+                return 'Password is required';
+            }
+            if (value.length < 6) {
+                return 'Password must be at least 6 characters';
+            }
+            const { strength } = checkPasswordStrength(value);
+            if (strength < 2) {
+                return 'Password is too weak. Use a mix of letters, numbers, and special characters';
+            }
+            return '';
+        }
+
+        function validateConfirmPassword(value, password) {
+            if (!value) {
+                return 'Please confirm your password';
+            }
+            if (value !== password) {
+                return 'Passwords do not match';
+            }
+            return '';
+        }
+
+        // Check inputs as user types
+        document.getElementById('firstName').addEventListener('blur', function() {
+            const error = validateFirstName(this.value);
+            if (error) {
+                showError('firstName', error);
+            } else {
+                clearError('firstName');
+            }
+        });
+
+        document.getElementById('lastName').addEventListener('blur', function() {
+            const error = validateLastName(this.value);
+            if (error) {
+                showError('lastName', error);
+            } else {
+                clearError('lastName');
+            }
+        });
+
+        document.getElementById('email').addEventListener('blur', function() {
+            const error = validateEmail(this.value);
+            if (error) {
+                showError('email', error);
+            } else {
+                clearError('email');
+            }
+        });
+
+        document.getElementById('phone').addEventListener('blur', function() {
+            const error = validatePhone(this.value);
+            if (error) {
+                showError('phone', error);
+            } else {
+                clearError('phone');
+            }
+        });
+
+        document.getElementById('password').addEventListener('input', function() {
+            const password = this.value;
+            updatePasswordStrength(password);
+            clearError('password');
+            
+            // Validate confirm password if it has a value
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            if (confirmPassword) {
+                const confirmError = validateConfirmPassword(confirmPassword, password);
+                if (confirmError) {
+                    showError('confirmPassword', confirmError);
+                } else {
+                    clearError('confirmPassword');
+                }
+            }
+        });
+
+        document.getElementById('password').addEventListener('blur', function() {
+            const error = validatePassword(this.value);
+            if (error) {
+                showError('password', error);
+            } else {
+                clearError('password');
+            }
+        });
+
+        document.getElementById('confirmPassword').addEventListener('blur', function() {
+            const password = document.getElementById('password').value;
+            const error = validateConfirmPassword(this.value, password);
+            if (error) {
+                showError('confirmPassword', error);
+            } else {
+                clearError('confirmPassword');
+            }
+        });
+
+        document.getElementById('firstName').addEventListener('input', () => clearError('firstName'));
+        document.getElementById('lastName').addEventListener('input', () => clearError('lastName'));
+        document.getElementById('email').addEventListener('input', () => clearError('email'));
+        document.getElementById('phone').addEventListener('input', () => clearError('phone'));
+        document.getElementById('confirmPassword').addEventListener('input', function() {
+            clearError('confirmPassword');
+            const password = document.getElementById('password').value;
+            if (this.value && this.value === password) {
+                clearError('confirmPassword');
+            }
+        });
+        document.getElementById('terms').addEventListener('change', () => clearError('terms'));
+
+        // Success modal
+        function showSuccessModal() {
+            const modal = document.getElementById('successModal');
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                window.location.href = 'login.html';
+            }, 2000);
+        }
+
+        // Form submission
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (isSubmitting) {
+                return;
+            }
+            
+            const firstName = document.getElementById('firstName').value.trim();
+            const lastName = document.getElementById('lastName').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const terms = document.getElementById('terms').checked;
+            
+            clearAllErrors();
+            let hasErrors = false;
+            
+            const firstNameError = validateFirstName(firstName);
+            if (firstNameError) {
+                showError('firstName', firstNameError);
+                hasErrors = true;
+            }
+            
+            const lastNameError = validateLastName(lastName);
+            if (lastNameError) {
+                showError('lastName', lastNameError);
+                hasErrors = true;
+            }
+            
+            const emailError = validateEmail(email);
+            if (emailError) {
+                showError('email', emailError);
+                hasErrors = true;
+            }
+            
+            const phoneError = validatePhone(phone);
+            if (phoneError) {
+                showError('phone', phoneError);
+                hasErrors = true;
+            }
+            
+            const passwordError = validatePassword(password);
+            if (passwordError) {
+                showError('password', passwordError);
+                hasErrors = true;
+            }
+            
+            const confirmPasswordError = validateConfirmPassword(confirmPassword, password);
+            if (confirmPasswordError) {
+                showError('confirmPassword', confirmPasswordError);
+                hasErrors = true;
+            }
+            
+            if (!terms) {
+                showError('terms', 'Please agree to the Terms of Service and Privacy Policy');
+                hasErrors = true;
+            }
+            
+            if (hasErrors) {
+                return;
+            }
+            
+            setFormState(true);
+            registerUser(firstName, lastName, email, phone, password);
+        });
+
+        // Registration
+        async function registerUser(firstName, lastName, email, phone, password) {
+            try {
+                const userCredential = await window.createUserWithEmailAndPassword(
+                    window.firebaseAuth,
+                    email,
+                    password
+                );
+
+                const user = userCredential.user;
+
+                if (!user || !user.uid) {
+                    throw new Error('Account creation failed');
+                }
+
+                // Save user data to database
+                await window.setDoc(window.doc(window.firebaseDb, "customers", user.uid), {
+                    firstName: firstName,
+                    lastName: lastName,
+                    email: email,
+                    phone: phone,
+                    createdAt: new Date(),
+                    uid: user.uid
+                });
+
+                showSuccessModal();
+                
+            } catch (error) {
+                setFormState(false);
+                
+                let errorMessage = 'An error occurred during registration. Please try again.';
+                let errorField = 'email';
+                
+                switch (error.code) {
+                    case 'auth/email-already-in-use':
+                        errorMessage = 'This email is already registered. Please use a different email or sign in.';
+                        errorField = 'email';
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = 'Invalid email address. Please enter a valid email.';
+                        errorField = 'email';
+                        break;
+                    case 'auth/weak-password':
+                        errorMessage = 'Password is too weak. Please use a stronger password (at least 6 characters).';
+                        errorField = 'password';
+                        break;
+                    case 'auth/network-request-failed':
+                        errorMessage = 'Network error. Please check your internet connection and try again.';
+                        errorField = 'email';
+                        break;
+                    default:
+                        errorMessage = error.message || errorMessage;
+                        errorField = 'email';
+                }
+                
+                showError(errorField, errorMessage);
+                console.error('Registration error:', error);
+                console.error('Error code:', error.code);
+                console.error('Error message:', error.message);
+            }
+        }
+    </script>
+</body>
+</html> 

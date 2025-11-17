@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Dashboard - PABLO'S PERI PERI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* Lightweight scoped layout helpers for this page only */
+    .driver-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+    @media (min-width: 900px) { .driver-grid { grid-template-columns: 1fr 1fr 1fr; } }
+    .driver-card { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 16px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); padding: 16px; display:flex; flex-direction:column; gap:12px; }
+    .driver-card h3 { font-size: 1.1em; font-weight: 800; margin: 0; color: #111; display:flex; align-items:center; gap:10px; }
+    .driver-actions { display:flex; gap:8px; flex-wrap: wrap; }
+    .driver-actions .filter-btn, .driver-actions .size-select { flex: 0 0 auto; }
+    @media (min-width: 1200px) {
+      .driver-actions { justify-content: flex-end; }
+      .driver-actions .filter-btn { padding: 10px 14px; font-size: 0.95em; }
+      .driver-actions .size-select { min-width: 160px; }
+    }
+    .driver-quiet { color:#666; font-size:0.95em; }
+    .orders-list-compact { display:flex; flex-direction:column; gap:12px; }
+    .orders-list-compact .review-item { padding:16px; }
+    .orders-list-compact .review-header { margin-bottom:8px; }
+    .orders-list-compact .review-text { margin: 6px 0 10px 0; }
+    /* Toasts */
+    .toast-container { position: fixed; top: 16px; right: 16px; display: grid; gap: 10px; z-index: 10001; }
+    .toast { display:flex; align-items:center; gap:10px; background:#fff; border:2px solid #e0e0e0; border-left:6px solid #e53935; color:#222; padding:12px 14px; border-radius:12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); min-width: 260px; max-width: 360px; }
+    .toast.success { border-left-color:#4caf50; }
+    .toast.info { border-left-color:#ffc72c; }
+    .toast .icon { color:#e53935; }
+    .toast.success .icon { color: #4caf50; }
+    .toast.info .icon { color: #ffc72c; }
+    .toast button { background:none; border:none; color:#666; cursor:pointer; padding:4px; border-radius:8px; }
+    .toast button:hover { background: rgba(0,0,0,0.05); }
+    /* Driver status visuals */
+    .driver-card .review-item[data-status="new"] { border-color: #e53935; }
+    .driver-card .review-item[data-status="processing"] { border-color: #ffc72c; }
+    .driver-card .review-item[data-status="completed"] { border-color: #4caf50; }
+    .driver-status-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:8px; font-size:0.8em; font-weight:700; }
+    .driver-status-badge.red { background: linear-gradient(135deg, #ff6b6b, #e53935); color:#fff; }
+    .driver-status-badge.yellow { background: linear-gradient(135deg, #ffc72c, #ffd54f); color:#222; }
+    .driver-status-badge.green { background: linear-gradient(135deg, #66bb6a, #43a047); color:#fff; }
+
+    /* Centered notification for Accept action (minimal design) */
+    .center-toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: transparent;
+      color: #111;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      font-weight: 400;
+      letter-spacing: normal;
+      z-index: 10002;
+      opacity: 0;
+      animation: centerToastIn 120ms ease forwards;
+    }
+    .center-toast.hide { animation: centerToastOut 150ms ease forwards; }
+    @keyframes centerToastIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes centerToastOut { to { opacity: 0; } }
+
+    /* Hide decorative icons across the driver page */
+    .driver-tabs .tab-icon,
+    .driver-card h3 i,
+    .reviewer-avatar,
+    .driver-actions i,
+    .driver-status-badge i,
+    .modal-content .modal-header .modal-close i,
+    .modal-content .modal-body i,
+    .toast .icon { display: none !important; }
+  </style>
+  <meta name="theme-color" content="#ffe3a3">
+  <meta name="description" content="Driver dashboard to manage new, ongoing, and completed orders.">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle"></i>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <i class="fas fa-user"></i>
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">EZ REL</span>
+            </div>
+          </div>
+          <button class="profile-item" id="driverAccountBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;"><span>Account info</span></button>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="header-banner">
+    <div class="banner-content">
+      <span>Driver Dashboard</span>
+    </div>
+  </div>
+
+  <main id="main-content" class="main-container">
+    <div class="category-tabs driver-tabs" role="tablist" aria-label="Orders filter" style="padding-left:20px; padding-right:20px;">
+      <button class="tab-btn active" role="tab" aria-selected="true" data-view="all">
+        <i class="fas fa-layer-group tab-icon"></i>
+        <span class="tab-text">All</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-view="new">
+        <i class="fas fa-bell tab-icon"></i>
+        <span class="tab-text">New orders</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-view="ongoing">
+        <i class="fas fa-route tab-icon"></i>
+        <span class="tab-text">Ongoing</span>
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-view="completed">
+        <i class="fas fa-check-circle tab-icon"></i>
+        <span class="tab-text">Completed</span>
+      </button>
+    </div>
+    <div class="content-wrapper driver-grid">
+      <!-- New Orders -->
+      <section class="driver-card" aria-label="New orders" id="newSection">
+        <h3><i class="fas fa-bell"></i> New Orders</h3>
+        <div id="newOrdersList" class="orders-list-compact"></div>
+        <div id="newOrdersEmpty" class="driver-quiet">No new orders right now.</div>
+      </section>
+
+      <!-- Ongoing Orders -->
+      <section class="driver-card" aria-label="Ongoing orders" id="ongoingSection">
+        <h3><i class="fas fa-route"></i> Ongoing</h3>
+        <div id="ongoingOrdersList" class="orders-list-compact"></div>
+        <div id="ongoingOrdersEmpty" class="driver-quiet">No ongoing deliveries.</div>
+      </section>
+
+      <!-- Completed Orders -->
+      <section class="driver-card" aria-label="Completed orders" id="completedSection">
+        <h3><i class="fas fa-check-circle"></i> Completed</h3>
+        <div id="completedOrdersList" class="orders-list-compact"></div>
+        <div id="completedOrdersEmpty" class="driver-quiet">No completed orders yet.</div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Toasts -->
+  <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Order Details Modal -->
+  <div class="modal-overlay" id="orderModal" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="orderModalTitle">Order Details</h3>
+        <button class="modal-close" aria-label="Close" onclick="closeOrderModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="orderModalBody" class="modal-body" style="display:grid; gap:12px;">
+        <!-- Filled by JS -->
+      </div>
+      <div class="driver-actions" id="orderModalActions" style="margin-top:12px; justify-content:flex-end;"></div>
+    </div>
+  </div>
+
+  <!-- Driver Account  -->
+  <div class="modal-overlay" id="driverAccountModal" role="dialog" aria-modal="true" aria-labelledby="driverAccountTitle" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="driverAccountTitle">Driver Account</h3>
+        <button class="modal-close" aria-label="Close" onclick="closeDriverAccount()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" style="display:grid; gap:16px;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div class="reviewer-avatar" style="width:64px; height:64px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #e0e0e0; font-size:28px; color:#888;"><i class="fas fa-user"></i></div>
+          <div style="font-weight:800; font-size:1.4em;">EZ REL</div>
+        </div>
+
+        <div class="driver-card" style="margin:0;">
+          <h3 style="margin-bottom:6px;">Driver ID #<span id="daId">55555</span></h3>
+          <div id="daVehicle">Yamaha NMAX Plate: 123 ABC</div>
+          <div id="daBranch">Pablo’s Peri-Peri Zabarte Branch</div>
+        </div>
+
+        <div class="driver-card" style="margin:0;">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; align-items:center; text-align:center;">
+            <div>
+              <div style="font-size:2.2em; font-weight:800;" id="daCompletedToday">0</div>
+              <div style="color:#555;">Completed Today</div>
+            </div>
+            <div>
+              <div style="font-size:2.2em; font-weight:800;" id="daCompletedTotal">0</div>
+              <div style="color:#555;">Completed Deliveries</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="driver-card" style="margin:0;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div style="font-weight:700;">Availability</div>
+            <select class="size-select" id="availabilitySelect" aria-label="Driver availability">
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
+            </select>
+          </div>
+          <div style="margin-top:8px; color:#666; font-size:0.95em;">Update your status after completing or accepting an order.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+
+    // Profile dropdown logic
+    (function initProfileDropdown(){
+      const btn = document.getElementById('profileButton');
+      const dropdown = document.getElementById('profileDropdown');
+      if (!btn || !dropdown) return;
+      function toggleDropdown(e){ e.stopPropagation(); dropdown.classList.toggle('show'); }
+      function handleOutside(e){ if (!dropdown.classList.contains('show')) return; if (!dropdown.contains(e.target) && !btn.contains(e.target)) { dropdown.classList.remove('show'); } }
+      btn.addEventListener('click', toggleDropdown);
+      document.addEventListener('click', handleOutside);
+      document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') dropdown.classList.remove('show'); });
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function(){ dropdown.classList.remove('show'); alert('You have been logged out.'); setTimeout(()=>{ window.location.href = 'login.html'; }, 300); });
+      const driverAccountBtn = document.getElementById('driverAccountBtn');
+      if (driverAccountBtn) driverAccountBtn.addEventListener('click', function(e){ e.stopPropagation(); dropdown.classList.remove('show'); openDriverAccount(); });
+    })();
+
+    // Tabs - filter view
+    let currentView = 'all';
+    document.addEventListener('DOMContentLoaded', function(){
+      document.querySelectorAll('.driver-tabs .tab-btn').forEach(btn => {
+        btn.addEventListener('click', function(){
+          document.querySelectorAll('.driver-tabs .tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
+          this.classList.add('active');
+          this.setAttribute('aria-selected','true');
+          currentView = this.dataset.view;
+          applyView();
+        });
+      });
+    });
+
+    function applyView(){
+      const map = {
+        all: ['newSection','ongoingSection','completedSection'],
+        new: ['newSection'],
+        ongoing: ['ongoingSection'],
+        completed: ['completedSection']
+      };
+      const toShow = new Set(map[currentView] || map.all);
+      ['newSection','ongoingSection','completedSection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = toShow.has(id) ? '' : 'none';
+      });
+    }
+
+    // ---------- Data ----------
+    const statusSteps = [ 'Transit' ];
+    let driverAvailability = 'available';
+
+    const newOrders = [
+      {
+        id: '111111111',
+        createdAt: new Date().toLocaleString(),
+        pickup: { name: "Pablo's Peri Peri", address: 'Zabarte Road, Brgy. Kaligayahan, Quezon City' },
+        dropoff: { name: 'Ez', address: 'Sm Fairview, Quezon City' },
+        customer: { name: 'Realino', phone: '099999999999' },
+        items: [ 'Peri Peri Chicken (Whole)', 'Iced Tea (Large)' ],
+        total: 599,
+        notes: 'na',
+ 
+      }
+    ];
+
+    const ongoingOrders = [
+      {
+        id: '111111111',
+        createdAt: 'Sep 10, 2025 10:32 AM',
+        pickup: { name: "Pablo's Peri Peri", address: 'Zabarte Road, Brgy. Kaligayahan, Quezon City' },
+        dropoff: { name: 'sef', address: 'Almar' },
+        customer: { name: 'Capalarant', phone: '099999999999' },
+        items: [ 'Baby Back Ribs Meal' ],
+        total: 299,
+        notes: 'blue gate',
+      }
+    ];
+
+    const completedOrders = [
+      {
+        id: '111111111',
+        createdAt: 'Sep 7, 2025 3:04 PM',
+        pickup: { name: "Pablo's Peri Peri", address: 'Zabarte Road, Brgy. Kaligayahan, Quezon City' },
+        dropoff: { name: 'ron', address: 'Novaliches' },
+        customer: { name: 'ron', phone: '099999999999' },
+        items: [ 'shawarma B1T1', 'Coke' ],
+        total: 120,
+        completedAt: 'Sep 7, 2025 3:28 PM'
+      }
+    ];
+
+    // Rendering aggregator: refresh all sections and apply current view filter
+    function renderAll(){ renderNew(); renderOngoing(); renderCompleted(); applyView(); }
+
+    function renderNew(){
+      const container = document.getElementById('newOrdersList');
+      const empty = document.getElementById('newOrdersEmpty');
+      if (!newOrders.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      container.innerHTML = newOrders.map(order => cardTemplate(order, 'new')).join('');
+    }
+
+    function renderOngoing(){
+      const container = document.getElementById('ongoingOrdersList');
+      const empty = document.getElementById('ongoingOrdersEmpty');
+      if (!ongoingOrders.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      container.innerHTML = ongoingOrders.map(order => cardTemplate(order, 'ongoing')).join('');
+    }
+
+    function renderCompleted(){
+      const container = document.getElementById('completedOrdersList');
+      const empty = document.getElementById('completedOrdersEmpty');
+      if (!completedOrders.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      container.innerHTML = completedOrders.map(order => cardTemplate(order, 'completed')).join('');
+    }
+
+    function cardTemplate(order, list){
+      const itemsLine = order.items ? order.items.map(i=>`<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`).join('') : '';
+      const statusBadge = list === 'completed' ? 'completed' : (list === 'ongoing' ? 'processing' : 'new');
+      const progressLabel = list==='completed' ? 'Completed' : (list==='ongoing' ? (typeof order.stepIndex === 'number' ? statusSteps[order.stepIndex] : 'Transit') : 'New');
+      return `
+        <div class="review-item" data-status="${statusBadge}">
+          <div class="review-header">
+            <div class="reviewer-info">
+              <div class="reviewer-avatar"><i class="fas ${list==='completed' ? 'fa-check' : list==='ongoing' ? 'fa-route' : 'fa-bell'}"></i></div>
+              <div class="reviewer-details">
+                <div class="reviewer-name">Order ${order.id}</div>
+                <div class="review-date">${order.createdAt}${list==='completed' && order.completedAt ? ` • Completed ${order.completedAt}`:''}</div>
+              </div>
+            </div>
+            <span class="driver-status-badge ${list==='completed' ? 'green' : (list==='ongoing' ? 'yellow' : 'red')}" style="text-transform:none;">${progressLabel}</span>
+          </div>
+          <div class="review-text" style="font-style:normal;">
+            <div>Pickup: <strong>${order.pickup.name}</strong> — ${order.pickup.address}</div>
+            <div>Dropoff: <strong>${order.dropoff.name}</strong> — ${order.dropoff.address}</div>
+            ${order.notes ? `<div>Note: ${order.notes}</div>`: ''}
+            ${itemsLine}
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div class="card-price">₱${order.total}.00</div>
+            <div class="driver-actions">
+              ${list==='new' ? `
+                <button class="filter-btn" onclick="viewDetails('${order.id}','new')"><span>Details</span></button>
+                <button class="filter-btn" onclick="acceptOrder('${order.id}')"><i class="fas fa-check"></i><span>Accept</span></button>
+                <button class="filter-btn" onclick="declineOrder('${order.id}')"><i class="fas fa-xmark"></i><span>Decline</span></button>
+              `: ''}
+              ${list==='ongoing' ? `
+                <button class="filter-btn" onclick="viewDetails('${order.id}','ongoing')"><span>Details</span></button>
+                <select class="size-select" aria-label="Update status" onchange="handleDropdownChange('${order.id}', this.value)">
+                  <option value="transit" ${typeof order.stepIndex==='number' && order.stepIndex===0 ? 'selected' : ''}>Transit</option>
+                  <option value="done">Done</option>
+                </select>
+              `: ''}
+              ${list==='completed' ? `
+                <button class="filter-btn" onclick="viewDetails('${order.id}','completed')"><span>Details</span></button>
+              `: ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ---------- Actions ----------
+    function acceptOrder(id){
+      const idx = newOrders.findIndex(o=>o.id===id);
+      if (idx === -1) return;
+      const order = newOrders.splice(idx,1)[0];
+      order.stepIndex = 0;
+      ongoingOrders.unshift(order);
+      showCenterNotification('Accepted');
+      driverAvailability = 'unavailable';
+      syncAvailabilitySelect();
+      renderAll();
+    }
+
+    function declineOrder(id){
+      const idx = newOrders.findIndex(o=>o.id===id);
+      if (idx === -1) return;
+      const order = newOrders.splice(idx,1)[0];
+      notify('Order ' + order.id + ' declined.', 'info');
+      renderAll();
+    }
+
+    function progressOrder(id){
+      const order = ongoingOrders.find(o=>o.id===id);
+      if (!order) return;
+      if (typeof order.stepIndex !== 'number') order.stepIndex = 0;
+      if (order.stepIndex < statusSteps.length - 1){
+        order.stepIndex += 1;
+        notify('Status updated: ' + statusSteps[order.stepIndex], 'info');
+      }
+      renderAll();
+    }
+
+    function setOrderStatus(id, value){
+      const order = ongoingOrders.find(o=>o.id===id);
+      if (!order) return;
+      const idx = parseInt(value, 10);
+      if (isNaN(idx) || idx < 0 || idx >= statusSteps.length) return;
+      order.stepIndex = idx;
+      notify('Status set to: ' + statusSteps[idx], 'info');
+      renderAll();
+    }
+
+    function handleDropdownChange(id, value){
+      if (value === 'transit') {
+        setOrderStatus(id, 0);
+      } else if (value === 'done') {
+        completeOrder(id);
+      }
+    }
+
+    function completeOrder(id){
+      const idx = ongoingOrders.findIndex(o=>o.id===id);
+      if (idx === -1) return;
+      const order = ongoingOrders.splice(idx,1)[0];
+      order.completedAt = new Date().toLocaleString();
+      order.completedAtTs = Date.now();
+      completedOrders.unshift(order);
+      notify('Delivery completed for ' + order.id, 'success');
+      if (ongoingOrders.length === 0) { driverAvailability = 'available'; syncAvailabilitySelect(); }
+      renderAll();
+    }
+
+    // ---------- Modal ----------
+    function viewDetails(id, list){
+      const source = list==='new' ? newOrders : list==='ongoing' ? ongoingOrders : completedOrders;
+      const order = source.find(o=>o.id===id);
+      if (!order) return;
+      const modal = document.getElementById('orderModal');
+      const body = document.getElementById('orderModalBody');
+      const actions = document.getElementById('orderModalActions');
+      document.getElementById('orderModalTitle').textContent = 'Order ' + order.id;
+      body.innerHTML = `
+        <div style="display:grid; gap:6px;">
+          <div><strong>Created:</strong> ${order.createdAt}${order.completedAt ? ` • <strong>Completed:</strong> ${order.completedAt}`:''}</div>
+          <div style="display:grid; gap:6px;">
+            <div>
+              <div><strong>Pickup</strong>: ${order.pickup.name}</div>
+              <div style="color:#555;">${order.pickup.address}</div>
+            </div>
+            <div>
+              <div><strong>Dropoff</strong>: ${order.dropoff.name}</div>
+              <div style="color:#555;">${order.dropoff.address}</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <i class="fas fa-user" style="color:#e53935; width:18px; text-align:center;"></i>
+            <div><strong>Customer</strong>: ${order.customer.name} • ${order.customer.phone}</div>
+          </div>
+          ${order.notes ? `<div><strong>Notes</strong>: ${order.notes}</div>` : ''}
+          <div>
+            <div class="od-section-title">Items</div>
+            <div class="od-items-list">${order.items.map(i=>`<div>• ${i}</div>`).join('')}</div>
+          </div>
+          <div style="display:flex; gap:12px; color:#555;">
+            <div><i class="fas fa-road" style="color:#e53935; margin-right:6px;"></i>${order.distanceKm || '-'} km</div>
+            <div><i class="fas fa-clock" style="color:#e53935; margin-right:6px;"></i>ETA ${order.etaMin || '-'} min</div>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div class="card-price">₱${order.total}.00</div>
+            <span class="driver-status-badge ${order.completedAt ? 'green' : (typeof order.stepIndex==='number' ? 'yellow' : 'red')}">${order.completedAt ? 'Completed' : (typeof order.stepIndex==='number' ? statusSteps[order.stepIndex] : 'New')}</span>
+          </div>
+        </div>
+      `;
+
+      actions.innerHTML = '';
+      if (list==='new'){
+        actions.innerHTML = `
+          <button class="filter-btn" onclick="acceptOrder('${order.id}')"><i class="fas fa-check"></i><span>Accept</span></button>
+          <button class="filter-btn" onclick="declineOrder('${order.id}')"><i class="fas fa-xmark"></i><span>Decline</span></button>
+        `;
+      } else if (list==='ongoing'){
+        actions.innerHTML = `
+          <select class="size-select" aria-label="Update status" onchange="handleDropdownChange('${order.id}', this.value)">
+            <option value="transit" ${typeof order.stepIndex==='number' && order.stepIndex===0 ? 'selected' : ''}>Transit</option>
+            <option value="done">Done</option>
+          </select>
+        `;
+      }
+      modal.style.display = 'flex';
+    }
+
+    function closeOrderModal(){ document.getElementById('orderModal').style.display = 'none'; }
+
+    // ---------- Notifications ----------
+    function notify(message, type){
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast ' + (type || '');
+      toast.innerHTML = `
+        <i class="icon fas ${type==='success' ? 'fa-check-circle' : type==='info' ? 'fa-bell' : 'fa-circle-info'}"></i>
+        <div style="flex:1;">${message}</div>
+        <button aria-label="Dismiss" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+      `;
+      container.appendChild(toast);
+      setTimeout(()=>{ if (toast && toast.parentElement) toast.remove(); }, 4000);
+    }
+
+    // Center notification helper (used for Accept)
+    function showCenterNotification(text){
+      const el = document.createElement('div');
+      el.className = 'center-toast';
+      el.textContent = text || 'Accepted';
+      document.body.appendChild(el);
+      setTimeout(()=>{ el.classList.add('hide'); }, 1200);
+      setTimeout(()=>{ if (el && el.parentElement) el.remove(); }, 1600);
+    }
+
+    // ---- Driver Account Modal & Availability ----
+    function openDriverAccount(){
+      // Stats
+      const total = completedOrders.length;
+      const todayCount = completedOrders.filter(o => isSameDay(o.completedAtTs || Date.parse(o.completedAt), Date.now())).length;
+      const daCompletedToday = document.getElementById('daCompletedToday');
+      const daCompletedTotal = document.getElementById('daCompletedTotal');
+      if (daCompletedToday) daCompletedToday.textContent = String(todayCount);
+      if (daCompletedTotal) daCompletedTotal.textContent = String(total);
+
+      // Availability select
+      const select = document.getElementById('availabilitySelect');
+      if (select){
+        select.value = driverAvailability;
+        select.onchange = function(){ driverAvailability = this.value; };
+      }
+      const modal = document.getElementById('driverAccountModal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeDriverAccount(){
+      const modal = document.getElementById('driverAccountModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function syncAvailabilitySelect(){
+      const select = document.getElementById('availabilitySelect');
+      if (select) select.value = driverAvailability;
+    }
+
+    function isSameDay(aTs, bTs){
+      if (!aTs || !bTs) return false;
+      const a = new Date(aTs); const b = new Date(bTs);
+      return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+    }
+
+    // Init
+    renderAll();
+  </script>
+</body>
+</html>
+
+

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Help & Support - PABLO'S PERI PERI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="help-page">
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle"></i>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <i class="fas fa-user"></i>
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item"><span>Orders</span></a>
+          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <a href="menu.html" class="back-button">
+      <i class="fas fa-arrow-left"></i>
+      <span>Back to Menu</span>
+    </a>
+
+    <section class="review-section help-section" style="max-width: 900px; margin: 0 auto;">
+      <div class="review-header" style="align-items:center;">
+        <h2 class="section-title">Help & Support</h2>
+      </div>
+      <div class="review-item" style="padding: 20px; border-radius: 16px; max-width: 900px; margin: 0 auto;">
+      <section class="support-container">
+        <div class="support-hero">
+          <div class="support-hero-title">Help Center</div>
+        </div>
+
+        <div class="support-grid">
+          <div class="support-card contact-card">
+            <div class="support-card-title"><i class="fas fa-headset"></i> Contact Us</div>
+            <div class="support-actions">
+              <a class="support-cta email" href="mailto:Pabloperiperi.com"><i class="fas fa-envelope"></i><span>Email support@example.com</span></a>
+              <a class="support-cta facebook" href="#"><i class="fab fa-facebook"></i><span>Facebook</span></a>
+            </div>
+          </div>
+
+          <div class="support-card resources-card">
+            <div class="support-card-title"><i class="fas fa-book"></i> Resources</div>
+            <div class="support-links">
+              <a class="support-link" href="#"><i class="fas fa-file-contract"></i><span>Terms & Conditions</span><i class="fas fa-arrow-right"></i></a>
+              <a class="support-link" href="#"><i class="fas fa-shield-halved"></i><span>Privacy Policy</span><i class="fas fa-arrow-right"></i></a>
+              <a class="support-link" href="#"><i class="fas fa-truck"></i><span>Delivery Information</span><i class="fas fa-arrow-right"></i></a>
+            </div>
+          </div>
+        </div>
+
+        <div class="support-card faq-card">
+          <div class="support-card-title"><i class="fas fa-circle-question"></i> FAQs</div>
+          <div class="faq-accordion">
+            <div class="faq-item">
+              <button class="faq-q"><span>How do I track my order?</span><i class="fas fa-chevron-down"></i></button>
+              <div class="faq-a">Go to Orders, select your order, and view its status and details.</div>
+            </div>
+            <div class="faq-item">
+              <button class="faq-q"><span>What payment methods are accepted?</span><i class="fas fa-chevron-down"></i></button>
+              <div class="faq-a">We accept cash and GCash Via its QR Code</div>
+            </div>
+            <div class="faq-item">
+              <button class="faq-q"><span>Do you deliver to my area?</span><i class="fas fa-chevron-down"></i></button>
+              <div class="faq-a">Enter your address at checkout to check if delivery is available to your location.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function goHome(){ window.location.href = 'menu.html'; }
+    function goToCart(){ window.location.href = 'cart_review.html'; }
+
+    // Profile dropdown logic
+    (function initProfileDropdown(){
+      const btn = document.getElementById('profileButton');
+      const dropdown = document.getElementById('profileDropdown');
+      if (!btn || !dropdown) return;
+      function toggleDropdown(e){ e.stopPropagation(); dropdown.classList.toggle('show'); }
+      function handleOutside(e){ if (!dropdown.classList.contains('show')) return; if (!dropdown.contains(e.target) && !btn.contains(e.target)) { dropdown.classList.remove('show'); } }
+      btn.addEventListener('click', toggleDropdown);
+      document.addEventListener('click', handleOutside);
+      document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') dropdown.classList.remove('show'); });
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function(){ dropdown.classList.remove('show'); alert('You have been logged out.'); setTimeout(()=>{ window.location.href = 'login.html'; }, 300); });
+    })();
+
+    function submitSupport(){ alert('Thanks! We will get back to you shortly.'); }
+
+    // Simple accordion for new FAQ
+    (function initSupport(){
+      document.querySelectorAll('.faq-q').forEach(btn => {
+        btn.addEventListener('click', function(){
+          const item = btn.parentElement;
+          const answer = item.querySelector('.faq-a');
+          const isOpen = answer.style.display === 'block';
+          answer.style.display = isOpen ? 'none' : 'block';
+          btn.querySelector('i')?.classList.toggle('fa-rotate-180');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
+
+

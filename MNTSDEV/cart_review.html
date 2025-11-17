@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cart Review - Pablo's Peri Peri</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon account-icon" title="Account" onclick="goToAccount()">
+        <i class="fas fa-user"></i>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <div class="cart-review-container">
+      <div class="cart-header">
+        <div class="cart-title-section">
+          <h2 class="cart-title">Your Order</h2>
+          <p class="cart-subtitle">Review your items before checkout</p>
+        </div>
+        <div class="cart-status">
+          <div class="status-indicator active">
+            <i class="fas fa-shopping-cart"></i>
+            <span>Cart</span>
+          </div>
+          <div class="status-line"></div>
+          <div class="status-indicator">
+            <i class="fas fa-credit-card"></i>
+            <span>Payment</span>
+          </div>
+          <div class="status-line"></div>
+          <div class="status-indicator">
+            <i class="fas fa-check-circle"></i>
+            <span>Complete</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cart-items-list">
+        <div class="cart-item">
+          <div class="item-image-container">
+            <img src="tea.png" alt="Iced Tea" class="item-image">
+          </div>
+          <div class="cart-item-details">
+            <div class="item-info">
+              <h3 class="cart-item-title">Iced Tea</h3>
+            </div>
+            <div class="item-options">
+              <div class="size-selector">
+                <label class="size-label">Size:</label>
+                <select class="size-select">
+                  <option value="large">Large</option>
+                  <option value="medium">Medium</option>
+                  <option value="small">Small</option>
+                </select>
+              </div>
+            </div>
+            <div class="item-price-section">
+              <div class="cart-item-price">₱101.00</div>
+              <div class="price-per-unit">₱101.00 each</div>
+            </div>
+          </div>
+          <div class="cart-item-controls">
+            <button class="qty-btn minus-btn" onclick="updateQuantity(this, -1)">
+              <i class="fas fa-minus"></i>
+            </button>
+            <span class="qty-display">1</span>
+            <button class="qty-btn plus-btn" onclick="updateQuantity(this, 1)">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+          <button class="remove-btn" onclick="removeItem(this)">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+
+        <div class="cart-item">
+          <div class="item-image-container">
+            <img src="food_img.png" alt="Pablo's Spaghetti" class="item-image">
+          </div>
+          <div class="cart-item-details">
+            <div class="item-info">
+              <h3 class="cart-item-title">Baby Back Ribs</h3>
+            </div>
+            <div class="item-options">
+            </div>
+            <div class="item-price-section">
+              <div class="cart-item-price">₱150.00</div>
+              <div class="price-per-unit">₱150.00 each</div>
+            </div>
+          </div>
+          <div class="cart-item-controls">
+            <button class="qty-btn minus-btn" onclick="updateQuantity(this, -1)">
+              <i class="fas fa-minus"></i>
+            </button>
+            <span class="qty-display">1</span>
+            <button class="qty-btn plus-btn" onclick="updateQuantity(this, 1)">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+          <button class="remove-btn" onclick="removeItem(this)">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="cart-summary">
+        <div class="summary-header">
+          <h3 class="summary-title">Order Summary</h3>
+          <i class="fas fa-receipt"></i>
+        </div>
+        <div class="summary-items">
+          <div class="summary-row">
+            <span class="summary-label">Pablo's Spaghetti</span>
+            <span class="summary-value">₱150.00</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Iced Tea - Large</span>
+            <span class="summary-value">₱101.00</span>
+          </div>
+          <div class="summary-row subtotal">
+            <span class="summary-label">Sub-Total</span>
+            <span class="summary-value">₱251.00</span>
+          </div>
+          <div class="summary-row discount">
+            <span class="summary-label">
+              <i class="fas fa-gift"></i>
+              Points Applied
+            </span>
+            <span class="summary-value">-₱30.00</span>
+          </div>
+          <div class="summary-row total">
+            <span class="summary-label">Total</span>
+            <span class="summary-value">₱221.00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="loyalty-section">
+        <div class="points-info">
+          <div class="points-badge">
+            <i class="fas fa-coins"></i>
+            <span>Points Remaining: 5</span>
+          </div>
+          <button class="apply-points-btn">
+            <i class="fas fa-plus"></i>
+            <span>Apply More Points</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="delivery-section">
+        <h3 class="section-title">Service Options</h3>
+        <div class="delivery-options">
+          <label class="delivery-option">
+            <input type="radio" name="delivery" value="dinein" checked>
+            <div class="option-content">
+              <div class="option-icon">
+                <i class="fas fa-utensils"></i>
+              </div>
+              <div class="option-details">
+                <span class="option-title">Dine-In</span>
+                <span class="option-subtitle">Free • Ready in 10-15 min</span>
+              </div>
+            </div>
+          </label>
+          <label class="delivery-option">
+            <input type="radio" name="delivery" value="pickup">
+            <div class="option-content">
+              <div class="option-icon">
+                <i class="fas fa-store"></i>
+              </div>
+              <div class="option-details">
+                <span class="option-title">Pick-Up</span>
+                <span class="option-subtitle">Free • Ready in 15-20 min</span>
+              </div>
+            </div>
+          </label>
+          <label class="delivery-option">
+            <input type="radio" name="delivery" value="delivery">
+            <div class="option-content">
+              <div class="option-icon">
+                <i class="fas fa-motorcycle"></i>
+              </div>
+              <div class="option-details">
+                <span class="option-title">Delivery</span>
+                <span class="option-subtitle">₱50.00 • 30-45 min</span>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="add-more-btn" onclick="addMoreItems()">
+          <i class="fas fa-plus"></i>
+          <span>Add More Items</span>
+        </button>
+        <button class="proceed-btn" onclick="proceedToCheckout()">
+          <i class="fas fa-credit-card"></i>
+          <span>Proceed to Checkout</span>
+          <span class="total-amount">₱221.00</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function updateQuantity(btn, change) {
+      const qtyDisplay = btn.parentElement.querySelector('.qty-display');
+      let currentQty = parseInt(qtyDisplay.textContent);
+      let newQty = currentQty + change;
+      
+      if (newQty < 1) {
+        newQty = 1;
+      }
+      
+      qtyDisplay.textContent = newQty;
+      updateCartSummary();
+    }
+
+    function removeItem(btn) {
+      const cartItem = btn.closest('.cart-item');
+      cartItem.style.animation = 'slideOut 0.3s ease forwards';
+      
+      setTimeout(() => {
+        cartItem.remove();
+        updateCartSummary();
+      }, 300);
+    }
+
+    function updateCartSummary() {
+      //  calculate totals based on quantities
+      console.log('Updating cart summary...');
+    }
+
+    function addMoreItems() {
+      window.location.href = 'menu.html';
+    }
+
+    function proceedToCheckout() {
+      // Get the selected service type
+      const selectedService = document.querySelector('input[name="delivery"]:checked').value;
+      
+      // Navigate to specific checkout page based on service type
+      switch(selectedService) {
+        case 'dinein':
+          window.location.href = 'checkout_dinein.html';
+          break;
+        case 'pickup':
+          window.location.href = 'checkout_pickup.html';
+          break;
+        case 'delivery':
+          window.location.href = 'checkout_delivery.html';
+          break;
+        default:
+          window.location.href = 'checkout_dinein.html'; 
+      }
+    }
+
+    function goHome() {
+      window.location.href = 'menu.html';
+    }
+
+    function goToAccount() {
+      // Navigate to account page
+      window.location.href = 'account.html';
+    }
+
+
+    // Delivery option selection
+    document.querySelectorAll('input[name="delivery"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        // Update delivery fee and total
+        updateCartSummary();
+      });
+    });
+
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideOut {
+        to {
+          opacity: 0;
+          transform: translateX(-100%);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>
