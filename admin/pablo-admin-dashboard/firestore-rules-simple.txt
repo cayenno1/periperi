@@ -1,0 +1,57 @@
+// Firestore Security Rules - SIMPLIFIED FOR TESTING
+// Use this to test if updates work, then we can add restrictions back
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isValidRole(role) {
+      return role in ['Staff', 'Admin', 'Manager', 'Owner', 'System_Admin'];
+    }
+    
+    function isValidStatus(status) {
+      return status in ['active', 'suspended', 'inactive', 'deleted'];
+    }
+
+// CUSTOMERS COLLECTION
+    match /customers/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+// STAFF COLLECTION
+    match /staff/{staffId} {
+      allow create: if true;
+      allow read: if true;
+
+      // SIMPLIFIED UPDATE RULE - Allows updates with basic validation
+      // Remove hasOnly() check temporarily to test
+      allow update: if (
+        // Prevent changing staffId (immutable)
+        request.resource.data.staffId == resource.data.staffId &&
+        
+        // Prevent changing password directly
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['password']) ||
+         request.resource.data.password == resource.data.password) &&
+        
+        // Basic field validation
+        request.resource.data.firstName is string && 
+        request.resource.data.firstName.size() > 0 &&
+        request.resource.data.lastName is string && 
+        request.resource.data.lastName.size() > 0 &&
+        request.resource.data.email is string && 
+        request.resource.data.email.matches('.*@.*\\..*') &&
+        request.resource.data.role is string && 
+        isValidRole(request.resource.data.role) &&
+        request.resource.data.status is string && 
+        isValidStatus(request.resource.data.status)
+      );
+
+      allow delete: if false;
+    }
+  }
+}
+
+

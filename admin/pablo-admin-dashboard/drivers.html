@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drivers - Pablo's Peri Peri</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        // Hide restricted navigation immediately on page load (runs before page renders)
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const userRole = staffSession.role || '';
+                    if (userRole !== 'Owner' && userRole !== 'Admin') {
+                        const style = document.createElement('style');
+                        style.id = 'restrict-admin-profile';
+                        style.textContent = 'a[href*="admin-profile.html"] { display: none !important; }';
+                        (document.head || document.documentElement).appendChild(style);
+                        
+                        const hideNavItem = function() {
+                            const links = document.querySelectorAll('a[href*="admin-profile.html"]');
+                            links.forEach(link => {
+                                const navItem = link.closest('.nav-item');
+                                if (navItem) {
+                                    navItem.style.display = 'none';
+                                }
+                            });
+                        };
+                        
+                        if (document.body) {
+                            hideNavItem();
+                        }
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', hideNavItem);
+                        } else {
+                            setTimeout(hideNavItem, 0);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not hide navigation immediately:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="periperilogo.png" alt="Pablo's Peri Peri Logo" class="logo-image">
+                    </div>
+                </div>
+                <div class="brand-text">
+                    <h1>PABLO'S</h1>
+                    <p>PERI PERI</p>
+                    <span>Administrator Side</span>
+                </div>
+            </div>
+            
+            <nav class="navigation">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="adminindex.html" class="nav-link">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>Orders</span>
+                        </a>
+                    </li>
+                    <li class="nav-item active">
+                        <a href="drivers.html" class="nav-link">
+                            <i class="fas fa-car"></i>
+                            <span>Drivers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="menu.html" class="nav-link">
+                            <i class="fas fa-shopping-basket"></i>
+                            <span>Menu</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="customer.html" class="nav-link">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Customer</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="sales.html" class="nav-link">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Sales</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="admin-profile.html" class="nav-link">
+                            <i class="fas fa-user"></i>
+                            <span>Admin Profile</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="activity-logs.html" class="nav-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Activity Logs</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="content-header">
+                <div class="page-title">
+                    <div class="title-bar"></div>
+                    <h2>Driver</h2>
+                </div>
+                <div class="user-profile">
+                    <button class="profile-btn" onclick="toggleDropdown('adminDropdown')">
+                        <i class="fas fa-user"></i>
+                        <span id="profileName"></span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="adminDropdown">
+                        <a href="#" class="dropdown-item">Profile Settings</a>
+                        <a href="#" class="dropdown-item">Account Settings</a>
+                        <a href="#" class="dropdown-item">Logout</a>
+                    </div>
+                </div>
+            </header>
+
+            <script>
+                // Update profile name immediately on page load
+                (function() {
+                    try {
+                        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                        if (session) {
+                            const staffSession = JSON.parse(session);
+                            const profileName = document.getElementById('profileName');
+                            if (profileName) {
+                                if (staffSession.firstName && staffSession.lastName) {
+                                    let displayName = staffSession.firstName + ' ' + staffSession.lastName;
+                                    if (staffSession.suffix) {
+                                        displayName += ' ' + staffSession.suffix;
+                                    }
+                                    profileName.textContent = displayName;
+                                } else if (staffSession.email) {
+                                    const emailName = staffSession.email.split('@')[0];
+                                    profileName.textContent = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                                } else if (staffSession.staffId) {
+                                    profileName.textContent = staffSession.staffId;
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.warn('Could not update profile name immediately:', e);
+                    }
+                })();
+            </script>
+
+            <!-- Driver Dashboard -->
+            <div class="driver-dashboard">
+                <!-- Profile & Account Management -->
+                <div class="driver-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-user"></i> Profile & Account Management</h3>
+                    </div>
+                    <div class="profile-card">
+                        <div class="profile-info">
+                            <div class="driver-avatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="driver-details">
+                                <h4>John Michael Santos</h4>
+                                <p><i class="fas fa-phone"></i> +63 912 345 6789</p>
+                                <p><i class="fas fa-clock"></i> Shift: 8:00 AM - 5:00 PM</p>
+                                <p><i class="fas fa-id-badge"></i> Driver ID: DRV001</p>
+                            </div>
+                        </div>
+                        <div class="status-indicator">
+                            <span class="status-badge active">Active</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Availability Management -->
+                <div class="driver-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-toggle-on"></i> Availability Management</h3>
+                    </div>
+                    <div class="availability-card">
+                        <div class="availability-status">
+                            <div class="status-toggle">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="availabilityToggle" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="status-text">Available</span>
+                            </div>
+                            <div class="time-tracking">
+                                <p><i class="fas fa-sign-in-alt"></i> Logged in: 7:45 AM</p>
+                                <p><i class="fas fa-sign-out-alt"></i> Last logout: Yesterday 6:30 PM</p>
+                            </div>
+                        </div>
+                        <div class="availability-actions">
+                            <button class="btn btn-primary" onclick="logIn()">
+                                <i class="fas fa-sign-in-alt"></i> Log In
+                            </button>
+                            <button class="btn btn-secondary" onclick="logOut()">
+                                <i class="fas fa-sign-out-alt"></i> Log Out
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assigned Deliveries -->
+                <div class="driver-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-shopping-bag"></i> Assigned Deliveries</h3>
+                    </div>
+                    <div class="deliveries-container">
+                        <div class="delivery-card">
+                            <div class="delivery-header">
+                                <h4>Order #20462</h4>
+                                <span class="delivery-status pending">Pending Pickup</span>
+                            </div>
+                            <div class="delivery-details">
+                                <p><i class="fas fa-user"></i> <strong>Customer:</strong> Maria Garcia</p>
+                                <p><i class="fas fa-map-marker-alt"></i> <strong>Address:</strong> 123 Main St, Barangay San Antonio</p>
+                                <p><i class="fas fa-credit-card"></i> <strong>Payment:</strong> Cash on Delivery (₱450.00)</p>
+                                <p><i class="fas fa-sticky-note"></i> <strong>Instructions:</strong> Call when near, leave at gate if no answer</p>
+                            </div>
+                            <div class="delivery-actions">
+                                <button class="btn btn-success" onclick="markPickedUp('20462')">
+                                    <i class="fas fa-hand-holding"></i> Mark as Picked Up
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="delivery-card">
+                            <div class="delivery-header">
+                                <h4>Order #18933</h4>
+                                <span class="delivery-status in-transit">On the Way</span>
+                            </div>
+                            <div class="delivery-details">
+                                <p><i class="fas fa-user"></i> <strong>Customer:</strong> Juan Dela Cruz</p>
+                                <p><i class="fas fa-map-marker-alt"></i> <strong>Address:</strong> 456 Oak St, Barangay San Jose</p>
+                                <p><i class="fas fa-credit-card"></i> <strong>Payment:</strong> GCash (₱320.00)</p>
+                                <p><i class="fas fa-sticky-note"></i> <strong>Instructions:</strong> Ring doorbell twice</p>
+                            </div>
+                            <div class="delivery-actions">
+                                <button class="btn btn-warning" onclick="markDelivered('18933')">
+                                    <i class="fas fa-check-circle"></i> Mark as Delivered
+                                </button>
+                                <button class="btn btn-danger" onclick="reportIssue('18933')">
+                                    <i class="fas fa-exclamation-triangle"></i> Report Issue
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Records -->
+                <div class="driver-section">
+                    <div class="section-header">
+                        <h3><i class="fas fa-chart-line"></i> Performance Records</h3>
+                    </div>
+                    <div class="performance-grid">
+                        <div class="performance-card">
+                            <div class="performance-icon">
+                                <i class="fas fa-shipping-fast"></i>
+                            </div>
+                            <div class="performance-info">
+                                <h4>Total Deliveries</h4>
+                                <span class="performance-value">247</span>
+                            </div>
+                        </div>
+                        <div class="performance-card">
+                            <div class="performance-icon">
+                                <i class="fas fa-percentage"></i>
+                            </div>
+                            <div class="performance-info">
+                                <h4>Success Rate</h4>
+                                <span class="performance-value">98.4%</span>
+                            </div>
+                        </div>
+                        <div class="performance-card">
+                            <div class="performance-icon">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="performance-info">
+                                <h4>Avg. Delivery Time</h4>
+                                <span class="performance-value">18 min</span>
+                            </div>
+                        </div>
+                        <div class="performance-card">
+                            <div class="performance-icon">
+                                <i class="fas fa-star"></i>
+                            </div>
+                            <div class="performance-info">
+                                <h4>Rating</h4>
+                                <span class="performance-value">4.8/5</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Firebase Initialization -->
+    <script type="module" src="firebase-init.js"></script>
+    
+    <!-- Session Check - Must be after Firebase init -->
+    <script src="session-check.js"></script>
+    
+    <!-- Update User Profile Display -->
+    <script src="update-user-profile.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>

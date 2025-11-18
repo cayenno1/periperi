@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Management - Pablo's Peri Peri</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        // Hide restricted navigation immediately on page load (runs before page renders)
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const userRole = staffSession.role || '';
+                    if (userRole !== 'Owner' && userRole !== 'Admin') {
+                        const style = document.createElement('style');
+                        style.id = 'restrict-admin-profile';
+                        style.textContent = 'a[href*="admin-profile.html"] { display: none !important; }';
+                        (document.head || document.documentElement).appendChild(style);
+                        
+                        const hideNavItem = function() {
+                            const links = document.querySelectorAll('a[href*="admin-profile.html"]');
+                            links.forEach(link => {
+                                const navItem = link.closest('.nav-item');
+                                if (navItem) {
+                                    navItem.style.display = 'none';
+                                }
+                            });
+                        };
+                        
+                        if (document.body) {
+                            hideNavItem();
+                        }
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', hideNavItem);
+                        } else {
+                            setTimeout(hideNavItem, 0);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not hide navigation immediately:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="periperilogo.png" alt="Pablo's Peri Peri Logo" class="logo-image">
+                    </div>
+                </div>
+                <div class="brand-text">
+                    <h1>PABLO'S</h1>
+                    <p>PERI PERI</p>
+                    <span>Administrator Side</span>
+                </div>
+            </div>
+            
+            <nav class="navigation">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="adminindex.html" class="nav-link">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>Orders</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="drivers.html" class="nav-link">
+                            <i class="fas fa-car"></i>
+                            <span>Drivers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item active">
+                        <a href="menu.html" class="nav-link">
+                            <i class="fas fa-shopping-basket"></i>
+                            <span>Menu</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="customer.html" class="nav-link">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Customer</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="sales.html" class="nav-link">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Sales</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="admin-profile.html" class="nav-link">
+                            <i class="fas fa-user"></i>
+                            <span>Admin Profile</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="activity-logs.html" class="nav-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Activity Logs</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="content-header">
+                <div class="page-title">
+                    <div class="title-bar"></div>
+                    <h2>Menu</h2>
+                </div>
+                <div class="user-profile">
+                    <button class="profile-btn" onclick="toggleDropdown('adminDropdown')">
+                        <i class="fas fa-user"></i>
+                        <span id="profileName"></span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="adminDropdown">
+                        <a href="#" class="dropdown-item">Profile Settings</a>
+                        <a href="#" class="dropdown-item">Account Settings</a>
+                        <a href="#" class="dropdown-item">Logout</a>
+                    </div>
+                </div>
+            </header>
+
+            <script>
+                // Update profile name immediately on page load
+                (function() {
+                    try {
+                        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                        if (session) {
+                            const staffSession = JSON.parse(session);
+                            const profileName = document.getElementById('profileName');
+                            if (profileName) {
+                                if (staffSession.firstName && staffSession.lastName) {
+                                    let displayName = staffSession.firstName + ' ' + staffSession.lastName;
+                                    if (staffSession.suffix) {
+                                        displayName += ' ' + staffSession.suffix;
+                                    }
+                                    profileName.textContent = displayName;
+                                } else if (staffSession.email) {
+                                    const emailName = staffSession.email.split('@')[0];
+                                    profileName.textContent = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                                } else if (staffSession.staffId) {
+                                    profileName.textContent = staffSession.staffId;
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.warn('Could not update profile name immediately:', e);
+                    }
+                })();
+            </script>
+
+            <!-- Add Food Dashboard (Hidden by default) -->
+            <div class="add-food-dashboard" id="addFoodDashboard" style="display: none;">
+                <div class="add-food-header">
+                    <button class="back-btn" onclick="hideAddFood()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to Menu
+                    </button>
+                    <h2>Add Food</h2>
+                </div>
+                
+                <div class="add-food-form">
+                    <div class="form-section">
+                        <h3>Food Image</h3>
+                        <div class="image-upload-section">
+                            <div class="image-preview" id="imagePreview">
+                                <div class="upload-placeholder">
+                                    <i class="fas fa-plus"></i>
+                                    <span>Add Photo</span>
+                                </div>
+                            </div>
+                            <div class="image-controls">
+                                <button class="btn btn-primary" onclick="document.getElementById('imageInput').click()">
+                                    <i class="fas fa-plus"></i>
+                                    Food Image
+                                </button>
+                                <button class="btn btn-secondary" onclick="removeImage()">
+                                    <i class="fas fa-trash"></i>
+                                    Remove
+                                </button>
+                                <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="previewImage(this)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Food Details</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="category">Category</label>
+                                <select id="category" class="form-control">
+                                    <option value="Rice Meal">Rice Meal</option>
+                                    <option value="Meat">Meat</option>
+                                    <option value="Pasta">Pasta</option>
+                                    <option value="Sides">Sides</option>
+                                    <option value="Shawarma">Shawarma</option>
+                                    <option value="Limited Only">Limited Only</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="foodId">ID</label>
+                                <input type="text" id="foodId" class="form-control" placeholder="Enter food ID">
+                            </div>
+                            <div class="form-group">
+                                <label for="foodName">Food name</label>
+                                <input type="text" id="foodName" class="form-control" placeholder="Enter food name">
+                            </div>
+                            <div class="form-group">
+                                <label for="price">Price</label>
+                                <input type="text" id="price" class="form-control" placeholder="PHP 0.00">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="description">Description</label>
+                            <textarea id="description" class="form-control" rows="3" placeholder="Write ingredients. Separate by comma (,)"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-large" onclick="submitFood()">
+                            <i class="fas fa-plus"></i>
+                            Add Food
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Food Section -->
+            <div class="food-section" id="foodSection">
+                <h3>Food</h3>
+                
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <div class="search-filter-group">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" placeholder="Search...">
+                        </div>
+                        <div class="filter-container">
+                            <button class="filter-btn" onclick="toggleDropdown('filterDropdown')">
+                                <i class="fas fa-filter"></i>
+                                Filter
+                            </button>
+                            <div class="dropdown-menu" id="filterDropdown">
+                                <a href="#" class="dropdown-item">All Categories</a>
+                                <a href="#" class="dropdown-item">Meat</a>
+                                <a href="#" class="dropdown-item">Rice Meal</a>
+                                <a href="#" class="dropdown-item">Pasta</a>
+                                <a href="#" class="dropdown-item">Sides</a>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="add-food-btn" onclick="addFood()">Add Food</button>
+                </div>
+
+                <!-- Food Items Table -->
+                <div class="table-container">
+                    <table class="orders-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox"></th>
+                                <th>Name <i class="fas fa-arrow-up"></i></th>
+                                <th>Img</th>
+                                <th>Menu ID</th>
+                                <th>Category</th>
+                                <th>Price <i class="fas fa-arrow-up"></i></th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox"></td>
+                                <td>Baby Back Ribs</td>
+                                <td><div class="food-thumbnail"><img src="babybackribs.png" alt="Baby Back Ribs"></div></td>
+                                <td>ID01</td>
+                                <td>Meat</td>
+                                <td>99.00</td>
+                                <td><span class="status active">Active</span></td>
+                                <td class="actions">
+                                    <button class="action-btn more" onclick="toggleItemMenu(1)">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <div class="item-menu" id="itemMenu1">
+                                        <a href="#" class="menu-item"><i class="fas fa-eye"></i> View</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-edit"></i> Edit</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-trash"></i> Delete</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-toggle-on"></i> Deactivate</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox"></td>
+                                <td>Chicken Rice</td>
+                                <td><div class="food-thumbnail"><img src="chickenrice.png" alt="Chicken Rice"></div></td>
+                                <td>ID01</td>
+                                <td>Rice meal</td>
+                                <td>99.00</td>
+                                <td><span class="status no-stock">No Stock</span></td>
+                                <td class="actions">
+                                    <button class="action-btn more" onclick="toggleItemMenu(2)">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <div class="item-menu" id="itemMenu2">
+                                        <a href="#" class="menu-item"><i class="fas fa-eye"></i> View</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-edit"></i> Edit</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-trash"></i> Delete</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-toggle-on"></i> Deactivate</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox"></td>
+                                <td>Pablo's Spaghetti</td>
+                                <td><div class="food-thumbnail"><img src="spaghetti.png" alt="Pablo's Spaghetti"></div></td>
+                                <td>ID01</td>
+                                <td>Pasta</td>
+                                <td>99.00</td>
+                                <td><span class="status active">Active</span></td>
+                                <td class="actions">
+                                    <button class="action-btn more" onclick="toggleItemMenu(3)">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <div class="item-menu" id="itemMenu3">
+                                        <a href="#" class="menu-item"><i class="fas fa-eye"></i> View</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-edit"></i> Edit</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-trash"></i> Delete</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-toggle-on"></i> Deactivate</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox"></td>
+                                <td>Fries</td>
+                                <td><div class="food-thumbnail"><img src="fries.png" alt="Fries"></div></td>
+                                <td>ID01</td>
+                                <td>Sides</td>
+                                <td>99.00</td>
+                                <td><span class="status no-stock">No Stock</span></td>
+                                <td class="actions">
+                                    <button class="action-btn more" onclick="toggleItemMenu(4)">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <div class="item-menu" id="itemMenu4">
+                                        <a href="#" class="menu-item"><i class="fas fa-eye"></i> View</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-edit"></i> Edit</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-trash"></i> Delete</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-toggle-on"></i> Deactivate</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox"></td>
+                                <td>Kebab</td>
+                                <td><div class="food-thumbnail"><img src="kebab.png" alt="Kebab"></div></td>
+                                <td>ID01</td>
+                                <td>Limited Only</td>
+                                <td>99.00</td>
+                                <td><span class="status active">Active</span></td>
+                                <td class="actions">
+                                    <button class="action-btn more" onclick="toggleItemMenu(5)">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <div class="item-menu" id="itemMenu5">
+                                        <a href="#" class="menu-item"><i class="fas fa-eye"></i> View</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-edit"></i> Edit</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-trash"></i> Delete</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-toggle-on"></i> Deactivate</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox"></td>
+                                <td>Chicken Shawarma</td>
+                                <td><div class="food-thumbnail"><img src="shawarma.png" alt="Chicken Shawarma"></div></td>
+                                <td>ID01</td>
+                                <td>Shawarma</td>
+                                <td>99.00</td>
+                                <td><span class="status no-stock">No Stock</span></td>
+                                <td class="actions">
+                                    <button class="action-btn more" onclick="toggleItemMenu(6)">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <div class="item-menu" id="itemMenu6">
+                                        <a href="#" class="menu-item"><i class="fas fa-eye"></i> View</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-edit"></i> Edit</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-trash"></i> Delete</a>
+                                        <a href="#" class="menu-item"><i class="fas fa-toggle-on"></i> Deactivate</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination">
+                    <span>1 of 2</span>
+                    <button class="page-btn" onclick="changePage('prev')">&lt;</button>
+                    <button class="page-btn active" onclick="changePage(1)">1</button>
+                    <button class="page-btn" onclick="changePage(2)">2</button>
+                    <button class="page-btn" onclick="changePage(3)">3</button>
+                    <button class="page-btn" onclick="changePage(4)">4</button>
+                    <button class="page-btn" onclick="changePage(5)">5</button>
+                    <button class="page-btn" onclick="changePage('next')">&gt;</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Firebase Initialization -->
+    <script type="module" src="firebase-init.js"></script>
+    
+    <!-- Session Check - Must be after Firebase init -->
+    <script src="session-check.js"></script>
+    
+    <!-- Update User Profile Display -->
+    <script src="update-user-profile.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
