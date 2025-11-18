@@ -1,0 +1,40 @@
+// Firestore Security Rules - MINIMAL TEST VERSION
+// Use this to test if basic updates work
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+// CUSTOMERS COLLECTION
+    match /customers/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+// STAFF COLLECTION
+    match /staff/{staffId} {
+      allow create: if true;
+      allow read: if true;
+      
+      // MINIMAL UPDATE RULE - Just prevent staffId and password changes
+      allow update: if (
+        request.resource.data.staffId == resource.data.staffId &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['password']) ||
+         request.resource.data.password == resource.data.password)
+      );
+
+      allow delete: if false;
+    }
+
+// STOCKS COLLECTION (Inventory)
+    match /stocks/{stockId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+    }
+  }
+}
+
+
