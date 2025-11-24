@@ -18,21 +18,24 @@
       <div class="nav-icon home-icon" title="Home" onclick="goHome()">
         <i class="fas fa-home"></i>
       </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
+      </div>
       <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
         <i class="fas fa-shopping-bag"></i>
         <span class="cart-badge">0</span>
       </div>
       <div class="nav-icon profile-icon" title="Profile" id="profileButton">
-        <i class="fas fa-user-circle"></i>
+        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+        <span class="profile-text" id="profileText">Sign In</span>
         <div class="profile-dropdown" id="profileDropdown">
           <div class="profile-dropdown-header">
-            <i class="fas fa-user"></i>
             <div class="profile-meta">
               <span class="profile-name" id="profileName">Your Account</span>
               <span class="profile-email" id="profileEmail">user@example.com</span>
             </div>
           </div>
-          <a href="account.html" class="profile-item"><span>Manage account</span></a>
+          <a href="account.html" class="profile-item profile-manage-account"><span>Manage account</span></a>
           <a href="orders.html" class="profile-item"><span>Orders</span></a>
           <a href="help.html" class="profile-item"><span>Help & support</span></a>
           <div class="profile-divider"></div>
@@ -52,14 +55,7 @@
 
     <div class="food-item-container">
       <div class="food-image-container">
-        <img src="food_img.png" alt="Whole Chicken Meal" class="food-image" decoding="async" loading="eager" srcset="food_img.png 1x, food_img.png 2x"/>
-        <div class="image-overlay" title="Add to Favorites" onclick="toggleFavorite()">
-          <i class="far fa-heart" id="favorite-icon"></i>
-        </div>
-        <div class="food-badge">
-          <i class="fas fa-fire"></i>
-          <span>Popular</span>
-        </div>
+        <img src="" alt="" class="food-image" decoding="async" loading="eager" style="display:none"/>
       </div>
 
       <div class="food-details">
@@ -68,7 +64,6 @@
             <span class="stars">★★★★★</span>
             <span class="rating-text">0.0 (0 reviews)</span>
           </div>
-          <span class="popular-tag">Most Popular</span>
         </div>
 
         <h1 class="food-title">Baby Back Ribs</h1>
@@ -77,17 +72,6 @@
           Tender, fall-off-the-bone pork ribs glazed in our signature smoky-sweet barbecue sauce, 
           grilled to perfection. Served with your choice of sides and our famous peri-peri sauce.
         </p>
-
-        <div class="food-features">
-          <div class="feature-item">
-            <i class="fas fa-clock"></i>
-            <span>Ready in 15-20 min</span>
-          </div>
-          <div class="feature-item">
-            <i class="fas fa-utensils"></i>
-            <span>Good for 1 people</span>
-          </div>
-        </div>
 
         <div class="quantity-section">
           <h3 class="section-subtitle">Quantity</h3>
@@ -187,10 +171,81 @@
     </section>
   </main>
 
+  <script type="module" src="firebase-init.js"></script>
+  <script src="profile-auth.js"></script>
+
   <script>
     let currentRating = 0;
     let currentQty = 1;
-    let isFavorite = false;
+    let unitPrice = 150; // will be updated from Firestore
+    let currentItemId = null;
+    let currentItemName = '';
+    let currentItemImg = '';
+
+    const GUEST_CART_KEY = 'ppp_guest_cart';
+
+    // Guest cart helpers (same behavior as menu.html)
+    function getGuestCart() {
+      try {
+        const raw = window.localStorage?.getItem(GUEST_CART_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.warn('Failed to read guest cart on food_item:', e);
+        return [];
+      }
+    }
+
+    function setGuestCart(cart) {
+      try {
+        window.localStorage?.setItem(GUEST_CART_KEY, JSON.stringify(cart || []));
+      } catch (e) {
+        console.warn('Failed to save guest cart on food_item:', e);
+      }
+    }
+
+    function addGuestCartItem({ itemId, name, imageUrl, price, quantity }) {
+      const cart = getGuestCart();
+
+      const numericPrice = typeof price === 'number' ? price : Number(price) || 0;
+      const numericQty = typeof quantity === 'number' ? quantity : Number(quantity) || 1;
+
+      // Try to match existing item by itemId (preferred) or name
+      let existingIndex = -1;
+      if (itemId) {
+        existingIndex = cart.findIndex((item) => item.itemId === itemId);
+      }
+      if (existingIndex === -1 && name) {
+        existingIndex = cart.findIndex((item) => item.name === name);
+      }
+
+      if (existingIndex !== -1) {
+        const existing = cart[existingIndex] || {};
+        const currentQty = typeof existing.quantity === 'number' ? existing.quantity : Number(existing.quantity) || 0;
+        const currentPrice = typeof existing.price === 'number' ? existing.price : Number(existing.price) || 0;
+
+        existing.quantity = currentQty + numericQty;
+        // Treat price as line total for this cart row
+        existing.price = currentPrice + numericPrice * numericQty;
+        cart[existingIndex] = existing;
+      } else {
+        const id =
+          itemId ||
+          `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        cart.push({
+          id,
+          itemId: itemId || null,
+          name: name || null,
+          imageUrl: imageUrl || null,
+          // Price is stored as total for this line (unit price * quantity)
+          price: numericPrice * numericQty,
+          quantity: numericQty
+        });
+      }
+
+      setGuestCart(cart);
+    }
 
     function changeQty(delta) {
       const qtyElem = document.getElementById('qty');
@@ -199,8 +254,7 @@
       
       // Update add to cart button
       const addBtn = document.querySelector('.add-to-cart-btn');
-      const price = 150;
-      const totalPrice = price * currentQty;
+      const totalPrice = unitPrice * currentQty;
       addBtn.querySelector('.total-price').textContent = `₱${totalPrice}.00`;
     }
 
@@ -225,38 +279,70 @@
       }
     }
 
-    function toggleFavorite() {
-      const icon = document.getElementById('favorite-icon');
-      isFavorite = !isFavorite;
-      
-      if (isFavorite) {
-        icon.className = 'fas fa-heart';
-        icon.style.color = '#e53935';
-        showNotification('Added to favorites!');
-      } else {
-        icon.className = 'far fa-heart';
-        icon.style.color = '#e53935';
-        showNotification('Removed from favorites');
-      }
-    }
-
-    function addToCart() {
-      // Add animation feedback
+    async function addToCart() {
       const btn = document.querySelector('.add-to-cart-btn');
+      if (!btn || btn.disabled) return;
+
       const originalContent = btn.innerHTML;
+      const originalBg = btn.style.background;
+
       btn.innerHTML = '<i class="fas fa-check"></i><span>Added to Cart!</span>';
       btn.style.background = '#4caf50';
       btn.disabled = true;
-      
-      // Update cart badge
-      const cartBadge = document.querySelector('.cart-badge');
-      const currentCount = parseInt(cartBadge.textContent) + currentQty;
-      cartBadge.textContent = currentCount;
-      
+
+      // Update global cart count (localStorage + badges on all pages) using shared helper when available
+      try {
+        if (typeof window.incrementCartCount === 'function') {
+          window.incrementCartCount(currentQty);
+        } else {
+          const key = 'ppp_cart_count';
+          const raw = window.localStorage?.getItem(key);
+          const current = Number(raw);
+          const safeCurrent = !Number.isFinite(current) || Number.isNaN(current) ? 0 : current;
+          const next = safeCurrent + currentQty;
+          window.localStorage?.setItem(key, String(next));
+
+          document.querySelectorAll('.cart-badge').forEach((badge) => {
+            badge.textContent = String(next);
+          });
+
+          document.dispatchEvent(new CustomEvent('cart:count-changed', {
+            detail: { count: next }
+          }));
+        }
+      } catch (e) {
+        console.warn('Failed to sync cart count from food_item:', e);
+      }
+
+      // Save this item into the correct cart:
+      // - Signed-in user: Firestore cart under customers/{uid}/cartItems
+      // - Guest: local guest cart in localStorage (ppp_guest_cart)
+      try {
+        const user = window.firebaseAuth?.currentUser || null;
+        const payload = {
+          itemId: currentItemId,
+          name: currentItemName,
+          imageUrl: currentItemImg,
+          price: unitPrice,
+          quantity: currentQty
+        };
+
+        if (user) {
+          await saveCartItemToFirestore(payload);
+        } else {
+          addGuestCartItem(payload);
+        }
+      } catch (e) {
+        console.error('Error saving food item to cart from food_item page:', e);
+      }
+
+      // Show "Added to Cart!" for 1 second, then restore original button state
       setTimeout(() => {
-        // Redirect to drink page after showing feedback
-        window.location.href = 'drink_page.html';
-      }, 1500);
+        if (!btn.isConnected) return;
+        btn.innerHTML = originalContent;
+        btn.style.background = originalBg;
+        btn.disabled = false;
+      }, 1000);
     }
 
     function toggleReviewForm() {
@@ -325,6 +411,10 @@
     }
 
     function goHome() {
+      window.location.href = 'index.html';
+    }
+
+    function goToMenu() {
       window.location.href = 'menu.html';
     }
 
@@ -332,42 +422,228 @@
       window.location.href = 'cart_review.html';
     }
 
-    // Profile dropdown logic
-    (function initProfileDropdown(){
-      const btn = document.getElementById('profileButton');
-      const dropdown = document.getElementById('profileDropdown');
-      if (!btn || !dropdown) return;
+    const MENU_COLLECTION = 'menu';
 
-      function toggleDropdown(e){
-        e.stopPropagation();
-        dropdown.classList.toggle('show');
+    async function waitForFirebaseReady(maxAttempts = 40, delayMs = 50) {
+      let attempts = 0;
+      while (!window.firebaseReady && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        attempts++;
+      }
+    }
+
+    async function loadFoodItem() {
+      await waitForFirebaseReady();
+
+      const db = window.firebaseDb;
+      if (!db || !window.collection || !window.getDocs || !window.getDoc || !window.doc) {
+        console.warn('Firebase not ready for food item fetch');
+        return;
       }
 
-      function handleOutside(e){
-        if (!dropdown.classList.contains('show')) return;
-        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
-          dropdown.classList.remove('show');
+      const params = new URLSearchParams(window.location.search);
+      const idFromUrl = params.get('id');
+
+      let item = null;
+
+      try {
+        if (idFromUrl) {
+          const ref = window.doc(db, MENU_COLLECTION, idFromUrl);
+          const snap = await window.getDoc(ref);
+          if (snap.exists()) {
+            item = { id: snap.id, ...snap.data() };
+          }
+        }
+
+        if (!item) {
+          const colRef = window.collection(db, MENU_COLLECTION);
+          const snap = await window.getDocs(colRef);
+          snap.forEach((docSnap) => {
+            if (item) return;
+            const data = docSnap.data();
+            if (data && data.active === false) return;
+            item = { id: docSnap.id, ...data };
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching food item:', error);
+      }
+
+      if (!item) {
+        console.warn('No menu item found for food_item page');
+        return;
+      }
+
+      const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
+      const primaryIngredient = ingredients[0] || {};
+
+      const title = item.name || item.title || primaryIngredient.ingredientName || 'Menu item';
+      const basePrice =
+        typeof item.price === 'number'
+          ? item.price
+          : typeof primaryIngredient.baseAmountPerDish === 'number'
+            ? primaryIngredient.baseAmountPerDish
+            : 150;
+      unitPrice = basePrice;
+      const priceDisplay = `₱${basePrice}.00`;
+
+      const description =
+        item.description ||
+        primaryIngredient.description ||
+        'No description available for this item yet.';
+
+      const rawImg = item.img || item.image || item.imageDataUrl || '';
+      const hasImage = !!rawImg;
+
+      // Cache current item meta for Add to Cart
+      currentItemId = item.id || null;
+      currentItemName = title;
+      currentItemImg = hasImage ? rawImg : '';
+
+      const imgEl = document.querySelector('.food-image');
+      const imgContainer = imgEl ? imgEl.parentElement : null;
+      const titleEl = document.querySelector('.food-title');
+      const priceEl = document.querySelector('.food-price');
+      const descEl = document.querySelector('.food-description');
+      const btnPriceEl = document.querySelector('.add-to-cart-btn .total-price');
+
+      if (titleEl) titleEl.textContent = title;
+      if (priceEl) priceEl.textContent = priceDisplay;
+      if (btnPriceEl) btnPriceEl.textContent = priceDisplay;
+      if (descEl) descEl.textContent = description;
+      if (imgEl && hasImage) {
+        imgEl.src = rawImg;
+        imgEl.alt = title;
+        imgEl.style.display = 'block';
+      } else if (imgEl && imgContainer) {
+        // Hide the image and show a "No image available" placeholder
+        imgEl.style.display = 'none';
+        const placeholder = document.createElement('div');
+        placeholder.className = 'food-image placeholder';
+        placeholder.textContent = 'No image available';
+        imgContainer.appendChild(placeholder);
+      }
+
+      // Recalculate quantity display with new price
+      changeQty(0);
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      changeQty(0);
+      loadFoodItem();
+    });
+  </script>
+
+  <script>
+    // Save to Firestore cart (same logic as in menu.html)
+    async function saveCartItemToFirestore({ itemId, name, imageUrl, price, quantity }) {
+      try {
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+
+        if (!db || !auth || !window.doc || !window.collection || !window.setDoc) {
+          console.warn('Firebase not fully initialized for cart save (food_item)');
+          return;
+        }
+
+        const user = auth.currentUser;
+        if (!user) {
+          console.warn('No authenticated user; skipping save to Firestore cart (food_item)');
+          return;
+        }
+
+        const customerRef = window.doc(db, 'customers', user.uid);
+        const cartItemsCol = window.collection(customerRef, 'cartItems');
+
+        const numericPrice = typeof price === 'number' ? price : Number(price) || 0;
+        const numericQty = typeof quantity === 'number' ? quantity : Number(quantity) || 1;
+
+        // Check if this item already exists in the cart
+        let existingSnap = null;
+        if (itemId) {
+          const q = window.query(cartItemsCol, window.where('itemId', '==', itemId));
+          const existingQuerySnap = await window.getDocs(q);
+          existingQuerySnap.forEach((docSnap) => {
+            if (!existingSnap) existingSnap = docSnap;
+          });
+        }
+
+        if (existingSnap) {
+          // Update existing cart item: add to quantity and price (treat price as running total)
+          const data = existingSnap.data() || {};
+          const currentQty = typeof data.quantity === 'number' ? data.quantity : Number(data.quantity) || 0;
+          const currentPrice = typeof data.price === 'number' ? data.price : Number(data.price) || 0;
+
+          const newQty = currentQty + numericQty;
+          const newPrice = currentPrice + numericPrice * numericQty;
+
+          await window.updateDoc(existingSnap.ref, {
+            quantity: newQty,
+            price: newPrice,
+            updatedAt: new Date()
+          });
+        } else {
+          // Create new cart item document
+          const cartItemRef = window.doc(cartItemsCol);
+          await window.setDoc(cartItemRef, {
+            itemId: itemId || null,
+            name: name || null,
+            imageUrl: imageUrl || null,
+            // For a new item, price is the total for this line (unit price * quantity)
+            price: numericPrice * numericQty,
+            quantity: numericQty,
+            createdAt: new Date()
+          });
+        }
+      } catch (error) {
+        console.error('Error saving cart item to Firestore from food_item:', error);
+      }
+    }
+  </script>
+
+  <script>
+    // Keep cart badge in sync on this page with shared localStorage value
+    (function() {
+      'use strict';
+      const CART_COUNT_KEY = 'ppp_cart_count';
+
+      function safeNumber(value, fallback = 0) {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return fallback;
+        return parsed;
+      }
+
+      function getStoredCartCount() {
+        try {
+          const raw = window.localStorage?.getItem(CART_COUNT_KEY);
+          return safeNumber(raw, 0);
+        } catch (e) {
+          console.warn('Cart count read failed on food_item:', e);
+          return 0;
         }
       }
 
-      btn.addEventListener('click', toggleDropdown);
-      document.addEventListener('click', handleOutside);
-      document.addEventListener('keydown', (e)=>{
-        if (e.key === 'Escape') dropdown.classList.remove('show');
-      });
-
-      const logoutBtn = document.getElementById('logoutBtn');
-      if (logoutBtn) {
-        logoutBtn.addEventListener('click', function(){
-          dropdown.classList.remove('show');
-          showNotification('You have been logged out.');
-          setTimeout(()=>{ window.location.href = 'login.html'; }, 800);
+      function updateCartBadges(count) {
+        const badges = document.querySelectorAll('.cart-badge');
+        badges.forEach((badge) => {
+          badge.textContent = String(Math.max(0, safeNumber(count, 0)));
         });
       }
-    })();
 
-    // Initialize
-    changeQty(0);
+      document.addEventListener('DOMContentLoaded', () => {
+        updateCartBadges(getStoredCartCount());
+      });
+
+      document.addEventListener('cart:count-changed', (e) => {
+        const count = typeof e.detail?.count === 'number'
+          ? e.detail.count
+          : getStoredCartCount();
+        updateCartBadges(count);
+      });
+    })();
   </script>
 
   <style>
@@ -386,8 +662,18 @@
     /* Page container sizing override for this page */
     .main-container {
       max-width: 1280px;
-      padding: 24px 24px;
+      margin: 0 auto;
+      padding: 20px 16px 32px;
     }
+
+    /* Primary food layout */
+    .food-item-container {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      margin-top: 20px;
+    }
+
     /* Food item layout & image sizing */
     .food-image-container {
       position: relative;
@@ -404,6 +690,16 @@
       object-fit: cover;
       display: block;
       transition: transform 0.4s ease;
+    }
+
+    .food-image.placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f5f5f5;
+      color: #666;
+      font-size: 0.95rem;
+      font-weight: 500;
     }
 
     .food-image-container:hover .food-image {
@@ -432,12 +728,78 @@
       color: #e53935;
     }
 
-    /* Overhauled details card and features */
+    /* Overhauled details card and typography */
     .food-details {
       background: var(--surface);
       border: 1.5px solid var(--border);
       border-radius: 20px;
       box-shadow: var(--shadow-1);
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .food-details .rating-badge {
+      display: flex;
+      justify-content: flex-start;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+      color: var(--ink-soft);
+    }
+
+    .food-details .stars-container {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+    }
+
+    .food-details .stars {
+      color: #f59e0b;
+      letter-spacing: 1px;
+    }
+
+    .food-details .rating-text {
+      font-weight: 500;
+      font-size: 0.85rem;
+      color: #92400e;
+    }
+
+    .food-details .food-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin: 4px 0 4px;
+    }
+
+    .food-details .food-price {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--brand);
+      margin-bottom: 8px;
+    }
+
+    .food-details .food-description {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: var(--ink-soft);
+      margin-bottom: 4px;
+    }
+
+    .quantity-section {
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+
+    .quantity-section .section-subtitle {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 6px;
     }
 
     .food-features {
@@ -508,19 +870,12 @@
       }
     }
 
-    .food-item-container {
-      display: flex;
-      flex-direction: column;
-      gap: 28px;
-      margin-top: 16px;
-    }
-
     .review-section {
       background: #fff;
       padding: 32px;
       border-radius: 20px;
       box-shadow: var(--shadow-1);
-      margin-top: 32px;
+      margin-top: 28px;
       max-width: 900px;
       margin-left: auto;
       margin-right: auto;
@@ -810,12 +1165,14 @@
     }
 
     @media (min-width: 768px) {
+      .main-container {
+        padding: 28px 24px 40px;
+      }
+
       .food-item-container {
-        display: flex;
-        flex-direction: column;
-        gap: 36px;
+        gap: 32px;
         max-width: 1100px;
-        margin: 24px auto 0 auto;
+        margin: 28px auto 0 auto;
         align-items: stretch;
       }
 
@@ -829,7 +1186,7 @@
       }
 
       .food-details {
-        padding: 40px;
+        padding: 32px;
         max-width: 900px;
         margin: 0 auto;
       }
@@ -851,13 +1208,47 @@
       .food-item-container {
         max-width: 1200px;
         gap: 40px;
+        flex-direction: row;
+        align-items: flex-start;
       }
+
+      .food-image-container {
+        max-width: none;
+        width: 52%;
+      }
+
       .food-details {
-        position: static;
-        top: auto;
+        max-width: none;
+        width: 48%;
       }
+
       .review-section {
         max-width: 1200px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .review-section {
+        padding: 24px 16px;
+        border-radius: 16px;
+      }
+
+      .review-header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .rating-section {
+        padding: 24px 16px;
+      }
+
+      .food-details {
+        padding: 18px 14px;
+      }
+
+      .food-details .food-title {
+        font-size: 1.35rem;
       }
     }
 

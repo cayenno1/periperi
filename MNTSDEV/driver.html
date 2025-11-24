@@ -8,23 +8,93 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
+    /* Page-level layout for a cleaner, balanced dashboard */
+    .main-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 16px 32px;
+    }
+
+    .header-banner .banner-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 10px 16px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
     /* Lightweight scoped layout helpers for this page only */
-    .driver-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
-    @media (min-width: 900px) { .driver-grid { grid-template-columns: 1fr 1fr 1fr; } }
-    .driver-card { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 16px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); padding: 16px; display:flex; flex-direction:column; gap:12px; }
-    .driver-card h3 { font-size: 1.1em; font-weight: 800; margin: 0; color: #111; display:flex; align-items:center; gap:10px; }
-    .driver-actions { display:flex; gap:8px; flex-wrap: wrap; }
-    .driver-actions .filter-btn, .driver-actions .size-select { flex: 0 0 auto; }
+    .driver-grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: 1fr;
+      margin-top: 16px;
+    }
+    @media (min-width: 900px) {
+      .driver-grid {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+    }
+
+    .driver-card {
+      background: #fff;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(15,23,42,0.08);
+      padding: 18px 16px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .driver-card h3 {
+      font-size: 1.05em;
+      font-weight: 700;
+      margin: 0 0 4px;
+      color: #111827;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+
+    .driver-actions {
+      display:flex;
+      gap:8px;
+      flex-wrap: wrap;
+    }
+    .driver-actions .filter-btn,
+    .driver-actions .size-select {
+      flex: 0 0 auto;
+    }
     @media (min-width: 1200px) {
       .driver-actions { justify-content: flex-end; }
       .driver-actions .filter-btn { padding: 10px 14px; font-size: 0.95em; }
       .driver-actions .size-select { min-width: 160px; }
     }
-    .driver-quiet { color:#666; font-size:0.95em; }
-    .orders-list-compact { display:flex; flex-direction:column; gap:12px; }
-    .orders-list-compact .review-item { padding:16px; }
-    .orders-list-compact .review-header { margin-bottom:8px; }
-    .orders-list-compact .review-text { margin: 6px 0 10px 0; }
+
+    .driver-quiet {
+      color:#6b7280;
+      font-size:0.9em;
+      margin-top:4px;
+    }
+
+    .orders-list-compact {
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .orders-list-compact .review-item {
+      padding:14px 12px;
+      border-radius:12px;
+      border-width:1.5px;
+      background:#fafafa;
+    }
+    .orders-list-compact .review-header { margin-bottom:6px; }
+    .orders-list-compact .review-text {
+      margin: 6px 0 10px 0;
+      font-size:0.9rem;
+      line-height:1.5;
+    }
     /* Toasts */
     .toast-container { position: fixed; top: 16px; right: 16px; display: grid; gap: 10px; z-index: 10001; }
     .toast { display:flex; align-items:center; gap:10px; background:#fff; border:2px solid #e0e0e0; border-left:6px solid #e53935; color:#222; padding:12px 14px; border-radius:12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); min-width: 260px; max-width: 360px; }
@@ -75,6 +145,32 @@
     .modal-content .modal-header .modal-close i,
     .modal-content .modal-body i,
     .toast .icon { display: none !important; }
+
+    /* Modal refinements for cleaner spacing on this page */
+    .modal-overlay .modal-content {
+      border-radius: 16px;
+      padding: 18px 18px 20px;
+    }
+
+    .modal-content .modal-header {
+      margin-bottom: 12px;
+    }
+
+    .modal-content .modal-body {
+      font-size: 0.95rem;
+    }
+
+    /* Tabs spacing */
+    .driver-tabs {
+      max-width: 1200px;
+      margin: 8px auto 0;
+      padding: 0 16px;
+    }
+
+    .driver-tabs .tab-btn {
+      padding-inline: 14px;
+      padding-block: 8px;
+    }
   </style>
   <meta name="theme-color" content="#ffe3a3">
   <meta name="description" content="Driver dashboard to manage new, ongoing, and completed orders.">
@@ -88,12 +184,13 @@
     </div>
     <div class="nav-icons">
       <div class="nav-icon profile-icon" title="Profile" id="profileButton">
-        <i class="fas fa-user-circle"></i>
+        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+        <span class="profile-text" id="profileText">Sign In</span>
         <div class="profile-dropdown" id="profileDropdown">
           <div class="profile-dropdown-header">
-            <i class="fas fa-user"></i>
             <div class="profile-meta">
-              <span class="profile-name" id="profileName">EZ REL</span>
+              <span class="profile-name" id="profileName">Driver Account</span>
+              <span class="profile-email" id="profileEmail">driver@example.com</span>
             </div>
           </div>
           <button class="profile-item" id="driverAccountBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;"><span>Account info</span></button>
@@ -161,9 +258,11 @@
   <!-- Order Details Modal -->
   <div class="modal-overlay" id="orderModal" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
     <div class="modal-content">
-      <div class="modal-header">
+          <div class="modal-header">
         <h3 id="orderModalTitle">Order Details</h3>
-        <button class="modal-close" aria-label="Close" onclick="closeOrderModal()"><i class="fas fa-times"></i></button>
+        <button class="modal-close" aria-label="Close" onclick="closeOrderModal()" style="background:none; border:none; font-size:1.2em; cursor:pointer; color:#777; padding:4px 8px; border-radius:8px;">
+          ✕
+        </button>
       </div>
       <div id="orderModalBody" class="modal-body" style="display:grid; gap:12px;">
         <!-- Filled by JS -->
@@ -177,16 +276,24 @@
     <div class="modal-content">
       <div class="modal-header">
         <h3 id="driverAccountTitle">Driver Account</h3>
-        <button class="modal-close" aria-label="Close" onclick="closeDriverAccount()"><i class="fas fa-times"></i></button>
+        <button
+          class="modal-close"
+          aria-label="Close"
+          onclick="closeDriverAccount()"
+          style="background:none; border:none; font-size:1.2em; cursor:pointer; color:#777; padding:4px 8px; border-radius:8px;"
+        >
+          ✕
+        </button>
       </div>
       <div class="modal-body" style="display:grid; gap:16px;">
         <div style="display:flex; align-items:center; gap:16px;">
           <div class="reviewer-avatar" style="width:64px; height:64px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #e0e0e0; font-size:28px; color:#888;"><i class="fas fa-user"></i></div>
-          <div style="font-weight:800; font-size:1.4em;">EZ REL</div>
+          <div style="font-weight:800; font-size:1.4em;" id="daName">Driver</div>
         </div>
 
         <div class="driver-card" style="margin:0;">
-          <h3 style="margin-bottom:6px;">Driver ID #<span id="daId">55555</span></h3>
+          <h3 style="margin-bottom:6px;">Driver ID #<span id="daId">—</span></h3>
+          <div><strong>Status:</strong> <span id="daStatus">—</span></div>
           <div id="daVehicle">Yamaha NMAX Plate: 123 ABC</div>
           <div id="daBranch">Pablo’s Peri-Peri Zabarte Branch</div>
         </div>
@@ -205,11 +312,19 @@
         </div>
 
         <div class="driver-card" style="margin:0;">
+          <h3 style="margin-bottom:12px;">Assigned Orders</h3>
+          <div id="assignedOrdersList" style="display:grid; gap:8px;">
+            <div style="color:#666; font-size:0.9em;">Loading orders...</div>
+          </div>
+        </div>
+
+        <div class="driver-card" style="margin:0;">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
             <div style="font-weight:700;">Availability</div>
             <select class="size-select" id="availabilitySelect" aria-label="Driver availability">
               <option value="available">Available</option>
-              <option value="unavailable">Unavailable</option>
+              <option value="busy">Busy</option>
+              <option value="off">Off</option>
             </select>
           </div>
           <div style="margin-top:8px; color:#666; font-size:0.95em;">Update your status after completing or accepting an order.</div>
@@ -220,21 +335,128 @@
 
   <script>
 
+    const DRIVER_STORAGE_KEY = 'ppp_driver';
+
+    function getCurrentDriver() {
+      try {
+        const raw = localStorage.getItem(DRIVER_STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) {
+        console.error('Error reading driver from storage:', e);
+        return null;
+      }
+    }
+
+    function getDriverDisplayName(driver) {
+      if (!driver) return 'Driver';
+      if (driver.fullName) return driver.fullName;
+      const first = driver.firstName || '';
+      const last = driver.lastName || '';
+      const combined = `${first} ${last}`.trim();
+      if (combined) return combined;
+      if (driver.email) {
+        const localPart = String(driver.email).split('@')[0] || 'driver';
+        return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+      }
+      return 'Driver';
+    }
+
+    let currentDriver = getCurrentDriver();
+    if (!currentDriver || currentDriver.role !== 'Driver') {
+      // Not logged in as driver – send back to login
+      window.location.href = 'login.html';
+    }
 
     // Profile dropdown logic
     (function initProfileDropdown(){
       const btn = document.getElementById('profileButton');
       const dropdown = document.getElementById('profileDropdown');
-      if (!btn || !dropdown) return;
-      function toggleDropdown(e){ e.stopPropagation(); dropdown.classList.toggle('show'); }
-      function handleOutside(e){ if (!dropdown.classList.contains('show')) return; if (!dropdown.contains(e.target) && !btn.contains(e.target)) { dropdown.classList.remove('show'); } }
+      const profileText = document.getElementById('profileText');
+      const profileName = document.getElementById('profileName');
+      const profileEmail = document.getElementById('profileEmail');
+      const profileIcon = document.getElementById('profileIcon');
+
+      if (!btn || !dropdown || !profileText || !profileIcon) return;
+
+      // Mark as logged in and show driver info
+      const displayName = getDriverDisplayName(currentDriver);
+      btn.classList.add('logged-in');
+      profileIcon.style.display = '';
+      profileText.style.display = '';
+      profileText.textContent = displayName;
+      if (profileName) profileName.textContent = displayName;
+      if (profileEmail) profileEmail.textContent = currentDriver.email || '';
+
+      function toggleDropdown(e){
+        e.stopPropagation();
+        dropdown.classList.toggle('show');
+      }
+      function handleOutside(e){
+        if (!dropdown.classList.contains('show')) return;
+        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+          dropdown.classList.remove('show');
+        }
+      }
       btn.addEventListener('click', toggleDropdown);
       document.addEventListener('click', handleOutside);
       document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') dropdown.classList.remove('show'); });
+
       const logoutBtn = document.getElementById('logoutBtn');
-      if (logoutBtn) logoutBtn.addEventListener('click', function(){ dropdown.classList.remove('show'); alert('You have been logged out.'); setTimeout(()=>{ window.location.href = 'login.html'; }, 300); });
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async function(){
+          dropdown.classList.remove('show');
+          
+          // Update driver availability to "off" in Firestore
+          if (currentDriver && currentDriver.id) {
+            try {
+              const db = window.firebaseDb;
+              const updateDocFn = window.updateDoc;
+              const docFn = window.doc;
+              const serverTimestampFn = window.serverTimestamp;
+              
+              if (db && updateDocFn && docFn && serverTimestampFn) {
+                // Try to update in 'drivers' collection first
+                try {
+                  const driverRef = docFn(db, 'drivers', currentDriver.id);
+                  await updateDocFn(driverRef, {
+                    availability: 'off',
+                    lastLogoutAt: serverTimestampFn(),
+                    updatedAt: serverTimestampFn()
+                  });
+                } catch (driverError) {
+                  // If drivers collection doesn't exist, update in staff collection
+                  const staffRef = docFn(db, 'staff', currentDriver.id);
+                  await updateDocFn(staffRef, {
+                    availability: 'off',
+                    lastLogoutAt: serverTimestampFn(),
+                    updatedAt: serverTimestampFn()
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('Error updating driver availability on logout:', e);
+              // Don't block logout if update fails
+            }
+          }
+          
+          try {
+            localStorage.removeItem(DRIVER_STORAGE_KEY);
+          } catch (e) {
+            console.error('Error clearing driver storage:', e);
+          }
+          window.location.href = 'login.html';
+        });
+      }
+
       const driverAccountBtn = document.getElementById('driverAccountBtn');
-      if (driverAccountBtn) driverAccountBtn.addEventListener('click', function(e){ e.stopPropagation(); dropdown.classList.remove('show'); openDriverAccount(); });
+      if (driverAccountBtn) {
+        driverAccountBtn.addEventListener('click', function(e){
+          e.stopPropagation();
+          dropdown.classList.remove('show');
+          openDriverAccount();
+        });
+      }
     })();
 
     // Tabs - filter view
@@ -269,46 +491,114 @@
     // ---------- Data ----------
     const statusSteps = [ 'Transit' ];
     let driverAvailability = 'available';
-
-    const newOrders = [
-      {
-        id: '111111111',
-        createdAt: new Date().toLocaleString(),
-        pickup: { name: "Pablo's Peri Peri", address: 'Zabarte Road, Brgy. Kaligayahan, Quezon City' },
-        dropoff: { name: 'Ez', address: 'Sm Fairview, Quezon City' },
-        customer: { name: 'Realino', phone: '099999999999' },
-        items: [ 'Peri Peri Chicken (Whole)', 'Iced Tea (Large)' ],
-        total: 599,
-        notes: 'na',
- 
+    let newOrders = [];
+    let ongoingOrders = [];
+    let completedOrders = [];
+    
+    // Load orders from Firebase
+    async function loadDriverOrders() {
+      if (!currentDriver || !currentDriver.id) {
+        console.error('No driver ID available');
+        return;
       }
-    ];
-
-    const ongoingOrders = [
-      {
-        id: '111111111',
-        createdAt: 'Sep 10, 2025 10:32 AM',
-        pickup: { name: "Pablo's Peri Peri", address: 'Zabarte Road, Brgy. Kaligayahan, Quezon City' },
-        dropoff: { name: 'sef', address: 'Almar' },
-        customer: { name: 'Capalarant', phone: '099999999999' },
-        items: [ 'Baby Back Ribs Meal' ],
-        total: 299,
-        notes: 'blue gate',
+      
+      const db = window.firebaseDb;
+      const collectionFn = window.collection;
+      const queryFn = window.query;
+      const whereFn = window.where;
+      const getDocsFn = window.getDocs;
+      const onSnapshotFn = window.onSnapshot;
+      const docFn = window.doc;
+      const getDocFn = window.getDoc;
+      
+      if (!db || !collectionFn || !queryFn || !whereFn) {
+        console.error('Firebase not ready');
+        return;
       }
-    ];
-
-    const completedOrders = [
-      {
-        id: '111111111',
-        createdAt: 'Sep 7, 2025 3:04 PM',
-        pickup: { name: "Pablo's Peri Peri", address: 'Zabarte Road, Brgy. Kaligayahan, Quezon City' },
-        dropoff: { name: 'ron', address: 'Novaliches' },
-        customer: { name: 'ron', phone: '099999999999' },
-        items: [ 'shawarma B1T1', 'Coke' ],
-        total: 120,
-        completedAt: 'Sep 7, 2025 3:28 PM'
+      
+      try {
+        const driverId = currentDriver.staffId || currentDriver.id;
+        const driverDocId = currentDriver.id;
+        const ordersRef = collectionFn(db, 'orders');
+        
+        // Query orders assigned to this driver (check both driverId and document ID)
+        // First try with staffId/driverId
+        const ordersQuery = queryFn(
+          ordersRef,
+          whereFn('driverId', '==', driverId)
+        );
+        
+        // Set up real-time listener
+        if (onSnapshotFn) {
+          onSnapshotFn(ordersQuery, (snapshot) => {
+            newOrders = [];
+            ongoingOrders = [];
+            completedOrders = [];
+            
+            snapshot.forEach((docSnap) => {
+              const orderData = docSnap.data();
+              const orderDriverId = orderData.driverId || '';
+              const orderStatus = (orderData.status || '').toLowerCase().trim();
+              
+              // Only process orders that match this driver (by staffId or document ID)
+              const matchesDriver = orderDriverId === driverId || orderDriverId === driverDocId;
+              if (!matchesDriver) return;
+              
+              // Format order for display
+              const order = {
+                id: docSnap.id,
+                trackingId: orderData.trackingId || `#${docSnap.id.slice(-6).toUpperCase()}`,
+                createdAt: orderData.createdAt ? (orderData.createdAt.toDate ? new Date(orderData.createdAt.toDate()) : new Date(orderData.createdAt)).toLocaleString() : new Date().toLocaleString(),
+                pickup: {
+                  name: "Pablo's Peri Peri",
+                  address: orderData.restaurantAddress || 'Zabarte Road, Brgy. Kaligayahan, Quezon City'
+                },
+                dropoff: {
+                  name: orderData.deliveryInfo?.customerName || orderData.customerName || 'Customer',
+                  address: orderData.address || orderData.deliveryInfo?.address || 'Address not provided'
+                },
+                customer: {
+                  name: orderData.deliveryInfo?.customerName || orderData.customerName || 'Customer',
+                  phone: orderData.deliveryInfo?.phone || orderData.phone || '—'
+                },
+                items: Array.isArray(orderData.items) ? orderData.items.map(item => {
+                  const name = item.name || item.itemName || 'Item';
+                  const qty = item.quantity || 1;
+                  return qty > 1 ? `${name} x${qty}` : name;
+                }) : [],
+                total: orderData.total || 0,
+                notes: orderData.deliveryInfo?.notes || orderData.notes || '',
+                stepIndex: orderStatus === 'out for delivery' || orderStatus === 'out_for_delivery' ? 0 : undefined,
+                completedAt: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? new Date(orderData.deliveredAt.toDate()) : new Date(orderData.deliveredAt)).toLocaleString() : null,
+                completedAtTs: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? orderData.deliveredAt.toDate().getTime() : new Date(orderData.deliveredAt).getTime()) : null
+              };
+              
+              // Categorize orders
+              if (orderStatus === 'delivered' || orderStatus === 'completed') {
+                completedOrders.push(order);
+              } else if (orderStatus === 'out for delivery' || orderStatus === 'out_for_delivery' || 
+                         orderStatus === 'out-for-delivery' || orderStatus === 'in-transit' || 
+                         orderStatus === 'in_transit') {
+                ongoingOrders.push(order);
+              } else if (orderStatus === 'ready for delivery' || orderStatus === 'ready_for_delivery' ||
+                         orderStatus === 'for delivery' || orderStatus === 'for_delivery') {
+                newOrders.push(order); // Ready for delivery orders appear as "new" for driver to accept
+              }
+            });
+            
+            renderAll();
+          }, (error) => {
+            console.error('Error loading orders:', error);
+          });
+        } else {
+          // Fallback to one-time load
+          const snapshot = await getDocsFn(ordersQuery);
+          // Process snapshot same as above
+        }
+      } catch (error) {
+        console.error('Error setting up orders listener:', error);
       }
-    ];
+    }
 
     // Rendering aggregator: refresh all sections and apply current view filter
     function renderAll(){ renderNew(); renderOngoing(); renderCompleted(); applyView(); }
@@ -364,8 +654,7 @@
             <div class="driver-actions">
               ${list==='new' ? `
                 <button class="filter-btn" onclick="viewDetails('${order.id}','new')"><span>Details</span></button>
-                <button class="filter-btn" onclick="acceptOrder('${order.id}')"><i class="fas fa-check"></i><span>Accept</span></button>
-                <button class="filter-btn" onclick="declineOrder('${order.id}')"><i class="fas fa-xmark"></i><span>Decline</span></button>
+                <button class="filter-btn" onclick="acceptOrder('${order.id}')"><i class="fas fa-check"></i><span>Confirm</span></button>
               `: ''}
               ${list==='ongoing' ? `
                 <button class="filter-btn" onclick="viewDetails('${order.id}','ongoing')"><span>Details</span></button>
@@ -384,12 +673,53 @@
     }
 
     // ---------- Actions ----------
-    function acceptOrder(id){
+    async function acceptOrder(id){
       const idx = newOrders.findIndex(o=>o.id===id);
       if (idx === -1) return;
-      const order = newOrders.splice(idx,1)[0];
-      order.stepIndex = 0;
-      ongoingOrders.unshift(order);
+      const order = newOrders[idx];
+      
+      // Update order status in Firestore to "out for delivery"
+      try {
+        const db = window.firebaseDb;
+        const updateDocFn = window.updateDoc;
+        const docFn = window.doc;
+        const serverTimestampFn = window.serverTimestamp;
+        
+        if (db && updateDocFn && docFn && serverTimestampFn) {
+          const orderRef = docFn(db, 'orders', id);
+          await updateDocFn(orderRef, {
+            status: 'out for delivery',
+            outForDeliveryAt: serverTimestampFn(),
+            updatedAt: serverTimestampFn()
+          });
+          
+          // Update driver availability to busy
+          if (currentDriver && currentDriver.id) {
+            try {
+              const driverRef = docFn(db, 'drivers', currentDriver.id);
+              await updateDocFn(driverRef, {
+                availability: 'busy',
+                updatedAt: serverTimestampFn()
+              });
+            } catch (driverError) {
+              const staffRef = docFn(db, 'staff', currentDriver.id);
+              await updateDocFn(staffRef, {
+                availability: 'busy',
+                updatedAt: serverTimestampFn()
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error accepting order:', error);
+        notify('Error accepting order. Please try again.', 'error');
+        return;
+      }
+      
+      // Update local state
+      const acceptedOrder = newOrders.splice(idx,1)[0];
+      acceptedOrder.stepIndex = 0;
+      ongoingOrders.unshift(acceptedOrder);
       showCenterNotification('Accepted');
       driverAvailability = 'unavailable';
       syncAvailabilitySelect();
@@ -433,15 +763,88 @@
       }
     }
 
-    function completeOrder(id){
+    async function completeOrder(id){
       const idx = ongoingOrders.findIndex(o=>o.id===id);
       if (idx === -1) return;
-      const order = ongoingOrders.splice(idx,1)[0];
-      order.completedAt = new Date().toLocaleString();
-      order.completedAtTs = Date.now();
-      completedOrders.unshift(order);
-      notify('Delivery completed for ' + order.id, 'success');
-      if (ongoingOrders.length === 0) { driverAvailability = 'available'; syncAvailabilitySelect(); }
+      const order = ongoingOrders[idx];
+      
+      // Update order status in Firestore
+      try {
+        const db = window.firebaseDb;
+        const updateDocFn = window.updateDoc;
+        const docFn = window.doc;
+        const serverTimestampFn = window.serverTimestamp;
+        const getDocFn = window.getDoc;
+        
+        if (db && updateDocFn && docFn && serverTimestampFn) {
+          const orderRef = docFn(db, 'orders', id);
+          await updateDocFn(orderRef, {
+            status: 'delivered',
+            deliveredAt: serverTimestampFn(),
+            completedAt: serverTimestampFn(),
+            updatedAt: serverTimestampFn()
+          });
+          
+          // Also update for_delivery document if it exists
+          try {
+            if (getDocFn) {
+              const deliveryRef = docFn(db, 'for_delivery', id);
+              const deliveryDoc = await getDocFn(deliveryRef);
+              if (deliveryDoc.exists()) {
+                await updateDocFn(deliveryRef, {
+                  timeDelivered: serverTimestampFn(),
+                  updatedAt: serverTimestampFn()
+                });
+              }
+            }
+          } catch (deliveryError) {
+            console.error('Error updating for_delivery:', deliveryError);
+            // Don't fail if for_delivery update fails
+          }
+        }
+      } catch (error) {
+        console.error('Error updating order status:', error);
+        notify('Error updating order status. Please try again.', 'error');
+        return;
+      }
+      
+      // Update local state
+      const completedOrder = ongoingOrders.splice(idx,1)[0];
+      completedOrder.completedAt = new Date().toLocaleString();
+      completedOrder.completedAtTs = Date.now();
+      completedOrders.unshift(completedOrder);
+      
+      notify('Delivery completed for ' + (order.trackingId || order.id), 'success');
+      if (ongoingOrders.length === 0) { 
+        driverAvailability = 'available'; 
+        syncAvailabilitySelect();
+        
+        // Update availability in Firestore
+        try {
+          const db = window.firebaseDb;
+          const updateDocFn = window.updateDoc;
+          const docFn = window.doc;
+          const serverTimestampFn = window.serverTimestamp;
+          
+          if (db && updateDocFn && docFn && serverTimestampFn && currentDriver && currentDriver.id) {
+            try {
+              const driverRef = docFn(db, 'drivers', currentDriver.id);
+              await updateDocFn(driverRef, {
+                availability: 'available',
+                updatedAt: serverTimestampFn()
+              });
+            } catch (driverError) {
+              const staffRef = docFn(db, 'staff', currentDriver.id);
+              await updateDocFn(staffRef, {
+                availability: 'available',
+                updatedAt: serverTimestampFn()
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Error updating availability:', e);
+        }
+      }
       renderAll();
     }
 
@@ -490,8 +893,7 @@
       actions.innerHTML = '';
       if (list==='new'){
         actions.innerHTML = `
-          <button class="filter-btn" onclick="acceptOrder('${order.id}')"><i class="fas fa-check"></i><span>Accept</span></button>
-          <button class="filter-btn" onclick="declineOrder('${order.id}')"><i class="fas fa-xmark"></i><span>Decline</span></button>
+          <button class="filter-btn" onclick="acceptOrder('${order.id}')"><i class="fas fa-check"></i><span>Confirm</span></button>
         `;
       } else if (list==='ongoing'){
         actions.innerHTML = `
@@ -537,14 +939,79 @@
       const todayCount = completedOrders.filter(o => isSameDay(o.completedAtTs || Date.parse(o.completedAt), Date.now())).length;
       const daCompletedToday = document.getElementById('daCompletedToday');
       const daCompletedTotal = document.getElementById('daCompletedTotal');
+      const daName = document.getElementById('daName');
+      const daId = document.getElementById('daId');
+      const daStatus = document.getElementById('daStatus');
       if (daCompletedToday) daCompletedToday.textContent = String(todayCount);
       if (daCompletedTotal) daCompletedTotal.textContent = String(total);
+
+      // Basic driver identity from local storage
+      const displayName = getDriverDisplayName(currentDriver);
+      if (daName) daName.textContent = displayName;
+      if (daId) {
+        const idToShow = currentDriver && (currentDriver.staffId || currentDriver.id);
+        daId.textContent = idToShow || '—';
+      }
+      if (daStatus) {
+        daStatus.textContent = driverAvailability === 'available' ? 'Available' : 
+                              driverAvailability === 'busy' ? 'Busy' : 'Off';
+      }
+
+      // Show assigned orders
+      const assignedOrdersList = document.getElementById('assignedOrdersList');
+      if (assignedOrdersList) {
+        const allAssigned = [...newOrders, ...ongoingOrders];
+        if (allAssigned.length === 0) {
+          assignedOrdersList.innerHTML = '<div style="color:#666; font-size:0.9em;">No assigned orders at the moment.</div>';
+        } else {
+          assignedOrdersList.innerHTML = allAssigned.map(order => {
+            const status = ongoingOrders.find(o => o.id === order.id) ? 'Ongoing' : 'New';
+            return `
+              <div style="padding:12px; background:#f5f5f5; border-radius:8px; border-left:4px solid ${status === 'Ongoing' ? '#ffc72c' : '#e53935'};">
+                <div style="font-weight:700; margin-bottom:4px;">${order.trackingId || order.id}</div>
+                <div style="font-size:0.9em; color:#666;">${order.dropoff.name} - ${order.dropoff.address}</div>
+                <div style="font-size:0.85em; color:#888; margin-top:4px;">Status: ${status}</div>
+              </div>
+            `;
+          }).join('');
+        }
+      }
 
       // Availability select
       const select = document.getElementById('availabilitySelect');
       if (select){
         select.value = driverAvailability;
-        select.onchange = function(){ driverAvailability = this.value; };
+        select.onchange = async function(){ 
+          driverAvailability = this.value;
+          
+          // Update availability in Firestore
+          if (currentDriver && currentDriver.id) {
+            try {
+              const db = window.firebaseDb;
+              const updateDocFn = window.updateDoc;
+              const docFn = window.doc;
+              const serverTimestampFn = window.serverTimestamp;
+              
+              if (db && updateDocFn && docFn && serverTimestampFn) {
+                try {
+                  const driverRef = docFn(db, 'drivers', currentDriver.id);
+                  await updateDocFn(driverRef, {
+                    availability: driverAvailability,
+                    updatedAt: serverTimestampFn()
+                  });
+                } catch (driverError) {
+                  const staffRef = docFn(db, 'staff', currentDriver.id);
+                  await updateDocFn(staffRef, {
+                    availability: driverAvailability,
+                    updatedAt: serverTimestampFn()
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('Error updating availability:', e);
+            }
+          }
+        };
       }
       const modal = document.getElementById('driverAccountModal');
       if (modal) modal.style.display = 'flex';
@@ -566,9 +1033,31 @@
       return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
     }
 
-    // Init
-    renderAll();
+    // Load orders from Firebase on page load
+    // Wait for Firebase to be ready
+    function initDriverDashboard() {
+      if (window.firebaseDb && currentDriver && currentDriver.id) {
+        loadDriverOrders();
+      } else {
+        // Wait a bit for Firebase to initialize
+        setTimeout(() => {
+          if (window.firebaseDb && currentDriver && currentDriver.id) {
+            loadDriverOrders();
+          } else {
+            renderAll();
+          }
+        }, 500);
+      }
+    }
+    
+    // Initialize when page loads
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initDriverDashboard);
+    } else {
+      initDriverDashboard();
+    }
   </script>
+  <script type="module" src="firebase-init.js"></script>
 </body>
 </html>
 

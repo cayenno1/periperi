@@ -73,6 +73,47 @@ async function fetchUserData(userId) {
   }
 }
 
+function applyDropdownContext() {
+  const dropdown = document.getElementById('profileDropdown');
+  if (!dropdown) return;
+
+  const bodyClasses = document.body?.classList || [];
+  const currentPath = window.location.pathname.split('/').pop() || 'index.html';
+
+  dropdown.querySelectorAll('.profile-item[data-hide-on-body]').forEach((item) => {
+    const hideClasses = (item.dataset.hideOnBody || '')
+      .split(',')
+      .map((cls) => cls.trim())
+      .filter(Boolean);
+
+    const shouldHide = hideClasses.some((cls) => bodyClasses.contains(cls));
+    item.style.display = shouldHide ? 'none' : '';
+  });
+
+  dropdown.querySelectorAll('.profile-item[data-nav-target]').forEach((item) => {
+    if (item.style.display === 'none') {
+      item.classList.remove('current-page');
+      item.removeAttribute('aria-current');
+      return;
+    }
+
+    const target = item.dataset.navTarget;
+    if (!target) return;
+
+    const matchesBodyClass = bodyClasses.contains(`${target}-page`);
+    const matchesPath = currentPath === `${target}.html`;
+    const isCurrent = matchesBodyClass || matchesPath;
+
+    if (isCurrent) {
+      item.classList.add('current-page');
+      item.setAttribute('aria-current', 'page');
+    } else {
+      item.classList.remove('current-page');
+      item.removeAttribute('aria-current');
+    }
+  });
+}
+
 // Setup profile auth
 function initProfileAuth() {
   const btn = document.getElementById('profileButton');
@@ -107,6 +148,8 @@ function initProfileAuth() {
     if (e.key === 'Escape') dropdown.classList.remove('show');
   });
 
+  applyDropdownContext();
+
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async function() {
@@ -137,6 +180,7 @@ function initProfileAuth() {
 
     window.onAuthStateChanged(window.firebaseAuth, async (user) => {
       await updateProfileUI(user);
+      applyDropdownContext();
     });
   }
 

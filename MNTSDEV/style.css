@@ -55,6 +55,75 @@ body {
   background: rgba(255, 255, 255, 0.95);
 }
 
+/* PRIMARY MAIN NAVBAR (Home / Menu) */
+.primary-nav {
+  position: sticky;
+  top: 72px; /* keeps it just below the sticky header */
+  z-index: 900;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.primary-nav-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
+.primary-nav-link {
+  position: relative;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #444;
+  text-decoration: none;
+  padding: 6px 4px;
+  letter-spacing: 0.02em;
+  transition: color 0.2s ease;
+}
+
+.primary-nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 0;
+  height: 2px;
+  background: #e53935;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.primary-nav-link:hover,
+.primary-nav-link:focus-visible {
+  color: #e53935;
+}
+
+.primary-nav-link:hover::after,
+.primary-nav-link:focus-visible::after {
+  width: 100%;
+}
+
+/* Simple active-state styling (optional: can be toggled per-page) */
+.primary-nav-link-home[href="index.html"] {
+  /* On the home page this naturally points to current page */
+}
+
+@media (max-width: 600px) {
+  .primary-nav-inner {
+    justify-content: center;
+    gap: 18px;
+    padding-inline: 16px;
+  }
+
+  .primary-nav-link {
+    font-size: 0.9rem;
+  }
+}
+
 .logo-container {
   display: flex;
   align-items: center;
@@ -243,6 +312,37 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.account-page .account-loyalty {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff7e0;
+  border: 1px solid #ffe08a;
+  align-self: flex-start;
+}
+
+.account-page .account-loyalty-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #aa6c07;
+  font-weight: 600;
+}
+
+.account-page .account-loyalty-label i {
+  color: #f4a421;
+}
+
+.account-page .account-loyalty-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e53935;
 }
 
 .account-page .account-name-container {
@@ -553,6 +653,88 @@ body {
   background: #fff;
 }
 
+/* Loyalty card on account page */
+.account-page .loyalty-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.account-page .loyalty-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.account-page .loyalty-stat {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff7e0;
+  border: 1px solid #ffe08a;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.account-page .loyalty-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #aa6c07;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.account-page .loyalty-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e53935;
+}
+
+.account-page .loyalty-meta {
+  font-size: 0.78rem;
+  color: #777;
+}
+
+.account-page .loyalty-history {
+  margin-top: 4px;
+  border-top: 1px solid #f0e0b3;
+  padding-top: 12px;
+}
+
+.account-page .loyalty-history-header {
+  margin-bottom: 8px;
+}
+
+.account-page .loyalty-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-page .loyalty-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.account-page .loyalty-history-item span:last-child {
+  font-weight: 600;
+}
+
+.account-page .loyalty-empty {
+  font-size: 0.9rem;
+  color: #999;
+}
+
+@media (max-width: 768px) {
+  .account-page .loyalty-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 /* ==========================
    ORDERS PAGE STYLES
@@ -662,6 +844,79 @@ body {
   background: #ffe8e8;
   border-color: #e53935;
   color: #e53935;
+}
+
+/* Order details overall spacing */
+.order-details-page .main-container {
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-5);
+}
+
+.order-details-page .back-button {
+  margin-bottom: var(--space-4);
+}
+
+.order-details-page .order-details-shell {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.order-details-page .order-details-header {
+  align-items: center;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.order-details-page .order-status-badge {
+  gap: var(--space-2);
+}
+
+.order-details-page .od-card {
+  margin-top: var(--space-4);
+  padding: var(--space-5);
+}
+
+.order-details-page .od-section {
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.order-details-page .od-section + .od-section {
+  border-top: 1px dashed var(--border);
+}
+
+.order-details-page .od-items-list .od-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-1) 0;
+}
+
+.order-details-page .od-actions {
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+  gap: var(--space-3);
+}
+
+@media (max-width: 600px) {
+  .order-details-page .order-details-shell {
+    padding: var(--space-4);
+  }
+
+  .order-details-page .od-card {
+    padding: var(--space-4);
+  }
+
+  .order-details-page .order-details-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
 }
 
 /* ==========================
@@ -866,6 +1121,18 @@ body {
   font-weight: 700;
 }
 
+.profile-dropdown .profile-item.current-page {
+  color: #9e9e9e;
+  cursor: default;
+  pointer-events: none;
+}
+
+.profile-dropdown .profile-item.current-page span::after {
+  content: ' (current)';
+  font-size: 0.85em;
+  color: #b0b0b0;
+}
+
 /* Hide "Manage account" option when already on account page */
 .account-page .profile-manage-account {
   display: none;
@@ -891,10 +1158,12 @@ body {
   color: #222;
   font-weight: 600;
   text-align: center;
-  padding: 14px 20px;
-  font-size: 1em;
+  padding: 8px 16px;
+  font-size: 0.9em;
   line-height: 1.3;
-  position: relative;
+  position: sticky;
+  top: 64px; /* sits just below the sticky header */
+  z-index: 950;
   overflow: hidden;
 }
 
@@ -902,8 +1171,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  max-width: 600px;
+  gap: 20px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
@@ -2271,9 +2540,67 @@ body {
   }
   
   .header-banner {
-    padding: 16px 0;
-    font-size: 1.1em;
+    padding: 10px 0;
+    font-size: 0.95em;
   }
+
+/* Banner navigation (Home / Menu inside yellow strip) */
+.banner-nav {
+  display: block;
+}
+
+.banner-nav-link {
+  position: relative;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+  text-decoration: none;
+  padding: 6px 4px;
+  letter-spacing: 0.02em;
+  transition: color 0.2s ease;
+}
+
+.banner-nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 0;
+  height: 2px;
+  background: #e53935;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.banner-nav-link:hover,
+.banner-nav-link:focus-visible {
+  color: #e53935;
+}
+
+.banner-nav-link:hover::after,
+.banner-nav-link:focus-visible::after {
+  width: 100%;
+}
+
+/* Active state (current page) */
+.banner-nav-link.is-active {
+  color: #e53935;
+}
+
+.banner-nav-link.is-active::after {
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .banner-content {
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .banner-nav-link {
+    font-size: 0.9rem;
+  }
+}
   
   .menu-nav {
     padding: 32px;
@@ -3372,9 +3699,39 @@ select.restaurant-form-input {
   width: 100%;
 }
 
-.modal-actions .write-review-toggle {
+.modal-actions .write-review-toggle,
+.modal-actions .danger-action {
   width: 100%;
   justify-content: center;
+  padding: 12px 18px;
+  border-radius: 999px;
+}
+
+/* Delete account confirmation buttons (account page) */
+.account-page #deleteAccountPasswordModal .modal-actions #confirmDeleteAccountBtn {
+  background: #ffffff;
+  color: #555555;
+  border: 2px solid #e0e0e0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+.account-page #deleteAccountPasswordModal .modal-actions #confirmDeleteAccountBtn:hover {
+  background: #fafafa;
+  border-color: #d5d5d5;
+  color: #333333;
+}
+
+.account-page #deleteAccountPasswordModal .modal-actions #cancelDeleteAccountBtn {
+  background: #ffffff;
+  color: #e53935;
+  border: 2px solid #ff6b6b;
+  box-shadow: 0 10px 24px rgba(255, 107, 107, 0.18);
+}
+
+.account-page #deleteAccountPasswordModal .modal-actions #cancelDeleteAccountBtn:hover {
+  background: #fff5f5;
+  border-color: #e53935;
+  color: #d32f2f;
 }
 
 .modal-save-btn {
@@ -5455,5 +5812,331 @@ select.restaurant-form-input {
   .footer-brand {
     flex-direction: column;
     gap: 12px;
+  }
+}
+
+/* =========================================================
+   MODERN UI ADDITIONS (NON-BREAKING, LAYOUT & TYPO ONLY)
+   ========================================================= */
+
+:root {
+  --brand: #e53935;
+  --brand-dark: #c62828;
+  --bg: #ffe3a3;
+  --ink: #222;
+  --ink-soft: #666;
+  --ink-softer: #999;
+
+  --surface: #ffffff;
+  --surface-muted: #f8f9fa;
+  --surface-subtle: #f5f5f5;
+  --border: #e0e0e0;
+
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-medium: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-strong: 0 8px 32px rgba(0, 0, 0, 0.12);
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --text-xs: 0.78rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.35rem;
+  --text-2xl: 1.6rem;
+
+  --transition-fast: 0.15s ease-out;
+  --transition-med: 0.25s ease;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+/* Unified content shell */
+.main-container {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+}
+
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.page-section {
+  margin-bottom: var(--space-5);
+}
+
+/* Generic card surface */
+.app-card {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-5);
+}
+
+/* Badges / tags */
+.badge,
+.popular-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: capitalize;
+  background: rgba(229, 57, 53, 0.06);
+  color: var(--brand);
+}
+
+/* Primary buttons (reusing existing classes) */
+.submit-review-btn,
+.add-to-cart-btn,
+.proceed-btn,
+.hero-btn,
+.restaurant-auth-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+  box-shadow: 0 6px 18px rgba(229, 57, 53, 0.35);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.submit-review-btn:hover,
+.add-to-cart-btn:hover,
+.proceed-btn:hover,
+.hero-btn:hover,
+.restaurant-auth-button:hover {
+  box-shadow: 0 8px 22px rgba(229, 57, 53, 0.45);
+  transform: translateY(-1px);
+}
+
+.submit-review-btn:active,
+.add-to-cart-btn:active,
+.proceed-btn:active,
+.hero-btn:active,
+.restaurant-auth-button:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.35);
+}
+
+/* Secondary / pill buttons */
+.write-review-toggle,
+.filter-btn,
+.profile-item.logout,
+.danger-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: background var(--transition-fast), color var(--transition-fast),
+    box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.write-review-toggle:hover,
+.filter-btn:hover,
+.profile-item.logout:hover,
+.danger-action:hover {
+  background: var(--surface-subtle);
+  color: var(--brand);
+  border-color: rgba(229, 57, 53, 0.5);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Icon circle controls (qty, etc.) */
+.quantity-btn,
+.qty-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--ink);
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.quantity-btn:hover,
+.qty-btn:hover {
+  background: rgba(229, 57, 53, 0.07);
+  border-color: rgba(229, 57, 53, 0.45);
+  transform: translateY(-1px);
+}
+
+/* Inputs refinement */
+.restaurant-form-input,
+.review-textarea {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  transition: border-color var(--transition-fast),
+    box-shadow var(--transition-fast), background var(--transition-fast);
+}
+
+.restaurant-form-input:focus,
+.review-textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.16);
+  background: #fff;
+}
+
+/* Review sections as cards */
+.review-section {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-5);
+}
+
+/* Food item layout */
+.food-item-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.food-details {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Cart review layout */
+.cart-review-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.cart-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-4);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+}
+
+.cart-summary,
+.loyalty-section,
+.delivery-section {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Cart review page: show order summary without card box */
+.cart-review-container .cart-summary {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.action-buttons {
+  gap: var(--space-3);
+}
+
+/* Orders / order details */
+.orders-section {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-5);
+}
+
+.od-card {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+}
+
+.od-section {
+  border-top: 1px dashed var(--border);
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* Toast notifications */
+.notification {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-medium);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 1200;
+  font-size: var(--text-sm);
+}
+
+/* Responsive tweaks */
+@media (min-width: 720px) {
+  .cart-review-container {
+    gap: var(--space-5);
+  }
+
+  .cart-summary,
+  .loyalty-section,
+  .delivery-section {
+    margin-top: 0;
+  }
+}
+
+@media (min-width: 900px) {
+  .food-item-container {
+    gap: var(--space-5);
   }
 }

@@ -32,9 +32,9 @@
                             <span class="profile-email" id="profileEmail">user@example.com</span>
                         </div>
                     </div>
-                    <a href="account.html" class="profile-item"><span>Manage account</span></a>
-                    <a href="orders.html" class="profile-item"><span>Orders</span></a>
-                    <a href="help.html" class="profile-item"><span>Help & support</span></a>
+                    <a href="account.html" class="profile-item profile-manage-account" data-nav-target="account" data-hide-on-body="account-page"><span>Manage account</span></a>
+                    <a href="orders.html" class="profile-item" data-nav-target="orders" data-hide-on-body="orders-page"><span>Orders</span></a>
+                    <a href="help.html" class="profile-item" data-nav-target="help" data-hide-on-body="help-page"><span>Help & support</span></a>
                     <div class="profile-divider"></div>
                     <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
                         <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
@@ -46,13 +46,13 @@
 
     <!-- Banner -->
     <div class="header-banner">
-        <div class="banner-content">
-            <i class="fas fa-fire banner-icon"></i>
-            <span>Tara na sa Pablo's Maiba naman!</span>
-        </div>
+        <nav class="banner-nav" aria-label="Main navigation">
+            <div class="banner-content">
+                <a href="index.html" class="banner-nav-link banner-nav-link-home">Home</a>
+                <a href="menu.html" class="banner-nav-link banner-nav-link-menu">Menu</a>
+            </div>
+        </nav>
     </div>
-
-    
 
     <!-- Main Banner Section -->
     <section class="hero-section" id="main-content">
@@ -179,16 +179,6 @@
                             </div>
                         </div>
                         <div class="bestseller-content">
-                            <div class="rating-section">
-                                <div class="stars">
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                </div>
-                                <span class="rating-text">4.8 (120 reviews)</span>
-                            </div>
                             <h3 class="bestseller-title">Peri Peri Chicken</h3>
                             <p class="bestseller-description">Flame-grilled chicken with our signature peri peri sauce</p>
                             <div class="price-section">
@@ -211,16 +201,6 @@
                             </div>
                         </div>
                         <div class="bestseller-content">
-                            <div class="rating-section">
-                                <div class="stars">
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                </div>
-                                <span class="rating-text">4.9 (85 reviews)</span>
-                            </div>
                             <h3 class="bestseller-title">Special Combo Meal</h3>
                             <p class="bestseller-description">Complete meal with chicken, sides, and refreshing drink</p>
                             <div class="price-section">
@@ -243,16 +223,6 @@
                             </div>
                         </div>
                         <div class="bestseller-content">
-                            <div class="rating-section">
-                                <div class="stars">
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                </div>
-                                <span class="rating-text">4.7 (95 reviews)</span>
-                            </div>
                             <h3 class="bestseller-title">Refreshing Drinks</h3>
                             <p class="bestseller-description">Perfect complement to your spicy peri peri meal</p>
                             <div class="price-section">
@@ -275,16 +245,6 @@
                             </div>
                         </div>
                         <div class="bestseller-content">
-                            <div class="rating-section">
-                                <div class="stars">
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                    <i class="fas fa-star"></i>
-                                </div>
-                                <span class="rating-text">4.6 (78 reviews)</span>
-                            </div>
                             <h3 class="bestseller-title">Hot Tea Selection</h3>
                             <p class="bestseller-description">Premium tea varieties to soothe your palate</p>
                             <div class="price-section">
@@ -306,50 +266,12 @@
 
     
 
-    <!-- Testimonials -->
-    <section class="testimonials" aria-label="Testimonials">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">What guests say</h2>
-            </div>
-            <div class="testimonials-grid">
-                <div class="testimonial-card">
-                    <div class="testimonial-stars">
-                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
-                    </div>
-                    <p class="testimonial-text">“Yummers”</p>
-                    <div class="testimonial-author">
-                        <div class="avatar"><i class="fas fa-user"></i></div>
-                        <span>sef</span>
-                    </div>
-                </div>
-                <div class="testimonial-card">
-                    <div class="testimonial-stars">
-                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star-half-alt"></i>
-                    </div>
-                    <p class="testimonial-text">“Malinis”</p>
-                    <div class="testimonial-author">
-                        <div class="avatar"><i class="fas fa-user"></i></div>
-                        <span>ez</span>
-                    </div>
-                </div>
-                <div class="testimonial-card">
-                    <div class="testimonial-stars">
-                        <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
-                    </div>
-                    <p class="testimonial-text">“Masarap ang food at malinis ang resto”</p>
-                    <div class="testimonial-author">
-                        <div class="avatar"><i class="fas fa-user"></i></div>
-                        <span>ron</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <!-- Visit us strip -->
     <section class="visit-strip" aria-label="Visit us">
         <div class="container visit-grid">
+            <div class="section-header" style="grid-column: 1 / -1; text-align: left; margin-bottom: 12px;">
+                <h2 class="section-title">Visit us</h2>
+            </div>
             <div class="visit-item">
                 <i class="fas fa-location-dot"></i>
                 <div>
@@ -398,14 +320,105 @@
     <script src="profile-auth.js"></script>
 
     <script>
-        // Navigation
-        function goToCart() {
-            window.location.href = 'cart.html';
-        }
+        (function() {
+            'use strict';
 
-        function goToMenu() {
-            window.location.href = 'menu.html';
-        }
+            const CART_COUNT_KEY = 'ppp_cart_count';
+            const ROUTES = {
+                home: 'index.html',
+                menu: 'menu.html',
+                cart: 'cart_review.html',
+                help: 'help.html'
+            };
+
+            function safeNumber(value, fallback = 0) {
+                const parsed = Number(value);
+                if (Number.isNaN(parsed) || !Number.isFinite(parsed)) {
+                    return fallback;
+                }
+                return parsed;
+            }
+
+            function getStoredCartCount() {
+                try {
+                    const raw = window.localStorage?.getItem(CART_COUNT_KEY);
+                    return safeNumber(raw, 0);
+                } catch (error) {
+                    console.warn('Cart count read failed:', error);
+                    return 0;
+                }
+            }
+
+            function storeCartCount(count) {
+                try {
+                    window.localStorage?.setItem(CART_COUNT_KEY, String(count));
+                } catch (error) {
+                    console.warn('Cart count save failed:', error);
+                }
+            }
+
+            function updateCartBadges(count = getStoredCartCount()) {
+                const badges = document.querySelectorAll('.cart-badge');
+                badges.forEach((badge) => {
+                    badge.textContent = Math.max(0, safeNumber(count, 0));
+                });
+            }
+
+            function broadcastCartCount(count) {
+                document.dispatchEvent(new CustomEvent('cart:count-changed', {
+                    detail: { count }
+                }));
+            }
+
+            function navigateTo(key) {
+                const target = ROUTES[key];
+                if (target) {
+                    window.location.href = target;
+                }
+            }
+
+            window.goHome = () => navigateTo('home');
+            window.goToMenu = () => navigateTo('menu');
+            window.goToHelp = () => navigateTo('help');
+            window.goToCart = () => navigateTo('cart');
+
+            window.getCartCount = getStoredCartCount;
+
+            window.setCartCount = function setCartCount(count) {
+                const next = Math.max(0, safeNumber(count, 0));
+                storeCartCount(next);
+                updateCartBadges(next);
+                broadcastCartCount(next);
+                return next;
+            };
+
+            window.incrementCartCount = function incrementCartCount(delta = 1) {
+                const current = getStoredCartCount();
+                return window.setCartCount(current + safeNumber(delta, 0));
+            };
+
+            window.resetCartCount = function resetCartCount() {
+                return window.setCartCount(0);
+            };
+
+            document.addEventListener('DOMContentLoaded', () => {
+                updateCartBadges();
+            });
+            document.addEventListener('cart:sync', () => updateCartBadges());
+        })();
+
+        // Highlight current page in banner nav (Home / Menu)
+        document.addEventListener('DOMContentLoaded', function() {
+            const path = window.location.pathname.split('/').pop() || 'index.html';
+            const homeLink = document.querySelector('.banner-nav-link-home');
+            const menuLink = document.querySelector('.banner-nav-link-menu');
+
+            if (path === 'menu.html' && menuLink) {
+                menuLink.classList.add('is-active');
+            } else if ((path === '' || path === 'index.html') && homeLink) {
+                homeLink.classList.add('is-active');
+            }
+        });
 
         // Carousel
         function scrollCarousel(direction) {
@@ -427,10 +440,8 @@
 
         // Add to cart
         function addToCart(itemId) {
-            const cartBadge = document.querySelector('.cart-badge');
-            const currentCount = parseInt(cartBadge.textContent);
-            cartBadge.textContent = currentCount + 1;
-            
+            window.incrementCartCount(1);
+
             const button = event.target.closest('.add-to-cart-btn');
             const originalText = button.innerHTML;
             button.innerHTML = '<i class="fas fa-check"></i>';

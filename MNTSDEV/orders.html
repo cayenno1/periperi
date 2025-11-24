@@ -18,6 +18,9 @@
       <div class="nav-icon home-icon" title="Home" onclick="goHome()">
         <i class="fas fa-home"></i>
       </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
+      </div>
       <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
         <i class="fas fa-shopping-bag"></i>
         <span class="cart-badge">0</span>
@@ -32,9 +35,9 @@
               <span class="profile-email" id="profileEmail">user@example.com</span>
             </div>
           </div>
-          <a href="account.html" class="profile-item"><span>Manage account</span></a>
-          <a href="orders.html" class="profile-item"><span>Orders</span></a>
-          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <a href="account.html" class="profile-item profile-manage-account" data-nav-target="account" data-hide-on-body="account-page"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item" data-nav-target="orders" data-hide-on-body="orders-page"><span>Orders</span></a>
+          <a href="help.html" class="profile-item" data-nav-target="help" data-hide-on-body="help-page"><span>Help & support</span></a>
           <div class="profile-divider"></div>
           <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
             <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
@@ -63,44 +66,14 @@
       <div class="reviews-list orders-list" id="ordersList" style="gap:16px;">
         <!-- Order cards inserted by JS -->
       </div>
-
-      <button class="load-more-reviews-btn" id="loadMoreOrders">
-        <i class="fas fa-rotate"></i>
-        <span>Load more</span>
-      </button>
     </section>
   </main>
 
-  <!-- Firebase SDK -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyA4N_Q6hTfKGBdnSkZxWRyyYxeJNFncOKw",
-      authDomain: "pablo-s-peri-peri-database.firebaseapp.com",
-      projectId: "pablo-s-peri-peri-database",
-      storageBucket: "pablo-s-peri-peri-database.firebasestorage.app",
-      messagingSenderId: "862159042861",
-      appId: "1:862159042861:web:b9215e4f7fbea8c44ffba4",
-      measurementId: "G-76TEJYQHQN"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    window.firebaseAuth = auth;
-    window.firebaseDb = db;
-    window.signOut = signOut;
-    window.onAuthStateChanged = onAuthStateChanged;
-    window.getDoc = getDoc;
-    window.doc = doc;
-  </script>
+  <script type="module" src="firebase-init.js"></script>
 
   <script>
-    function goHome() { window.location.href = 'menu.html'; }
+    function goHome() { window.location.href = 'index.html'; }
+    function goToMenu() { window.location.href = 'menu.html'; }
     function goToCart() { window.location.href = 'cart_review.html'; }
 
     // Check authentication state and update profile UI
@@ -150,6 +123,18 @@
       const btn = document.getElementById('profileButton');
       const dropdown = document.getElementById('profileDropdown');
       if (!btn || !dropdown) return;
+
+      // Hide "Orders" entry when we're already on the Orders page
+      try {
+        if (document.body.classList.contains('orders-page')) {
+          const ordersLink = dropdown.querySelector('a[href="orders.html"]');
+          if (ordersLink) {
+            ordersLink.style.display = 'none';
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to apply dropdown context on orders page:', e);
+      }
 
       function toggleDropdown(e){
         e.stopPropagation();
@@ -203,63 +188,149 @@
       initAuthListener();
     })();
 
-    // Sample orders
-    const orders = [
-      {
-        id: 'PP-20250910-0001',
-        date: 'Sep 10, 2025',
-        total: 599,
-        status: 'completed',
-        items: [ 'Peri Peri Chicken (Whole)', 'Iced Tea (Large)' ],
-        service: { type: 'dine-in', table: 'B12' },
-        payment: { method: 'GCash', pointsUsed: 20, amountPaid: 579 }
-      },
-      {
-        id: 'PP-20250909-0007',
-        date: 'Sep 9, 2025',
-        total: 299,
-        status: 'ongoing',
-        items: [ 'Baby Back Ribs Meal' ],
-        service: { type: 'delivery' },
-        payment: { method: 'GCash', pointsUsed: 0, amountPaid: 299 }
-      },
-      
-  
-    ];
+    let orders = [];
+    let currentFilter = 'all';
 
-    let visible = 3; let currentFilter = 'all';
+    function formatOrderDate(raw) {
+      if (!raw) return '';
+      try {
+        const d = new Date(raw);
+        if (!Number.isNaN(d.getTime())) {
+          return d.toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+        }
+      } catch (e) {}
+      return String(raw);
+    }
 
     function renderOrders() {
       const container = document.getElementById('ordersList');
-      container.innerHTML = orders
+      if (!container) return;
+
+      const filtered = orders
         .filter(o => o.status !== 'cancelled')
-        .filter(o => currentFilter==='all' || o.status===currentFilter)
-        .slice(0, visible)
-        .map(order => `
-          <div class="review-item" data-status="${order.status}">
-            <div class="review-header">
-              <div class="reviewer-info">
-                <div class="reviewer-avatar"><i class="fas fa-receipt"></i></div>
-                <div class="reviewer-details">
-                  <div class="reviewer-name">Order ${order.id}</div>
-                  <div class="review-date">${order.date} • ${order.items.length} item(s)</div>
-                </div>
+        .filter(o => currentFilter === 'all' || o.status === currentFilter);
+
+      if (!filtered.length) {
+        container.innerHTML = `
+          <div class="address-empty-state" style="text-align:center;padding:32px;color:#999;">
+            No orders yet.
+          </div>
+        `;
+        if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+        return;
+      }
+
+      container.innerHTML = filtered.map(order => {
+        const totalDisplay = (typeof order.total === 'number' ? order.total : Number(order.total) || 0).toFixed(2);
+        const itemsHtml = order.items
+          .map(i => `<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`)
+          .join('');
+        const reorderButton = order.status === 'completed'
+          ? `<button class="filter-btn" onclick="reorder('${order.id}')"><span>Reorder</span></button>`
+          : '';
+
+        return `
+        <div class="review-item" data-status="${order.status}">
+          <div class="review-header">
+            <div class="reviewer-info">
+              <div class="reviewer-avatar"><i class="fas fa-receipt"></i></div>
+              <div class="reviewer-details">
+                <div class="reviewer-name">Order ${order.displayId}</div>
+                <div class="review-date">${order.date} • ${order.items.length} item(s)</div>
               </div>
-              <span class="popular-tag" style="text-transform:capitalize;">${order.status}</span>
             </div>
-            <div class="review-text" style="font-style:normal;">
-              ${order.items.map(i=>`<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`).join('')} 
-            </div>
-            <div style="display:flex; align-items:center; justify-content:space-between;">
-              <div class="card-price">₱${order.total}.00</div>
-              <div style="display:flex; gap:8px;">
-                <button class="filter-btn" onclick="viewDetails('${order.id}')"><span>View details</span></button>
-                <button class="filter-btn" onclick="reorder('${order.id}')"><span>Reorder</span></button>
-              </div>
+            <span class="popular-tag" style="text-transform:capitalize;">${order.status}</span>
+          </div>
+          <div class="review-text" style="font-style:normal;">
+            ${itemsHtml} 
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div class="card-price">₱${totalDisplay}</div>
+            <div style="display:flex; gap:8px;">
+              <button class="filter-btn" onclick="viewDetails('${order.id}')"><span>View details</span></button>
+              ${reorderButton}
             </div>
           </div>
-        `).join('');
-      document.getElementById('loadMoreOrders').style.display = (visible < orders.filter(o => currentFilter==='all' || o.status===currentFilter).length) ? 'flex' : 'none';
+        </div>
+        `;
+      }).join('');
+
+    }
+
+    async function loadOrdersForUser(user) {
+      if (!user || !window.firebaseDb || !window.collection || !window.query || !window.where || !window.getDocs) {
+        orders = [];
+        renderOrders();
+        return;
+      }
+
+      try {
+        const ordersCol = window.collection(window.firebaseDb, 'orders');
+        const q = window.query(
+          ordersCol,
+          window.where('userId', '==', user.uid)
+        );
+        const snap = await window.getDocs(q);
+
+        const loaded = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          const rawTimestamp = data.timestamp || data.createdAt || null;
+          const dateDisplay = formatOrderDate(rawTimestamp);
+          const itemsArr = Array.isArray(data.items) ? data.items : [];
+          const itemLabels = itemsArr.map((it) => {
+            const name = it.name || 'Item';
+            const qty =
+              typeof it.quantity === 'number'
+                ? it.quantity
+                : Number(it.quantity) || 1;
+            return `${name} x ${qty}`;
+          });
+
+          let total = 0;
+          if (typeof data.total === 'number') {
+            total = data.total;
+          } else {
+            const parsed = Number(data.total);
+            total = Number.isFinite(parsed) ? parsed : 0;
+          }
+
+          const rawStatus = data.status || 'pending';
+          const status = rawStatus === 'pending' ? 'ongoing' : rawStatus;
+
+          loaded.push({
+            id: docSnap.id,
+            displayId: docSnap.id,
+            date: dateDisplay,
+            total,
+            status,
+            items: itemLabels,
+            raw: data
+          });
+        });
+
+        // Sort newest first by timestamp (if present)
+        loaded.sort((a, b) => {
+          const ta = a.raw.timestamp || a.raw.createdAt || '';
+          const tb = b.raw.timestamp || b.raw.createdAt || '';
+          if (!ta && !tb) return 0;
+          if (!ta) return 1;
+          if (!tb) return -1;
+          return ta < tb ? 1 : -1;
+        });
+
+        orders = loaded;
+        visible = 3;
+        renderOrders();
+      } catch (error) {
+        console.error('Error loading orders from Firestore:', error);
+        orders = [];
+        renderOrders();
+      }
     }
 
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -267,31 +338,90 @@
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         currentFilter = this.dataset.status || 'all';
-        visible = 3;
         renderOrders();
       });
     });
 
-    document.getElementById('loadMoreOrders').addEventListener('click', function(){ visible += 3; renderOrders(); });
-
     function viewDetails(id){
-      const first = orders[0];
-      const second = orders[1];
-      const allowed = (first && id === first.id) || (second && id === second.id && second.status === 'ongoing');
-      if (!allowed) { alert('Only the first order and the ongoing order can be opened.'); return; }
       const order = orders.find(o => o.id === id);
       if (order) {
         try {
-          localStorage.setItem('selectedOrder', JSON.stringify(order));
+          localStorage.setItem('selectedOrder', JSON.stringify(order.raw || order));
+          localStorage.setItem('selectedOrderId', id);
         } catch (e) {}
-        window.location.href = 'order_details.html';
+        // Also pass orderId via query string so we can reload from Firestore
+        window.location.href = `order_details.html?orderId=${encodeURIComponent(id)}`;
       } else {
         alert('Order not found');
       }
     }
-    function reorder(id){ alert('Reordered ' + id); }
 
-    renderOrders();
+    function reorder(id){
+      const order = orders.find(o => o.id === id);
+      if (!order) {
+        alert('Order not found');
+        return;
+      }
+      alert('Reorder feature coming soon.');
+    }
+
+    // Hook into auth to load the current user's orders
+    (function initOrdersForUser(){
+      function waitForAuth() {
+        if (!window.firebaseAuth || !window.onAuthStateChanged) {
+          setTimeout(waitForAuth, 100);
+          return;
+        }
+
+        window.onAuthStateChanged(window.firebaseAuth, (user) => {
+          loadOrdersForUser(user);
+        });
+      }
+
+      waitForAuth();
+    })();
+  </script>
+
+  <script>
+    // Keep cart badge in sync on this page with shared localStorage value
+    (function() {
+      'use strict';
+      const CART_COUNT_KEY = 'ppp_cart_count';
+
+      function safeNumber(value, fallback = 0) {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return fallback;
+        return parsed;
+      }
+
+      function getStoredCartCount() {
+        try {
+          const raw = window.localStorage?.getItem(CART_COUNT_KEY);
+          return safeNumber(raw, 0);
+        } catch (e) {
+          console.warn('Cart count read failed on orders page:', e);
+          return 0;
+        }
+      }
+
+      function updateCartBadges(count) {
+        const badges = document.querySelectorAll('.cart-badge');
+        badges.forEach((badge) => {
+          badge.textContent = String(Math.max(0, safeNumber(count, 0)));
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        updateCartBadges(getStoredCartCount());
+      });
+
+      document.addEventListener('cart:count-changed', (e) => {
+        const count = typeof e.detail?.count === 'number'
+          ? e.detail.count
+          : getStoredCartCount();
+        updateCartBadges(count);
+      });
+    })();
   </script>
 </body>
 <!-- Keep inline styles minimal; main theme comes from style.css colors/components -->

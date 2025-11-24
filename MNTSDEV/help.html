@@ -18,6 +18,9 @@
       <div class="nav-icon home-icon" title="Home" onclick="goHome()">
         <i class="fas fa-home"></i>
       </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
+      </div>
       <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
         <i class="fas fa-shopping-bag"></i>
         <span class="cart-badge">0</span>
@@ -102,7 +105,8 @@
   </main>
 
   <script>
-    function goHome(){ window.location.href = 'menu.html'; }
+    function goHome(){ window.location.href = 'index.html'; }
+    function goToMenu(){ window.location.href = 'menu.html'; }
     function goToCart(){ window.location.href = 'cart_review.html'; }
 
     // Profile dropdown logic
@@ -131,6 +135,48 @@
           answer.style.display = isOpen ? 'none' : 'block';
           btn.querySelector('i')?.classList.toggle('fa-rotate-180');
         });
+      });
+    })();
+  </script>
+
+  <script>
+    // Keep cart badge in sync on this page with shared localStorage value
+    (function() {
+      'use strict';
+      const CART_COUNT_KEY = 'ppp_cart_count';
+
+      function safeNumber(value, fallback = 0) {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return fallback;
+        return parsed;
+      }
+
+      function getStoredCartCount() {
+        try {
+          const raw = window.localStorage?.getItem(CART_COUNT_KEY);
+          return safeNumber(raw, 0);
+        } catch (e) {
+          console.warn('Cart count read failed on help page:', e);
+          return 0;
+        }
+      }
+
+      function updateCartBadges(count) {
+        const badges = document.querySelectorAll('.cart-badge');
+        badges.forEach((badge) => {
+          badge.textContent = String(Math.max(0, safeNumber(count, 0)));
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        updateCartBadges(getStoredCartCount());
+      });
+
+      document.addEventListener('cart:count-changed', (e) => {
+        const count = typeof e.detail?.count === 'number'
+          ? e.detail.count
+          : getStoredCartCount();
+        updateCartBadges(count);
       });
     })();
   </script>

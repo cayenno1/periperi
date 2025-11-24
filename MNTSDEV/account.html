@@ -1,13 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Account - PABLO'S PERI PERI</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-</head>
+
+  <style>
+    /* Layout: stack account cards vertically on all screens (Addresses, then Loyalty, then Security) */
+    .account-page .account-grid-2col {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Optional: give cards a bit more polish */
+    .account-page .account-card {
+      border-radius: 16px;
+    }
+
+    /* Recent point activity – sleeker list styling */
+    .account-page .loyalty-history {
+      margin-top: 20px;
+    }
+
+    .account-page .loyalty-history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .account-page .loyalty-history-header .loyalty-label {
+      font-weight: 600;
+      color: #111827;
+      font-size: 0.95rem;
+    }
+
+    .account-page .loyalty-history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .account-page .loyalty-history-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid #edf0f4;
+      background: linear-gradient(135deg, #f9fafb, #ffffff);
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+      cursor: pointer;
+      text-align: left;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .account-page .loyalty-history-item:hover {
+      transform: translateY(-1px);
+      border-color: #e11d48;
+      box-shadow: 0 4px 10px rgba(248, 113, 113, 0.16);
+    }
+
+    .account-page .loyalty-history-item > div:first-child > div:first-child {
+      font-weight: 600;
+      color: #111827;
+      font-size: 0.95rem;
+    }
+
+    .account-page .loyalty-history-item .loyalty-meta {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+
+    .account-page .loyalty-history-item > span:last-child {
+      font-weight: 600;
+      color: #111827;
+      font-size: 0.95rem;
+      margin-left: 16px;
+      white-space: nowrap;
+    }
+
+    /* Empty state stays centered but matches new card feel */
+    .account-page .loyalty-empty.account-empty-card {
+      border-radius: 14px;
+      border: 1px dashed #e5e7eb;
+      background: #f9fafb;
+    }
+  </style>
+  </head>
 <body class="account-page">
   <header class="header">
     <div class="logo-container">
@@ -17,6 +103,9 @@
     <div class="nav-icons">
       <div class="nav-icon home-icon" title="Home" onclick="goHome()">
         <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
       </div>
       <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
         <i class="fas fa-shopping-bag"></i>
@@ -45,27 +134,34 @@
   </header>
 
   <main class="main-container">
-    <section class="review-section account-section" style="max-width: 1000px;">
-      <div class="account-header">
+    <section class="review-section account-section" style="max-width: 1000px;" id="accountRoot">
+      <div class="account-header" id="accountHeader">
         <div class="account-hero">
           <div class="account-avatar"><i class="fas fa-user"></i></div>
-          <div class="account-identity">
-            <div class="account-name-container">
-              <div class="account-name" id="displayName">
-                <span class="loading-text" id="nameLoading">User</span>
-                <span class="name-content" id="nameContent" style="display: none;"></span>
-              </div>
-              <button class="edit-name-btn" id="editProfileBtn" title="Edit Profile">
-                <i class="fas fa-pen"></i>
-              </button>
+        <div class="account-identity">
+          <div class="account-name-container">
+            <div class="account-name" id="displayName">
+              <span class="loading-text" id="nameLoading">User</span>
+              <span class="name-content" id="nameContent" style="display: none;"></span>
             </div>
-            <div class="account-email" id="displayEmail">
-              <span class="loading-text" id="emailLoading">User</span>
-              <span class="email-content" id="emailContent" style="display: none;"></span>
+            <button class="edit-name-btn" id="editProfileBtn" title="Edit Profile">
+              <i class="fas fa-pen"></i>
+            </button>
+          </div>
+          <div class="account-email" id="displayEmail">
+            <span class="loading-text" id="emailLoading">User</span>
+            <span class="email-content" id="emailContent" style="display: none;"></span>
+          </div>
+          <div class="account-loyalty">
+            <div class="account-loyalty-label">
+              <i class="fas fa-coins"></i>
+              <span>Loyalty Points</span>
             </div>
+            <div class="account-loyalty-value" id="accountPoints">0 pts</div>
           </div>
         </div>
       </div>
+    </div>
 
       <div class="account-grid-2col">
         <section id="address" class="account-card">
@@ -78,10 +174,57 @@
           </div>
         </section>
 
+        <!-- Loyalty rewards card -->
+        <section id="loyalty" class="account-card loyalty-card">
+          <h3 class="account-card-title">Loyalty Rewards</h3>
+          <p class="account-card-subtitle" id="loyaltyProgramDescription">
+            ₱99 = 1 point, redeem at checkout.
+          </p>
+          <ul class="loyalty-tips">
+            <li>Earn points on dine-in, pick-up, and delivery orders.</li>
+          </ul>
+
+          <div class="loyalty-summary">
+            <div class="loyalty-stat">
+              <span class="loyalty-label">Total points</span>
+              <span class="loyalty-value" id="loyaltyTotalPoints">0 pts</span>
+            </div>
+            <div class="loyalty-stat">
+              <span class="loyalty-label">Last earned</span>
+              <span class="loyalty-value" id="loyaltyLastPoints">0 pts</span>
+              <span class="loyalty-meta" id="loyaltyLastEarnedDate">—</span>
+            </div>
+          </div>
+
+          <div class="loyalty-history">
+            <div class="loyalty-history-header">
+              <span class="loyalty-label">Recent point activity</span>
+            </div>
+            <div class="loyalty-history-list" id="loyaltyHistoryList">
+              <div class="account-empty-card loyalty-empty" id="loyaltyEmptyState">
+                <i class="fas fa-coins empty-icon"></i>
+                <div class="empty-title">No points yet</div>
+                <p class="empty-subtitle">Place an order to start earning loyalty rewards.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="security" class="account-card">
           <h3 class="account-card-title">Security</h3>
+          <div class="account-security-meta">
+            <h4 class="password-section-title">Security overview</h4>
+            <div class="security-meta-row">
+              <span>Last login</span>
+              <span id="lastLoginInfo">Loading...</span>
+            </div>
+            <div class="security-meta-row">
+              <span>Device</span>
+              <span id="lastLoginDevice">Loading...</span>
+            </div>
+          </div>
           
-          <!-- Change Password Form -->
+          <!-- Change Password / Reset Form -->
           <div class="password-change-section">
             <h4 class="password-section-title">Change Password</h4>
             <form class="password-change-form" id="passwordChangeForm">
@@ -96,37 +239,9 @@
                 <span class="error-message" id="currentPasswordError"></span>
               </div>
 
-              <div class="restaurant-form-group">
-                <label for="newPassword" class="restaurant-form-label">New Password</label>
-                <div class="password-input-container">
-                  <input type="password" id="newPassword" name="newPassword" class="restaurant-form-input" placeholder="Enter your new password" required>
-                  <button type="button" class="password-toggle" id="newPasswordToggle" aria-label="Toggle password visibility">
-                    <i class="fas fa-eye"></i>
-                  </button>
-                </div>
-                <div class="password-strength" id="newPasswordStrength">
-                  <div class="password-strength-bar">
-                    <div class="password-strength-fill" id="newPasswordStrengthFill"></div>
-                  </div>
-                  <span class="password-strength-text" id="newPasswordStrengthText"></span>
-                </div>
-                <span class="error-message" id="newPasswordError"></span>
-              </div>
-
-              <div class="restaurant-form-group">
-                <label for="confirmNewPassword" class="restaurant-form-label">Confirm New Password</label>
-                <div class="password-input-container">
-                  <input type="password" id="confirmNewPassword" name="confirmNewPassword" class="restaurant-form-input" placeholder="Confirm your new password" required>
-                  <button type="button" class="password-toggle" id="confirmNewPasswordToggle" aria-label="Toggle password visibility">
-                    <i class="fas fa-eye"></i>
-                  </button>
-                </div>
-                <span class="error-message" id="confirmNewPasswordError"></span>
-              </div>
-
               <div class="password-change-actions">
                 <button type="submit" class="restaurant-auth-button" id="savePasswordBtn">
-                  <span id="savePasswordBtnText">Save Changes</span>
+                  <span id="savePasswordBtnText">Verify & Send Reset Email</span>
                   <i class="fas fa-check"></i>
                 </button>
               </div>
@@ -135,7 +250,7 @@
             <!-- Success Message -->
             <div class="password-success-message" id="passwordSuccessMessage" style="display: none;">
               <i class="fas fa-check-circle"></i>
-              <span>Password updated successfully!</span>
+              <span>Password reset email sent! Please check your inbox.</span>
             </div>
           </div>
 
@@ -262,29 +377,51 @@
 
   <!-- Password Prompt Modal for Account Deletion -->
   <div class="modal-overlay" id="deleteAccountPasswordModal" style="display: none;">
-    <div class="modal-content" style="max-width: 400px;">
+    <div class="modal-content" style="max-width: 420px;">
       <div class="modal-header">
-        <h3>Confirm Password</h3>
+        <h3>Confirm Account Deletion</h3>
         <button class="modal-close" id="closeDeletePasswordModal">
           <i class="fas fa-times"></i>
         </button>
       </div>
       <form class="modal-form" id="deleteAccountPasswordForm">
+        <div class="restaurant-form-group" style="text-align: center; margin-bottom: 16px;">
+          <i class="fas fa-triangle-exclamation" style="font-size: 32px; color: #e53935; margin-bottom: 8px;"></i>
+          <p style="margin: 0; color: #555; font-size: 0.95rem;">
+            This will permanently delete your account and all associated data. 
+            Please enter your current password to confirm.
+          </p>
+        </div>
         <div class="restaurant-form-group">
-          <label for="deleteAccountPassword" class="restaurant-form-label">Enter your password to confirm</label>
+          <label for="deleteAccountPassword" class="restaurant-form-label">Current Password</label>
           <div class="password-input-container">
-            <input type="password" id="deleteAccountPassword" name="password" class="restaurant-form-input" placeholder="Enter your password" required autocomplete="current-password">
+            <input
+              type="password"
+              id="deleteAccountPassword"
+              name="password"
+              class="restaurant-form-input"
+              placeholder="Enter your current password"
+              required
+              autocomplete="current-password">
             <button type="button" class="password-toggle" id="deleteAccountPasswordToggle" aria-label="Toggle password visibility">
               <i class="fas fa-eye"></i>
             </button>
           </div>
           <span class="error-message" id="deleteAccountPasswordError"></span>
         </div>
-        <div class="account-actions modal-actions">
-          <button type="submit" class="profile-item logout danger-action" id="confirmDeleteAccountBtn" style="width: 100%; justify-content: center;">
-            <span id="confirmDeleteAccountBtnText">Delete Account</span>
+        <div class="account-actions modal-actions" style="margin-top: 8px;">
+          <button
+            type="submit"
+            class="profile-item logout danger-action"
+            id="confirmDeleteAccountBtn"
+            style="width: 100%; justify-content: center;">
+            <span id="confirmDeleteAccountBtnText">Yes, Delete My Account</span>
           </button>
-          <button type="button" class="write-review-toggle" id="cancelDeleteAccountBtn" style="width: 100%; justify-content: center;">
+          <button
+            type="button"
+            class="write-review-toggle"
+            id="cancelDeleteAccountBtn"
+            style="width: 100%; justify-content: center;">
             <span>Cancel</span>
           </button>
         </div>
@@ -297,6 +434,9 @@
 
   <script>
     function goHome() {
+      window.location.href = 'index.html';
+    }
+    function goToMenu() {
       window.location.href = 'menu.html';
     }
     function goToCart() {
@@ -421,6 +561,14 @@
 
       if (hasError) return;
 
+      const submitBtn = addressForm.querySelector('.modal-save-btn');
+      const submitText = document.getElementById('addressSubmitText');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add('disabled');
+        if (submitText) submitText.textContent = 'Saving...';
+      }
+
       try {
         const userDocRef = window.doc(window.firebaseDb, 'customers', user.uid);
         const userDoc = await window.getDoc(userDocRef);
@@ -445,7 +593,7 @@
           // Update existing address
           const index = addresses.findIndex(addr => addr.id === editingAddressId);
           if (index !== -1) {
-            addresses[index] = addressData;
+            addresses[index] = { ...addresses[index], ...addressData };
           }
         } else {
           // Add new address
@@ -456,9 +604,17 @@
         await window.setDoc(userDocRef, { addresses: addresses }, { merge: true });
 
         closeAddressModalFunc();
+        showToast('Address saved', 'success');
         // Address list updates automatically
       } catch (error) {
         console.error('Error saving address:', error);
+        showToast('Failed to save address. Please try again.', 'error');
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.classList.remove('disabled');
+          if (submitText) submitText.textContent = editingAddressId ? 'Update Address' : 'Save Address';
+        }
       }
     }
 
@@ -502,6 +658,7 @@
 
         // Address list updates automatically
         console.log('Address deleted successfully');
+        showToast('Address deleted', 'success');
       } catch (error) {
         console.error('Error deleting address:', error);
         
@@ -523,13 +680,45 @@
       }
     }
 
+    // Simple toast helper for inline feedback
+    function showToast(message, variant) {
+      try {
+        let container = document.getElementById('accountToastContainer');
+        if (!container) {
+          container = document.createElement('div');
+          container.id = 'accountToastContainer';
+          container.className = 'account-toast-container';
+          document.body.appendChild(container);
+        }
+        const toast = document.createElement('div');
+        toast.className = `account-toast ${variant === 'error' ? 'error' : 'success'}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => {
+          toast.classList.add('hide');
+          setTimeout(() => {
+            toast.remove();
+          }, 300);
+        }, 2500);
+      } catch (e) {
+        // Fallback
+        console.log(message);
+      }
+    }
+
     // Render addresses
     function renderAddresses(addresses) {
       const addressList = document.getElementById('addressList');
       if (!addressList) return;
 
       if (!addresses || addresses.length === 0) {
-        addressList.innerHTML = '<div class="address-empty-state" style="text-align: center; padding: 32px; color: #999;">No addresses.</div>';
+        addressList.innerHTML = `
+          <div class="account-empty-card address-empty-state">
+            <i class="fas fa-location-dot empty-icon"></i>
+            <div class="empty-title">No saved addresses</div>
+            <p class="empty-subtitle">Add a delivery address to speed up checkout.</p>
+          </div>
+        `;
         return;
       }
 
@@ -538,6 +727,20 @@
         // Handle backward compatibility: use barangay if available, otherwise province
         const barangay = address.barangay || address.province || '';
         const fullAddr = address.fullAddress || `${address.street}, ${address.city}, ${barangay} ${address.postal}`;
+        const lastUsed = address.lastUsedAt || null;
+        const deliveryOnly = !!address.deliveryOnly;
+
+        const chips = [];
+        if (address.label) {
+          chips.push(`<span class="address-chip">${address.label}</span>`);
+        }
+        if (lastUsed) {
+          chips.push('<span class="address-chip address-chip-last">Used for last order</span>');
+        }
+        if (deliveryOnly) {
+          chips.push('<span class="address-chip address-chip-delivery">Delivery only</span>');
+        }
+
         return `
           <div class="address-item" 
                data-id="${addressId}"
@@ -547,7 +750,9 @@
                data-barangay="${barangay}"
                data-postal="${address.postal || ''}">
             <div>
-              <span class="address-chip">${address.label || 'Other'}</span>
+              <div class="address-chip-row">
+                ${chips.join('')}
+              </div>
               <div class="address-text">${fullAddr}</div>
             </div>
             <div class="address-actions">
@@ -762,6 +967,7 @@
       const nameContent = document.getElementById('nameContent');
       const emailLoading = document.getElementById('emailLoading');
       const emailContent = document.getElementById('emailContent');
+      const pointsEl = document.getElementById('accountPoints');
 
       // Update name
       if (userData) {
@@ -777,6 +983,133 @@
       const email = userData?.email || authUser?.email || 'user@example.com';
       emailContent.textContent = email;
 
+      // Update loyalty points
+      const loyaltyTotalEl = document.getElementById('loyaltyTotalPoints');
+      const loyaltyLastEl = document.getElementById('loyaltyLastPoints');
+      const loyaltyLastDateEl = document.getElementById('loyaltyLastEarnedDate');
+      const loyaltyHistoryList = document.getElementById('loyaltyHistoryList');
+      const loyaltyEmptyState = document.getElementById('loyaltyEmptyState');
+
+      let pts = 0;
+      if (userData && typeof userData.points !== 'undefined') {
+        if (typeof userData.points === 'number') {
+          pts = userData.points;
+        } else {
+          const parsed = parseInt(userData.points, 10);
+          if (Number.isFinite(parsed) && parsed >= 0) pts = parsed;
+        }
+      } else {
+        // Fallback to localStorage cache
+        try {
+          const raw = localStorage.getItem('ppp_points');
+          const parsed = parseInt(raw || '0', 10);
+          if (Number.isFinite(parsed) && parsed >= 0) pts = parsed;
+        } catch (e) {
+          pts = 0;
+        }
+      }
+
+      if (pointsEl) {
+        pointsEl.textContent = `${pts} pts`;
+      }
+      if (loyaltyTotalEl) {
+        loyaltyTotalEl.textContent = `${pts} pts`;
+      }
+
+      // Keep local cache in sync when Firestore has a value
+      try {
+        if (userData && typeof userData.points !== 'undefined') {
+          localStorage.setItem('ppp_points', String(pts));
+        }
+      } catch (e) {
+        // ignore localStorage errors
+      }
+
+      // Last earned points and history (if available)
+      if (userData) {
+        const lastEarned =
+          typeof userData.lastEarnedPoints === 'number'
+            ? userData.lastEarnedPoints
+            : Number(userData.lastEarnedPoints) || 0;
+        const lastAtRaw = userData.lastEarnedAt || null;
+
+        if (loyaltyLastEl) {
+          loyaltyLastEl.textContent = lastEarned > 0 ? `${lastEarned} pts` : '0 pts';
+        }
+
+        if (loyaltyLastDateEl) {
+          if (lastEarned > 0 && lastAtRaw) {
+            const d = new Date(lastAtRaw);
+            if (!Number.isNaN(d.getTime())) {
+              loyaltyLastDateEl.textContent = d.toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              });
+            } else {
+              loyaltyLastDateEl.textContent = '—';
+            }
+          } else {
+            loyaltyLastDateEl.textContent = '—';
+          }
+        }
+
+        if (loyaltyHistoryList) {
+          const history = Array.isArray(userData.pointsHistory)
+            ? userData.pointsHistory.slice()
+            : [];
+
+          if (!history.length) {
+            if (loyaltyEmptyState) loyaltyEmptyState.style.display = 'block';
+          } else {
+            history.sort((a, b) => {
+              const ta = a.createdAt || '';
+              const tb = b.createdAt || '';
+              if (!ta && !tb) return 0;
+              if (!ta) return 1;
+              if (!tb) return -1;
+              return ta < tb ? 1 : -1;
+            });
+
+            const recent = history.slice(0, 5);
+            const rows = recent
+              .map((entry) => {
+                const p =
+                  typeof entry.points === 'number'
+                    ? entry.points
+                    : Number(entry.points) || 0;
+                const total =
+                  typeof entry.orderTotal === 'number'
+                    ? entry.orderTotal
+                    : Number(entry.orderTotal) || 0;
+                const orderId = entry.orderId || '';
+                const d = entry.createdAt ? new Date(entry.createdAt) : null;
+                const label = d && !Number.isNaN(d.getTime())
+                  ? d.toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })
+                  : '';
+
+                return `
+                  <button class="loyalty-history-item" type="button" data-order-id="${orderId}">
+                    <div>
+                      <div>${p} pts earned</div>
+                      ${label ? `<div class="loyalty-meta">${label}</div>` : ''}
+                    </div>
+                    <span>₱${total.toFixed(2)}</span>
+                  </button>
+                `;
+              })
+              .join('');
+
+            loyaltyHistoryList.innerHTML = rows;
+            if (loyaltyEmptyState) loyaltyEmptyState.style.display = 'none';
+          }
+        }
+      }
+
       // Hide loading, show content
       if (nameLoading) nameLoading.style.display = 'none';
       if (nameContent) nameContent.style.display = '';
@@ -790,10 +1123,45 @@
       const nameContent = document.getElementById('nameContent');
       const emailLoading = document.getElementById('emailLoading');
       const emailContent = document.getElementById('emailContent');
+      const pointsEl = document.getElementById('accountPoints');
+      const loyaltyTotalEl = document.getElementById('loyaltyTotalPoints');
+      const loyaltyLastEl = document.getElementById('loyaltyLastPoints');
+      const loyaltyLastDateEl = document.getElementById('loyaltyLastEarnedDate');
+      const loyaltyHistoryList = document.getElementById('loyaltyHistoryList');
+      const loyaltyEmptyState = document.getElementById('loyaltyEmptyState');
 
       // Use fallback values
       nameContent.textContent = authUser?.displayName || 'User';
       emailContent.textContent = authUser?.email || 'user@example.com';
+
+      // Fallback loyalty points from localStorage
+      let pts = 0;
+      try {
+        const raw = localStorage.getItem('ppp_points');
+        const parsed = parseInt(raw || '0', 10);
+        if (Number.isFinite(parsed) && parsed >= 0) pts = parsed;
+      } catch (e) {
+        pts = 0;
+      }
+
+      if (pointsEl) {
+        pointsEl.textContent = `${pts} pts`;
+      }
+      if (loyaltyTotalEl) {
+        loyaltyTotalEl.textContent = `${pts} pts`;
+      }
+
+      if (loyaltyLastEl) {
+        loyaltyLastEl.textContent = '0 pts';
+      }
+      if (loyaltyLastDateEl) {
+        loyaltyLastDateEl.textContent = '—';
+      }
+      if (loyaltyHistoryList && loyaltyEmptyState) {
+        loyaltyHistoryList.innerHTML = '';
+        loyaltyHistoryList.appendChild(loyaltyEmptyState);
+        loyaltyEmptyState.style.display = 'block';
+      }
 
       // Hide loading, show content
       if (nameLoading) nameLoading.style.display = 'none';
@@ -821,12 +1189,16 @@
               const userData = snapshot.data();
               updateUserDisplay(userData, user);
               
+              // Update security meta
+              updateSecurityMeta(user);
+              
               // Update addresses
               const addresses = userData.addresses || [];
               renderAddresses(addresses);
             } else {
               // No data found, use auth user info
               updateUserDisplay(null, user);
+              updateSecurityMeta(user);
               renderAddresses([]);
             }
           },
@@ -866,6 +1238,7 @@
         if (user) {
           // User is logged in, start tracking data
           setupUserDataListener(user);
+          updateSecurityMeta(user);
         } else {
           // User is not logged in, show default
           showErrorState(null);
@@ -876,6 +1249,94 @@
 
     initUserData();
     window.addEventListener('beforeunload', stopUserDataListenerFunc);
+
+    // Section nav scroll
+    (function initSectionNav() {
+      const nav = document.querySelector('.account-section-nav');
+      if (!nav) return;
+      nav.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-section]');
+        if (!btn) return;
+        const targetId = btn.getAttribute('data-section');
+        if (!targetId) return;
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    })();
+
+    // Keyboard shortcuts for modals (Esc to close)
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (profileEditModal && profileEditModal.style.display === 'flex') {
+        closeProfileEditModal();
+      } else if (addressModal && addressModal.style.display === 'flex') {
+        closeAddressModalFunc();
+      } else if (deleteAccountPasswordModal && deleteAccountPasswordModal.style.display === 'flex') {
+        closeDeletePasswordModalFunc();
+      } else if (confirmModal && confirmModal.style.display === 'flex') {
+        closeConfirmModalFunc();
+      }
+    });
+
+    // Security meta info (recent login / device)
+    function updateSecurityMeta(user) {
+      const lastLoginInfo = document.getElementById('lastLoginInfo');
+      const lastLoginDevice = document.getElementById('lastLoginDevice');
+      if (!lastLoginInfo || !lastLoginDevice) return;
+
+      if (!user) {
+        lastLoginInfo.textContent = 'Not signed in';
+        lastLoginDevice.textContent = '—';
+        return;
+      }
+
+      const meta = user.metadata || {};
+      let last = meta.lastSignInTime || meta.creationTime || null;
+      if (last) {
+        const d = new Date(last);
+        if (!Number.isNaN(d.getTime())) {
+          lastLoginInfo.textContent = d.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        } else {
+          lastLoginInfo.textContent = String(last);
+        }
+      } else {
+        lastLoginInfo.textContent = '—';
+      }
+
+      const ua = navigator.userAgent || '';
+      let device = 'Unknown device';
+      if (/Windows/i.test(ua)) device = 'Windows device';
+      else if (/Macintosh/i.test(ua)) device = 'macOS device';
+      else if (/Android/i.test(ua)) device = 'Android device';
+      else if (/iPhone|iPad/i.test(ua)) device = 'iOS device';
+
+      if (/Chrome/i.test(ua)) device += ' · Chrome';
+      else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) device += ' · Safari';
+      else if (/Firefox/i.test(ua)) device += ' · Firefox';
+
+      lastLoginDevice.textContent = device;
+    }
+
+    // Loyalty history click -> order details
+    (function initLoyaltyHistoryLinks() {
+      const list = document.getElementById('loyaltyHistoryList');
+      if (!list) return;
+      list.addEventListener('click', (e) => {
+        const item = e.target.closest('.loyalty-history-item');
+        if (!item) return;
+        const orderId = item.getAttribute('data-order-id');
+        if (!orderId) return;
+        window.location.href = `order_details.html?orderId=${encodeURIComponent(orderId)}`;
+      });
+    })();
+
 
     // Password change
     // Password toggle
@@ -900,8 +1361,6 @@
 
     // Setup password toggles
     setupPasswordToggle('currentPasswordToggle', 'currentPassword');
-    setupPasswordToggle('newPasswordToggle', 'newPassword');
-    setupPasswordToggle('confirmNewPasswordToggle', 'confirmNewPassword');
 
     // Password strength
     function checkPasswordStrength(password) {
@@ -969,8 +1428,6 @@
 
     function clearAllPasswordErrors() {
       clearPasswordError('currentPassword');
-      clearPasswordError('newPassword');
-      clearPasswordError('confirmNewPassword');
     }
 
     // Check inputs
@@ -981,34 +1438,8 @@
       return '';
     }
 
-    function validateNewPassword(value) {
-      if (!value) {
-        return 'New password is required';
-      }
-      if (value.length < 6) {
-        return 'Password must be at least 6 characters';
-      }
-      const strength = checkPasswordStrength(value);
-      if (strength < 2) {
-        return 'Password is too weak. Use a mix of letters, numbers, and special characters';
-      }
-      return '';
-    }
-
-    function validateConfirmPassword(value, newPassword) {
-      if (!value) {
-        return 'Please confirm your new password';
-      }
-      if (value !== newPassword) {
-        return 'Passwords do not match';
-      }
-      return '';
-    }
-
     // Check inputs as user types
     const currentPasswordInput = document.getElementById('currentPassword');
-    const newPasswordInput = document.getElementById('newPassword');
-    const confirmNewPasswordInput = document.getElementById('confirmNewPassword');
 
     if (currentPasswordInput) {
       currentPasswordInput.addEventListener('input', () => clearPasswordError('currentPassword'));
@@ -1016,48 +1447,6 @@
         const error = validateCurrentPassword(this.value);
         if (error) {
           showPasswordError('currentPassword', error);
-        }
-      });
-    }
-
-    if (newPasswordInput) {
-      newPasswordInput.addEventListener('input', function() {
-        const password = this.value;
-        updatePasswordStrength(password);
-        clearPasswordError('newPassword');
-        
-        // Validate confirm password if it has a value
-        const confirmPassword = confirmNewPasswordInput.value;
-        if (confirmPassword) {
-          const confirmError = validateConfirmPassword(confirmPassword, password);
-          if (confirmError) {
-            showPasswordError('confirmNewPassword', confirmError);
-          } else {
-            clearPasswordError('confirmNewPassword');
-          }
-        }
-      });
-      newPasswordInput.addEventListener('blur', function() {
-        const error = validateNewPassword(this.value);
-        if (error) {
-          showPasswordError('newPassword', error);
-        }
-      });
-    }
-
-    if (confirmNewPasswordInput) {
-      confirmNewPasswordInput.addEventListener('input', function() {
-        clearPasswordError('confirmNewPassword');
-        const newPassword = newPasswordInput.value;
-        if (this.value && this.value === newPassword) {
-          clearPasswordError('confirmNewPassword');
-        }
-      });
-      confirmNewPasswordInput.addEventListener('blur', function() {
-        const newPassword = newPasswordInput.value;
-        const error = validateConfirmPassword(this.value, newPassword);
-        if (error) {
-          showPasswordError('confirmNewPassword', error);
         }
       });
     }
@@ -1073,11 +1462,11 @@
       if (submitting) {
         saveBtn.disabled = true;
         saveBtn.classList.add('disabled');
-        saveBtnText.textContent = 'Updating...';
+        saveBtnText.textContent = 'Sending...';
       } else {
         saveBtn.disabled = false;
         saveBtn.classList.remove('disabled');
-        saveBtnText.textContent = 'Save Changes';
+        saveBtnText.textContent = 'Verify & Send Reset Email';
       }
     }
 
@@ -1092,8 +1481,8 @@
       }
     }
 
-    // Change password
-    async function changePassword(currentPassword, newPassword) {
+    // Verify current password, then send reset email
+    async function changePassword(currentPassword) {
       const user = window.firebaseAuth?.currentUser;
       if (!user || !user.email) {
         showPasswordError('currentPassword', 'You must be logged in to change your password');
@@ -1104,12 +1493,13 @@
         // Check current password
         const credential = window.EmailAuthProvider.credential(user.email, currentPassword);
         await window.reauthenticateWithCredential(user, credential);
-        // Update to new password
-        await window.updatePassword(user, newPassword);
+
+        // Send password reset email to verified user email
+        await window.sendPasswordResetEmail(window.firebaseAuth, user.email);
+
         showPasswordSuccess();
         document.getElementById('passwordChangeForm').reset();
         clearAllPasswordErrors();
-        document.getElementById('newPasswordStrength').style.display = 'none';
 
       } catch (error) {
         console.error('Error changing password:', error);
@@ -1121,10 +1511,6 @@
           case 'auth/wrong-password':
             errorMessage = 'Current password is incorrect. Please try again.';
             errorField = 'currentPassword';
-            break;
-          case 'auth/weak-password':
-            errorMessage = 'New password is too weak. Please use a stronger password.';
-            errorField = 'newPassword';
             break;
           case 'auth/requires-recent-login':
             errorMessage = 'For security, please log out and log back in before changing your password.';
@@ -1156,8 +1542,6 @@
         clearAllPasswordErrors();
 
         const currentPassword = currentPasswordInput.value;
-        const newPassword = newPasswordInput.value;
-        const confirmPassword = confirmNewPasswordInput.value;
 
         // Check inputs
         let hasErrors = false;
@@ -1168,30 +1552,12 @@
           hasErrors = true;
         }
 
-        const newPasswordError = validateNewPassword(newPassword);
-        if (newPasswordError) {
-          showPasswordError('newPassword', newPasswordError);
-          hasErrors = true;
-        }
-
-        const confirmPasswordError = validateConfirmPassword(confirmPassword, newPassword);
-        if (confirmPasswordError) {
-          showPasswordError('confirmNewPassword', confirmPasswordError);
-          hasErrors = true;
-        }
-
-        // Check if new password is same as current
-        if (currentPassword && newPassword && currentPassword === newPassword) {
-          showPasswordError('newPassword', 'New password must be different from current password');
-          hasErrors = true;
-        }
-
         if (hasErrors) {
           return;
         }
 
         setPasswordFormState(true);
-        await changePassword(currentPassword, newPassword);
+        await changePassword(currentPassword);
         setPasswordFormState(false);
       });
     }
@@ -1341,6 +1707,48 @@
     }
 
     document.getElementById('deleteAccountBtn').addEventListener('click', deleteUserAccount);
+  </script>
+
+  <script>
+    // Keep cart badge in sync on this page with shared localStorage value
+    (function() {
+      'use strict';
+      const CART_COUNT_KEY = 'ppp_cart_count';
+
+      function safeNumber(value, fallback = 0) {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return fallback;
+        return parsed;
+      }
+
+      function getStoredCartCount() {
+        try {
+          const raw = window.localStorage?.getItem(CART_COUNT_KEY);
+          return safeNumber(raw, 0);
+        } catch (e) {
+          console.warn('Cart count read failed on account page:', e);
+          return 0;
+        }
+      }
+
+      function updateCartBadges(count) {
+        const badges = document.querySelectorAll('.cart-badge');
+        badges.forEach((badge) => {
+          badge.textContent = String(Math.max(0, safeNumber(count, 0)));
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        updateCartBadges(getStoredCartCount());
+      });
+
+      document.addEventListener('cart:count-changed', (e) => {
+        const count = typeof e.detail?.count === 'number'
+          ? e.detail.count
+          : getStoredCartCount();
+        updateCartBadges(count);
+      });
+    })();
   </script>
 </body>
 </html>

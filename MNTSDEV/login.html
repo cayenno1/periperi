@@ -39,7 +39,17 @@
 
             <form class="restaurant-auth-form" id="loginForm">
                 <div class="restaurant-form-group">
-                    <label for="email" class="restaurant-form-label">
+                    <label for="loginMode" class="restaurant-form-label">
+                        Login as
+                    </label>
+                    <select id="loginMode" class="restaurant-form-input">
+                        <option value="customer" selected>Customer</option>
+                        <option value="driver">Driver</option>
+                    </select>
+                </div>
+
+                <div class="restaurant-form-group">
+                    <label for="email" class="restaurant-form-label" id="emailLabel">
                         Email
                     </label>
                     <input type="email" id="email" name="email" class="restaurant-form-input" placeholder="Enter your email" required>
@@ -60,11 +70,6 @@
                 </div>
 
                 <div class="form-options">
-                    <label class="checkbox-container">
-                        <input type="checkbox" id="remember" name="remember">
-                        <span class="checkmark"></span>
-                        Remember me
-                    </label>
                     <span class="forgot-password">Forgot Password?</span>
                 </div>
 
@@ -106,7 +111,14 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import {
+            getFirestore,
+            collection,
+            query,
+            where,
+            getDocs
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA4N_Q6hTfKGBdnSkZxWRyyYxeJNFncOKw",
@@ -120,14 +132,58 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Expose Firebase helpers used by this page
         window.firebaseAuth = auth;
         window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.signOut = signOut;
+        window.sendPasswordResetEmail = sendPasswordResetEmail;
+
+        window.firebaseDb = db;
+        window.collection = collection;
+        window.query = query;
+        window.where = where;
+        window.getDocs = getDocs;
     </script>
 
     <script>
         // Navigation
         function goHome() {
             window.location.href = 'index.html';
+        }
+        function goToMenu() {
+            window.location.href = 'menu.html';
+        }
+
+        // Login mode (customer / driver)
+        let loginMode = 'customer';
+        const loginModeSelect = document.getElementById('loginMode');
+        const forgotPasswordLink = document.querySelector('.forgot-password');
+
+        if (loginModeSelect) {
+            loginModeSelect.addEventListener('change', function() {
+                loginMode = this.value || 'customer';
+                clearAllErrors();
+
+                // Optionally hide forgot password for drivers (since reset flow is for customers)
+                if (forgotPasswordLink) {
+                    if (loginMode === 'driver') {
+                        forgotPasswordLink.style.display = 'none';
+                    } else {
+                        forgotPasswordLink.style.display = '';
+                    }
+                }
+            });
+        }
+
+        // Open forgot password modal when link is clicked (for customers)
+        if (forgotPasswordLink) {
+            forgotPasswordLink.addEventListener('click', function () {
+                if (loginMode === 'customer') {
+                    showForgotPassword();
+                }
+            });
         }
 
         // Password toggle
@@ -212,8 +268,8 @@
         document.getElementById('email').addEventListener('input', () => clearError('email'));
         document.getElementById('password').addEventListener('input', () => clearError('password'));
 
-        // Login
-        async function loginUser(email, password, remember) {
+        // Customer login (with email verification check)
+        async function loginUser(email, password) {
             try {
                 const userCredential = await window.signInWithEmailAndPassword(
                     window.firebaseAuth,
@@ -223,17 +279,23 @@
 
                 const user = userCredential.user;
 
-                // Save login info if remember me is checked
-                if (remember) {
-                    try {
-                        localStorage.setItem('ppp_user', JSON.stringify({
-                            id: user.uid,
-                            email: user.email,
-                            remember: true
-                        }));
-                    } catch (e) {
-                        console.error('Error saving login info:', e);
+                // Require verified email before allowing login
+                if (!user.emailVerified) {
+                    // Optionally sign the user back out to keep state clean
+                    if (window.signOut && window.firebaseAuth) {
+                        try {
+                            await window.signOut(window.firebaseAuth);
+                        } catch (signOutError) {
+                            console.error('Error signing out unverified user:', signOutError);
+                        }
                     }
+
+                    setFormState(false);
+                    showError(
+                        'email',
+                        'Please verify your email first. Check your inbox for the verification link we sent when you registered.'
+                    );
+                    return;
                 }
 
                 sessionStorage.setItem('justLoggedIn', 'true');
@@ -280,6 +342,111 @@
             }
         }
 
+        // Driver login (Firestore staff collection, role == "Driver")
+        async function loginDriver(email, password) {
+            try {
+                const db = window.firebaseDb;
+                const collectionFn = window.collection;
+                const queryFn = window.query;
+                const whereFn = window.where;
+                const getDocsFn = window.getDocs;
+
+                if (!db || !collectionFn || !queryFn || !whereFn || !getDocsFn) {
+                    throw new Error('Driver login is not available right now. Please try again later.');
+                }
+
+                const staffRef = collectionFn(db, 'staff');
+
+                // Look up staff member by email
+                const staffQuery = queryFn(
+                    staffRef,
+                    whereFn('email', '==', email)
+                );
+
+                const snapshot = await getDocsFn(staffQuery);
+
+                if (snapshot.empty) {
+                    setFormState(false);
+                    showError('email', 'Invalid email or password');
+                    return;
+                }
+
+                const staffDoc = snapshot.docs[0];
+                const staffData = staffDoc.data() || {};
+
+                // Normalize password to string before comparison in case it's stored as a number
+                const storedPassword = staffData.password != null ? String(staffData.password) : '';
+                if (storedPassword !== password) {
+                    setFormState(false);
+                    showError('email', 'Invalid email or password');
+                    return;
+                }
+
+                if (staffData.role !== 'Driver') {
+                    setFormState(false);
+                    // Hide role details from the user, keep message generic
+                    showError('email', 'Invalid email or password');
+                    return;
+                }
+
+                // Store driver info for later pages (driver dashboard)
+                try {
+                    const firstName = staffData.firstName || '';
+                    const lastName = staffData.lastName || '';
+                    const fullName = `${firstName} ${lastName}`.trim() || null;
+
+                    localStorage.setItem('ppp_driver', JSON.stringify({
+                        id: staffDoc.id,
+                        email: staffData.email,
+                        role: staffData.role,
+                        firstName: firstName || null,
+                        lastName: lastName || null,
+                        fullName,
+                        staffId: staffData.staffId || null,
+                        status: staffData.status || null
+                    }));
+                } catch (e) {
+                    console.error('Error saving driver info:', e);
+                }
+
+                // Update driver availability status in Firestore to "available"
+                try {
+                    const updateDocFn = window.updateDoc;
+                    const docFn = window.doc;
+                    const serverTimestampFn = window.serverTimestamp;
+                    
+                    if (updateDocFn && docFn && serverTimestampFn) {
+                        // Try to update in 'drivers' collection first
+                        try {
+                            const driverRef = docFn(db, 'drivers', staffDoc.id);
+                            await updateDocFn(driverRef, {
+                                availability: 'available',
+                                lastLoginAt: serverTimestampFn(),
+                                updatedAt: serverTimestampFn()
+                            });
+                        } catch (driverError) {
+                            // If drivers collection doesn't exist, update in staff collection
+                            const staffRef = docFn(db, 'staff', staffDoc.id);
+                            await updateDocFn(staffRef, {
+                                availability: 'available',
+                                lastLoginAt: serverTimestampFn(),
+                                updatedAt: serverTimestampFn()
+                            });
+                        }
+                    }
+                } catch (updateError) {
+                    console.error('Error updating driver availability:', updateError);
+                    // Don't block login if update fails
+                }
+
+                window.location.href = 'driver.html';
+            } catch (error) {
+                console.error('Driver login error:', error);
+                setFormState(false);
+                showError('email', error.message || 'An error occurred during driver login. Please try again.');
+            }
+        }
+
         // Form submission
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -292,7 +459,6 @@
 
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
-            const remember = document.getElementById('remember').checked;
 
             let hasErrors = false;
 
@@ -311,14 +477,46 @@
             }
 
             setFormState(true);
-            loginUser(email, password, remember);
+            if (loginMode === 'driver') {
+                loginDriver(email, password);
+            } else {
+                loginUser(email, password);
+            }
         });
 
-        document.getElementById('resetPasswordForm').addEventListener('submit', function(e) {
+        document.getElementById('resetPasswordForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const email = document.getElementById('resetEmail').value;
-            console.log('Password reset requested for:', email);
-            closeModal();
+
+            const emailInput = document.getElementById('resetEmail');
+            const email = emailInput ? emailInput.value.trim() : '';
+
+            if (!email) {
+                alert('Please enter your email address.');
+                return;
+            }
+
+            try {
+                await window.sendPasswordResetEmail(window.firebaseAuth, email);
+                alert('Password reset email sent. Please check your inbox.');
+                closeModal();
+            } catch (error) {
+                console.error('Password reset error:', error);
+
+                let message = 'Failed to send password reset email. Please try again.';
+                switch (error.code) {
+                    case 'auth/user-not-found':
+                        message = 'No account found with this email address.';
+                        break;
+                    case 'auth/invalid-email':
+                        message = 'Invalid email address. Please enter a valid email.';
+                        break;
+                    case 'auth/network-request-failed':
+                        message = 'Network error. Please check your internet connection and try again.';
+                        break;
+                }
+
+                alert(message);
+            }
         });
 
 

@@ -1,0 +1,1955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout - Pablo's Peri Peri</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon back-icon" title="Back to Cart" onclick="goBackToCart()">
+        <i class="fas fa-arrow-left"></i>
+      </div>
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <div class="cart-review-container">
+      <!-- Header Section -->
+      <div class="cart-header">
+        <div class="cart-title-section">
+          <h2 class="cart-title">Your Order</h2>
+          <p class="cart-subtitle">Confirm your details and payment</p>
+        </div>
+        <div class="cart-status">
+          <div class="status-indicator completed">
+            <i class="fas fa-shopping-cart"></i>
+            <span>Cart</span>
+          </div>
+          <div class="status-line completed"></div>
+          <div class="status-indicator active">
+            <i class="fas fa-credit-card"></i>
+            <span>Checkout &amp; Payment</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Service Type Selector -->
+      <section class="service-type-section">
+        <h3 class="section-title">Service Type</h3>
+        <div class="service-type-toggle" role="tablist" aria-label="Service Type">
+          <button class="service-pill" data-service="pickup" type="button">
+            <i class="fas fa-store"></i>
+            <span>Pick-Up</span>
+          </button>
+          <button class="service-pill" data-service="delivery" type="button">
+            <i class="fas fa-motorcycle"></i>
+            <span>Delivery</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Service Details -->
+      <section class="service-panels">
+        <!-- Pick-Up -->
+        <div class="delivery-section service-panel hidden" id="service-pickup">
+          <h3 class="section-title">Pick-Up Details</h3>
+          <div class="form-group">
+            <label for="store-location">Store Location <span class="required">*</span></label>
+            <select id="store-location">
+              <option value="">Select store location</option>
+              <option value="main-branch">Zabarte Road, Quezon City</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Delivery -->
+        <div class="delivery-section service-panel hidden" id="service-delivery">
+          <h3 class="section-title">Delivery Details</h3>
+
+          <div class="form-group">
+            <label for="delivery-address">Saved Address</label>
+            <select id="delivery-address" onchange="toggleNewAddress()">
+              <option value="">Select saved address</option>
+              <option value="new">+ Add New Address</option>
+            </select>
+          </div>
+
+          <div class="new-address-form hidden" id="new-address-form">
+            <div class="form-group">
+              <label for="street-address">Street Address <span class="required">*</span></label>
+              <input type="text" id="street-address" placeholder="Enter street address">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="city">City <span class="required">*</span></label>
+                <input type="text" id="city" placeholder="Enter city">
+              </div>
+              <div class="form-group">
+                <label for="deliveryBarangay">Barangay <span class="required">*</span></label>
+                <input type="text" id="deliveryBarangay" placeholder="Enter barangay">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="deliveryPostal">Postal Code <span class="required">*</span></label>
+              <input type="text" id="deliveryPostal" placeholder="Enter postal code">
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Contact Details -->
+      <section class="delivery-section">
+        <h3 class="section-title">Contact Details</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="contactName">Full Name <span class="required">*</span></label>
+            <input type="text" id="contactName" placeholder="Juan Dela Cruz">
+          </div>
+          <div class="form-group">
+            <label for="contactPhone">Mobile Number <span class="required">*</span></label>
+            <input type="tel" id="contactPhone" placeholder="09XXXXXXXXX">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="contactEmail">Email Address</label>
+          <input type="email" id="contactEmail" placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label for="orderNotes">Additional Notes</label>
+          <textarea id="orderNotes" rows="3" placeholder="Landmarks, special requests, or other notes for the team"></textarea>
+        </div>
+      </section>
+
+      <!-- Payment Method -->
+      <section class="delivery-section">
+        <h3 class="section-title">Payment Method</h3>
+        <div class="delivery-options">
+          <!-- Cash first -->
+          <label class="delivery-option">
+            <input type="radio" name="payment" value="cash">
+            <div class="option-content">
+              <div class="option-icon">
+                <i class="fas fa-money-bill-wave"></i>
+              </div>
+              <div class="option-details">
+                <span class="option-title">Cash</span>
+                <span class="option-subtitle">Pay in person</span>
+              </div>
+            </div>
+          </label>
+
+          <!-- GCash second -->
+          <label class="delivery-option">
+            <input type="radio" name="payment" value="gcash" onclick="toggleGCashDetails()">
+            <div class="option-content">
+              <div class="option-icon">
+                <i class="fas fa-mobile-alt"></i>
+              </div>
+              <div class="option-details">
+                <span class="option-title">GCash</span>
+                <span class="option-subtitle">Digital payment</span>
+              </div>
+              <div class="option-arrow">
+                <i class="fas fa-chevron-down"></i>
+              </div>
+            </div>
+          </label>
+          <div class="gcash-details" id="gcash-details">
+            <div class="gcash-info-card">
+              <div class="gcash-header">
+                <h4>GCash Payment Details</h4>
+                <p>Send payment to our official GCash account</p>
+              </div>
+              <div class="gcash-content">
+                <div class="gcash-number">
+                  <i class="fas fa-phone"></i>
+                  <div>
+                    <span class="label">GCash Number:</span>
+                    <span class="value">0917 123 4567</span>
+                  </div>
+                </div>
+                <div class="gcash-name">
+                  <i class="fas fa-store"></i>
+                  <div>
+                    <span class="label">Account Name:</span>
+                    <span class="value">PABLO'S PERI PERI</span>
+                  </div>
+                </div>
+                <div class="gcash-qr">
+                  <span class="label">QR Code:</span>
+                  <div class="qr-container">
+                    <img src="qr-code.png" alt="GCash QR Code" class="qr-image">
+                    <p>Scan to pay instantly</p>
+                  </div>
+                </div>
+                <div class="payment-proof">
+                  <span class="label">Payment Proof:</span>
+                  <div class="proof-upload">
+                    <input type="file" id="payment-proof" accept="image/*" style="display: none;" onchange="handleFileUpload(this)">
+                    <button type="button" class="upload-btn" onclick="document.getElementById('payment-proof').click()">
+                      <i class="fas fa-upload"></i>
+                      <span>Upload Payment Screenshot</span>
+                    </button>
+                    <div class="upload-preview" id="upload-preview"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Order Summary -->
+      <section class="cart-summary">
+        <div class="summary-header">
+          <h3 class="summary-title">Order Summary</h3>
+        </div>
+        <div class="summary-items" id="summaryItems">
+          <!-- Line items from cart will be injected here -->
+          <div id="summaryLineItems"></div>
+
+          <div class="summary-row subtotal">
+            <span class="summary-label">Sub-Total</span>
+            <span class="summary-value" id="summarySubtotal">₱0.00</span>
+          </div>
+          <div class="summary-row discount">
+            <span class="summary-label">
+              <i class="fas fa-gift"></i>
+              Points Applied
+            </span>
+            <span class="summary-value" id="summaryPoints">-₱0.00</span>
+          </div>
+          <div class="summary-row delivery-fee" id="deliveryFeeRow">
+            <span class="summary-label">Delivery Fee</span>
+            <span class="summary-value" id="summaryDeliveryFee">₱0.00</span>
+          </div>
+          <div class="summary-row total">
+            <span class="summary-label">Total</span>
+            <span class="summary-value" id="summaryTotal">₱0.00</span>
+          </div>
+          <div class="summary-row earned-points-row" id="earnedPointsRow" style="display:none;">
+            <span class="summary-label">Loyalty Reward</span>
+            <span class="summary-value" id="earnedPointsValue">+0 pts</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Points remaining</span>
+            <span class="summary-value" id="pointsRemaining">0</span>
+          </div>
+        </div>
+        <button type="button" class="apply-points-btn" onclick="applyPoints()">
+          <i class="fas fa-coins"></i>
+          <span>Apply Points</span>
+        </button>
+      </section>
+
+      <!-- Action Buttons -->
+      <div class="action-buttons">
+        <button class="add-more-btn" type="button" onclick="goBackToCart()">
+          <i class="fas fa-arrow-left"></i>
+          <span>Back to Cart</span>
+        </button>
+        <button class="proceed-btn" type="button" onclick="placeOrder()">
+          <span>Place Order</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="firebase-init.js"></script>
+  <script>
+    const GUEST_CART_KEY = 'ppp_guest_cart';
+    let baseSubtotal = 0;
+    const DELIVERY_FEE = 50;
+    const POINT_VALUE = 1; // 1 point = ₱1
+    let currentService = 'dinein';
+    let checkoutAddresses = [];
+    let loyaltyEnabled = false; // only for signed-in customers
+
+    function getGuestCart() {
+      try {
+        const raw = window.localStorage?.getItem(GUEST_CART_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.warn('Failed to read guest cart:', e);
+        return [];
+      }
+    }
+
+    function setGuestCart(cart) {
+      try {
+        window.localStorage?.setItem(GUEST_CART_KEY, JSON.stringify(cart || []));
+      } catch (e) {
+        console.warn('Failed to save guest cart:', e);
+      }
+    }
+
+    function clearGuestCart() {
+      try {
+        window.localStorage?.removeItem(GUEST_CART_KEY);
+        window.localStorage?.setItem('ppp_cart_count', '0');
+        document.dispatchEvent(new CustomEvent('cart:count-changed', {
+          detail: { count: 0 }
+        }));
+      } catch (e) {
+        console.warn('Failed to clear guest cart:', e);
+      }
+    }
+
+    // Simple visual highlighting for missing/invalid fields on checkout
+    function clearCheckoutErrors() {
+      document.querySelectorAll('.checkout-error').forEach((el) => {
+        el.classList.remove('checkout-error');
+      });
+    }
+
+    function flagCheckoutError(el) {
+      if (!el) return;
+      el.classList.add('checkout-error');
+    }
+
+    function getStoredPoints() {
+      try {
+        const raw = localStorage.getItem('ppp_points');
+        const n = parseInt(raw, 10);
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    function saveStoredPoints(value) {
+      try {
+        localStorage.setItem('ppp_points', String(Math.max(0, value || 0)));
+      } catch (e) {}
+    }
+
+    function getInitialServiceType() {
+      const params = new URLSearchParams(window.location.search);
+      const service = (params.get('service') || '').toLowerCase();
+
+      if (['pickup', 'delivery'].includes(service)) {
+        return service;
+      }
+
+      // Default service type when not specified.
+      return 'pickup';
+    }
+
+    function setServiceType(type) {
+      currentService = type;
+
+      document.querySelectorAll('.service-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.service === type);
+      });
+
+      document.querySelectorAll('.service-panel').forEach(panel => {
+        panel.classList.add('hidden');
+      });
+
+      const activePanel = document.getElementById(`service-${type}`);
+      if (activePanel) activePanel.classList.remove('hidden');
+
+      // Show delivery fee row only for delivery
+      const deliveryRow = document.getElementById('deliveryFeeRow');
+      if (deliveryRow) {
+        deliveryRow.style.display = type === 'delivery' ? 'flex' : 'none';
+      }
+
+      initPointsSummary();
+    }
+
+    function initPointsSummary() {
+      const remainingEl = document.getElementById('pointsRemaining');
+      const subtotalEl = document.getElementById('summarySubtotal');
+      const pointsEl = document.getElementById('summaryPoints');
+      const feeEl = document.getElementById('summaryDeliveryFee');
+      const totalEl = document.getElementById('summaryTotal');
+      const pointsRow = pointsEl ? pointsEl.closest('.summary-row') : null;
+      const earnedRow = document.getElementById('earnedPointsRow');
+      const remainingRow = remainingEl ? remainingEl.closest('.summary-row') : null;
+      const applyBtn = document.querySelector('.cart-summary .apply-points-btn');
+      const isLoyaltyOn = loyaltyEnabled && !!(window.firebaseAuth && window.firebaseAuth.currentUser);
+
+      const fee = currentService === 'delivery' ? DELIVERY_FEE : 0;
+
+      if (subtotalEl) subtotalEl.textContent = `₱${baseSubtotal.toFixed(2)}`;
+      if (feeEl) feeEl.textContent = `₱${fee.toFixed(2)}`;
+      if (totalEl) totalEl.textContent = `₱${(baseSubtotal + fee).toFixed(2)}`;
+
+      if (!isLoyaltyOn) {
+        if (remainingEl) remainingEl.textContent = '0';
+        if (pointsEl) pointsEl.textContent = '-₱0.00';
+        if (pointsRow) pointsRow.style.display = 'none';
+        if (remainingRow) remainingRow.style.display = 'none';
+        if (earnedRow) earnedRow.style.display = 'none';
+        if (applyBtn) {
+          applyBtn.style.display = 'none';
+          applyBtn.disabled = true;
+        }
+        return;
+      }
+
+      // Loyalty-enabled UI for signed-in users
+      const stored = getStoredPoints();
+      if (remainingEl) remainingEl.textContent = stored;
+      if (pointsEl) pointsEl.textContent = '-₱0.00';
+      if (pointsRow) pointsRow.style.display = 'flex';
+      if (remainingRow) remainingRow.style.display = 'flex';
+      if (applyBtn) {
+        applyBtn.style.display = '';
+        applyBtn.disabled = stored <= 0 || baseSubtotal <= 0;
+      }
+
+      updateEarnedPointsVisual();
+    }
+
+    function applyPoints() {
+      if (!loyaltyEnabled || !(window.firebaseAuth && window.firebaseAuth.currentUser)) {
+        alert('Sign in to use loyalty points.');
+        return;
+      }
+
+      const remaining = getStoredPoints();
+      if (!remaining) {
+        alert('No points available to apply.');
+        return;
+      }
+
+      const fee = currentService === 'delivery' ? DELIVERY_FEE : 0;
+
+      const maxDiscount = baseSubtotal;
+      const pointsToUse = Math.min(remaining, maxDiscount);
+      const discountAmount = pointsToUse * POINT_VALUE;
+      const newTotal = baseSubtotal + fee - discountAmount;
+      const newRemaining = remaining - pointsToUse;
+
+      const pointsEl = document.getElementById('summaryPoints');
+      const totalEl = document.getElementById('summaryTotal');
+      const remainingEl = document.getElementById('pointsRemaining');
+
+      if (pointsEl) pointsEl.textContent = `-₱${discountAmount}.00`;
+      if (totalEl) totalEl.textContent = `₱${newTotal}.00`;
+      if (remainingEl) remainingEl.textContent = newRemaining;
+
+      saveStoredPoints(newRemaining);
+
+      const btn = document.querySelector('.cart-summary .apply-points-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-check"></i><span>Points Applied</span>';
+      }
+
+      updateEarnedPointsVisual();
+    }
+
+    function toggleNewAddress() {
+      const addressSelect = document.getElementById('delivery-address');
+      const newAddressForm = document.getElementById('new-address-form');
+      
+      if (addressSelect.value === 'new') {
+        newAddressForm.classList.remove('hidden');
+      } else {
+        newAddressForm.classList.add('hidden');
+      }
+    }
+
+    async function uploadPaymentProof(file) {
+      await waitForFirebaseReady();
+
+      const storage = window.firebaseStorage;
+      const storageRef = window.storageRef;
+      const uploadBytes = window.uploadBytes;
+      const getDownloadURL = window.getDownloadURL;
+
+      if (!storage || !storageRef || !uploadBytes || !getDownloadURL) {
+        throw new Error('File upload is not available right now. Please try again later.');
+      }
+
+      const auth = window.firebaseAuth;
+      const userId = auth && auth.currentUser ? auth.currentUser.uid : 'guest';
+      const timestamp = Date.now();
+      const safeName = (file.name || 'proof').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const fullPath = `paymentProofs/${userId}/${timestamp}-${safeName}`;
+
+      const ref = storageRef(storage, fullPath);
+      const snapshot = await uploadBytes(ref, file);
+      const url = await getDownloadURL(snapshot.ref);
+
+      return { url, path: fullPath };
+    }
+
+    async function placeOrder() {
+      const btn = document.querySelector('.proceed-btn');
+      // Prevent double submission if already processing
+      if (btn && btn.disabled) return;
+
+      clearCheckoutErrors();
+
+      const paymentMethod = document.querySelector('input[name="payment"]:checked')?.value;
+      if (!paymentMethod) {
+        flagCheckoutError(document.querySelector('.delivery-options'));
+        alert('Please select a payment method.');
+        return;
+      }
+
+      // If GCash is selected, require an image before proceeding
+      let gcashFile = null;
+      if (paymentMethod === 'gcash') {
+        const fileInput = document.getElementById('payment-proof');
+        const file = fileInput && fileInput.files && fileInput.files[0];
+
+        if (!file) {
+          flagCheckoutError(document.querySelector('.payment-proof'));
+          alert('Please upload your GCash payment screenshot before placing your order.');
+          return;
+        }
+        gcashFile = file;
+      }
+
+      // Contact details (required for all)
+      const nameInput = document.getElementById('contactName');
+      const phoneInput = document.getElementById('contactPhone');
+      const emailInput = document.getElementById('contactEmail');
+      const notesInput = document.getElementById('orderNotes');
+
+      const fullName = (nameInput?.value || '').trim();
+      const phone = (phoneInput?.value || '').trim();
+      const email = (emailInput?.value || '').trim();
+      const notes = (notesInput?.value || '').trim();
+
+      let hasContactError = false;
+      if (!fullName) {
+        flagCheckoutError(nameInput);
+        hasContactError = true;
+      }
+      if (!phone) {
+        flagCheckoutError(phoneInput);
+        hasContactError = true;
+      }
+
+      const authUser = window.firebaseAuth?.currentUser || null;
+      if (!authUser && !email) {
+        flagCheckoutError(emailInput);
+        hasContactError = true;
+      }
+
+      if (hasContactError) {
+        alert('Please provide your name, mobile number, and email (for guest checkout).');
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('is-processing');
+        }
+        return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('is-processing');
+      }
+      const paymentType =
+        paymentMethod === 'cash'
+          ? (currentService === 'delivery' ? 'Cash on Delivery' : 'Cash Payment')
+          : 'GCash';
+
+      const params = new URLSearchParams();
+      params.set('payment', paymentType);
+      params.set('service', currentService);
+
+      if (currentService === 'pickup') {
+        const storeSelect = document.getElementById('store-location');
+        const storeValue = storeSelect.value;
+        const storeText = storeSelect.options[storeSelect.selectedIndex]?.text || '';
+        if (!storeValue) {
+          flagCheckoutError(storeSelect);
+          alert('Please select a store location for pick-up.');
+          if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('is-processing');
+          }
+          return;
+        }
+        params.set('store', storeText);
+      } else if (currentService === 'delivery') {
+        const addressSelect = document.getElementById('delivery-address');
+        const saved = addressSelect ? addressSelect.value : '';
+
+        let addressText = '';
+        if (saved && saved !== 'new') {
+          // Use a saved address from Firestore
+          const addr = checkoutAddresses.find(a => (a.id || '') === saved);
+          if (addr) {
+            const barangay = addr.barangay || addr.province || '';
+            const fullAddr =
+              addr.fullAddress ||
+              `${addr.street || ''}, ${addr.city || ''}, ${barangay} ${addr.postal || ''}`.trim();
+            addressText = fullAddr;
+          }
+        } else {
+          // Use a newly entered address
+          const streetInput = document.getElementById('street-address');
+          const cityInput = document.getElementById('city');
+          const barangayInput = document.getElementById('deliveryBarangay');
+          const postalInput = document.getElementById('deliveryPostal');
+
+          const streetAddress = (streetInput?.value || '').trim();
+          const city = (cityInput?.value || '').trim();
+          const barangay = (barangayInput?.value || '').trim();
+          const postal = (postalInput?.value || '').trim();
+
+          if (!streetAddress || !city || !barangay || !postal) {
+            if (!streetAddress) flagCheckoutError(streetInput);
+            if (!city) flagCheckoutError(cityInput);
+            if (!barangay) flagCheckoutError(barangayInput);
+            if (!postal) flagCheckoutError(postalInput);
+            alert('Please complete the delivery address (street, city, barangay, and postal code).');
+            if (btn) {
+              btn.disabled = false;
+              btn.classList.remove('is-processing');
+            }
+            return;
+          }
+          addressText = `${streetAddress}, ${city}, ${barangay} ${postal}`;
+        }
+
+        params.set('address', addressText);
+      }
+
+      // Calculate final order total from summary (includes points and any delivery fee)
+      const totalText = document.getElementById('summaryTotal')?.textContent || '₱0';
+      const orderTotal = parseFloat(totalText.replace(/[^\d.]/g, '')) || 0;
+
+      const deliveryInfo = {
+        serviceType: currentService,
+        tableNumber: null,
+        storeLocation: currentService === 'pickup'
+          ? (document.getElementById('store-location').options[document.getElementById('store-location').selectedIndex]?.text || '')
+          : undefined,
+        address: currentService === 'delivery' ? params.get('address') || '' : undefined
+      };
+
+      const customerInfo = {
+        name: fullName,
+        phone: phone,
+        email: email || (authUser?.email || ''),
+        notes: notes || ''
+      };
+
+      // Upload GCash payment proof (if applicable) before creating the order
+      let paymentProof = null;
+      if (paymentMethod === 'gcash' && gcashFile) {
+        try {
+          paymentProof = await uploadPaymentProof(gcashFile);
+        } catch (error) {
+          console.error('Payment proof upload failed:', error);
+          alert('Failed to upload your GCash payment screenshot. Please check your connection and try again.');
+          if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('is-processing');
+          }
+          return;
+        }
+      }
+
+      // Ensure orderId is available after the try/catch so we can use it
+      // when awarding loyalty points and building the receipt URL.
+      let orderId = null;
+
+      try {
+        const user = window.firebaseAuth?.currentUser || null;
+
+        if (user) {
+          // Signed-in customer: use Firestore cart
+          orderId = await createOrderWithInventoryCheck(
+            deliveryInfo,
+            customerInfo,
+            orderTotal,
+            {
+              method: paymentType,
+              gcashProofUrl: paymentProof ? paymentProof.url : null,
+              gcashProofPath: paymentProof ? paymentProof.path : null
+            }
+          );
+          // Clear cart after a successful order
+          await clearUserCart();
+        } else {
+          // Guest: use local guest cart from localStorage
+          orderId = await createGuestOrderWithInventoryCheck(
+            deliveryInfo,
+            customerInfo,
+            orderTotal,
+            {
+              method: paymentType,
+              gcashProofUrl: paymentProof ? paymentProof.url : null,
+              gcashProofPath: paymentProof ? paymentProof.path : null
+            }
+          );
+          clearGuestCart();
+        }
+
+        if (orderId) {
+          params.set('orderId', orderId);
+        }
+      } catch (error) {
+        console.error('Checkout failed due to inventory validation:', error);
+        if (error && error.code === 'inventory/insufficient') {
+          alert(error.message || 'Sorry, one or more ingredients are out of stock for this order.');
+        } else {
+          alert('Unable to complete checkout right now. Please try again.');
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('is-processing');
+        }
+        return;
+      }
+
+      if (window.firebaseAuth && window.firebaseAuth.currentUser) {
+        await awardPointsForOrder(orderTotal, orderId);
+      }
+
+      window.location.href = `completion_receipt_page.html?${params.toString()}`;
+    }
+
+    function goToMenu() {
+      window.location.href = 'menu.html';
+    }
+
+    function goHome() {
+      window.location.href = 'index.html';
+    }
+
+    function goBackToCart() {
+      window.location.href = 'cart_review.html';
+    }
+
+    function toggleGCashDetails() {
+      const gcashDetails = document.getElementById('gcash-details');
+      const arrow = document.querySelector('.option-arrow i');
+      
+      if (!gcashDetails || !arrow) return;
+
+      if (gcashDetails.classList.contains('show')) {
+        gcashDetails.classList.remove('show');
+        arrow.classList.remove('fa-chevron-up');
+        arrow.classList.add('fa-chevron-down');
+      } else {
+        gcashDetails.classList.add('show');
+        arrow.classList.remove('fa-chevron-down');
+        arrow.classList.add('fa-chevron-up');
+      }
+    }
+
+    function handleFileUpload(input) {
+      const file = input.files[0];
+      const preview = document.getElementById('upload-preview');
+      
+      if (file) {
+        if (!file.type.startsWith('image/')) {
+          alert('Please select an image file');
+          return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+          alert('File size must be less than 5MB');
+          return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          preview.innerHTML = `
+            <div class="preview-item">
+              <img src="${e.target.result}" alt="Payment Proof" class="preview-image">
+              <div class="preview-info">
+                <span class="file-name">${file.name}</span>
+                <div class="preview-actions">
+                  <button type="button" class="remove-btn" onclick="removeFile()" title="Remove file">
+                    <i class="fas fa-times"></i>
+                  </button>
+                  <button type="button" class="remove-text-btn" onclick="removeFile()">
+                    <i class="fas fa-trash"></i>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function removeFile() {
+      const input = document.getElementById('payment-proof');
+      const preview = document.getElementById('upload-preview');
+      if (input) input.value = '';
+      if (preview) preview.innerHTML = '';
+    }
+
+    function updateEarnedPointsVisual() {
+      const row = document.getElementById('earnedPointsRow');
+      const valueEl = document.getElementById('earnedPointsValue');
+      const totalText = document.getElementById('summaryTotal')?.textContent || '₱0';
+      if (!row || !valueEl) return;
+
+      if (!loyaltyEnabled || !(window.firebaseAuth && window.firebaseAuth.currentUser)) {
+        row.style.display = 'none';
+        return;
+      }
+
+      const orderTotal = parseFloat(totalText.replace(/[^\d.]/g, '')) || 0;
+      const pointsEarned = Math.floor(orderTotal / 99);
+
+      if (pointsEarned > 0) {
+        row.style.display = 'flex';
+        valueEl.textContent = `+${pointsEarned} pts`;
+      } else {
+        row.style.display = 'none';
+      }
+    }
+
+    async function awardPointsForOrder(orderTotal, orderId) {
+      try {
+        if (!orderTotal || orderTotal < 99) return;
+
+        const pointsToAdd = Math.floor(orderTotal / 99);
+        if (pointsToAdd <= 0) return;
+
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+
+        if (!db || !auth || !window.doc || !window.getDoc || !window.setDoc) {
+          console.warn('Firebase not fully initialized for awarding points');
+          return;
+        }
+
+        const user = auth.currentUser;
+        if (!user) {
+          console.warn('No authenticated user; skipping points award');
+          return;
+        }
+
+        const userDocRef = window.doc(db, 'customers', user.uid);
+
+        let currentPoints = 0;
+        let history = [];
+        try {
+          const snap = await window.getDoc(userDocRef);
+          if (snap.exists()) {
+            const data = snap.data() || {};
+            currentPoints =
+              typeof data.points === 'number'
+                ? data.points
+                : Number(data.points) || 0;
+            if (Array.isArray(data.pointsHistory)) {
+              history = data.pointsHistory.slice(0);
+            }
+          }
+        } catch (readError) {
+          console.warn('Failed to read existing points, defaulting to 0:', readError);
+        }
+
+        const newPoints = currentPoints + pointsToAdd;
+        const nowIso = new Date().toISOString();
+
+        history.push({
+          points: pointsToAdd,
+          orderTotal: orderTotal,
+          createdAt: nowIso,
+          orderId: orderId || null
+        });
+
+        await window.setDoc(
+          userDocRef,
+          {
+            points: newPoints,
+            lastEarnedPoints: pointsToAdd,
+            lastEarnedAt: nowIso,
+            pointsHistory: history
+          },
+          { merge: true }
+        );
+
+        // Sync local cached points used by checkout
+        saveStoredPoints(newPoints);
+      } catch (error) {
+        console.error('Error awarding loyalty points:', error);
+      }
+    }
+
+    async function clearUserCart() {
+      try {
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+
+        if (!db || !auth || !window.doc || !window.collection || !window.getDocs || !window.deleteDoc) {
+          console.warn('Firebase not fully initialized for clearing cart');
+          return;
+        }
+
+        const user = auth.currentUser;
+        if (!user) {
+          console.warn('No authenticated user; skipping cart clear');
+          return;
+        }
+
+        const cartCol = window.collection(db, 'customers', user.uid, 'cartItems');
+        const snap = await window.getDocs(cartCol);
+
+        const deletions = [];
+        snap.forEach((docSnap) => {
+          const ref = window.doc(db, 'customers', user.uid, 'cartItems', docSnap.id);
+          deletions.push(window.deleteDoc(ref));
+        });
+
+        if (deletions.length) {
+          await Promise.all(deletions);
+        }
+
+        // Reset local cart count and notify listeners
+        try {
+          window.localStorage?.setItem('ppp_cart_count', '0');
+          document.dispatchEvent(new CustomEvent('cart:count-changed', {
+            detail: { count: 0 }
+          }));
+        } catch (e) {
+          console.warn('Failed to sync cleared cart count to localStorage:', e);
+        }
+      } catch (error) {
+        console.error('Error clearing user cart after order placement:', error);
+      }
+    }
+
+    async function createOrderWithInventoryCheck(deliveryInfo, customerInfo, orderTotal, paymentInfo) {
+      await waitForFirebaseReady();
+
+      const db = window.firebaseDb;
+      const auth = window.firebaseAuth;
+
+      if (!db || !auth || !window.doc || !window.collection || !window.getDocs || !window.runTransaction) {
+        console.warn('Firebase not fully initialized for order + inventory transaction');
+        throw new Error('Checkout is temporarily unavailable. Please try again later.');
+      }
+
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('You must be signed in to place an order.');
+      }
+
+      const customerRef = window.doc(db, 'customers', user.uid);
+      const cartItemsCol = window.collection(customerRef, 'cartItems');
+      const cartSnap = await window.getDocs(cartItemsCol);
+
+      const cartItems = [];
+      cartSnap.forEach((docSnap) => {
+        cartItems.push({ id: docSnap.id, ...(docSnap.data() || {}) });
+      });
+
+      if (!cartItems.length) {
+        throw new Error('Your cart is empty.');
+      }
+
+      const MENU_COLLECTION = 'menu';
+      const STOCK_COLLECTION = 'stocks';
+
+      return await window.runTransaction(db, async (transaction) => {
+        const ingredientRequirements = {}; // stockId -> amount needed
+        const insufficient = [];
+        const orderItems = [];
+        const stockSnapshots = {}; // stockId -> document snapshot (read once per stock)
+
+        for (const cartItem of cartItems) {
+          const qty =
+            typeof cartItem.quantity === 'number'
+              ? cartItem.quantity
+              : Number(cartItem.quantity) || 1;
+
+          const linePrice =
+            typeof cartItem.price === 'number'
+              ? cartItem.price
+              : Number(cartItem.price) || 0;
+
+          const unitPrice = qty > 0 ? linePrice / qty : linePrice;
+
+          orderItems.push({
+            itemId: cartItem.itemId || cartItem.id,
+            name: cartItem.name || 'Item',
+            quantity: qty,
+            unitPrice: unitPrice,
+            lineTotal: linePrice || unitPrice * qty
+          });
+
+          const menuId = cartItem.itemId;
+          if (!menuId) continue;
+
+          const menuRef = window.doc(db, MENU_COLLECTION, menuId);
+          const menuSnap = await transaction.get(menuRef);
+          if (!menuSnap.exists()) continue;
+
+          const menuData = menuSnap.data() || {};
+          const ingredients = Array.isArray(menuData.ingredients) ? menuData.ingredients : [];
+
+          ingredients.forEach((ing) => {
+            const stockId = ing.stockId || ing.ingredientId || ing.ingredientName;
+            if (!stockId) return;
+
+            const perDish =
+              typeof ing.amountPerDish === 'number'
+                ? ing.amountPerDish
+                : typeof ing.baseAmountPerDish === 'number'
+                  ? ing.baseAmountPerDish
+                  : typeof ing.baseAmountPerDishGrams === 'number'
+                    ? ing.baseAmountPerDishGrams
+                    : 0;
+            if (!perDish) return;
+
+            const required = perDish * qty;
+            ingredientRequirements[stockId] = (ingredientRequirements[stockId] || 0) + required;
+          });
+        }
+
+        // Check stock (all reads happen before any writes)
+        for (const [stockId, required] of Object.entries(ingredientRequirements)) {
+          const stockRef = window.doc(db, STOCK_COLLECTION, stockId);
+          const stockSnap = await transaction.get(stockRef);
+
+          // Cache snapshot for later write phase so we don't read after writes
+          stockSnapshots[stockId] = stockSnap;
+
+          // If there is no matching stock document configured for this ingredient,
+          // skip it instead of treating it as "0" and failing the whole order.
+          if (!stockSnap.exists()) {
+            continue;
+          }
+
+          const stockData = stockSnap.data() || {};
+
+          const available =
+            typeof stockData.amount === 'number'
+              ? stockData.amount
+              : typeof stockData.quantity === 'number'
+                ? stockData.quantity
+                : typeof stockData.stock === 'number'
+                  ? stockData.stock
+                  : 0;
+
+          if (available < required) {
+            insufficient.push({
+              stockId,
+              required,
+              available
+            });
+          }
+        }
+
+        // If any tracked ingredients are low, block the order and surface a clear error.
+        if (insufficient.length > 0) {
+          const details = insufficient
+            .map((i) => `${i.stockId} (need ${i.required}, have ${i.available})`)
+            .join(', ');
+          const error = new Error(`Insufficient stock for: ${details}`);
+          error.code = 'inventory/insufficient';
+          throw error;
+        }
+
+        // Deduct stock (writes only, using cached snapshots from the read phase)
+        for (const [stockId, required] of Object.entries(ingredientRequirements)) {
+          const stockRef = window.doc(db, STOCK_COLLECTION, stockId);
+          const stockSnap = stockSnapshots[stockId];
+
+          // Only deduct from stocks that actually exist; ingredients without
+          // a configured stock document are treated as non-tracked.
+          if (!stockSnap || !stockSnap.exists()) {
+            continue;
+          }
+
+          const stockData = stockSnap.data() || {};
+
+          const available =
+            typeof stockData.amount === 'number'
+              ? stockData.amount
+              : typeof stockData.quantity === 'number'
+                ? stockData.quantity
+                : typeof stockData.stock === 'number'
+                  ? stockData.stock
+                  : 0;
+
+          const newAmount = Math.max(0, available - required);
+          const updatePayload = {};
+          if (typeof stockData.amount === 'number') {
+            updatePayload.amount = newAmount;
+          } else if (typeof stockData.quantity === 'number') {
+            updatePayload.quantity = newAmount;
+          } else {
+            updatePayload.amount = newAmount;
+          }
+
+          transaction.update(stockRef, updatePayload);
+        }
+
+        // Create order document
+        const ordersCol = window.collection(db, 'orders');
+        const orderRef = window.doc(ordersCol);
+
+        const now = new Date();
+        const dateOnly = now.toISOString().split('T')[0];
+
+        const orderDoc = {
+          userId: user.uid,
+          items: orderItems,
+          total: orderTotal,
+          deliveryInfo: {
+            serviceType: deliveryInfo.serviceType,
+            tableNumber: deliveryInfo.tableNumber || null,
+            storeLocation: deliveryInfo.storeLocation || null,
+            address: deliveryInfo.address || null
+          },
+          customerInfo: {
+            name: customerInfo && customerInfo.name ? customerInfo.name : null,
+            phone: customerInfo && customerInfo.phone ? customerInfo.phone : null,
+            email: customerInfo && customerInfo.email ? customerInfo.email : null,
+            notes: customerInfo && customerInfo.notes ? customerInfo.notes : null
+          },
+          payment: {
+            method: paymentInfo && paymentInfo.method ? paymentInfo.method : null,
+            gcashProofUrl: paymentInfo && paymentInfo.gcashProofUrl ? paymentInfo.gcashProofUrl : null,
+            gcashProofPath: paymentInfo && paymentInfo.gcashProofPath ? paymentInfo.gcashProofPath : null
+          },
+          timestamp: dateOnly,
+          status: 'pending'
+        };
+
+        transaction.set(orderRef, orderDoc);
+
+        return orderRef.id;
+      });
+    }
+
+    async function createGuestOrderWithInventoryCheck(deliveryInfo, customerInfo, orderTotal, paymentInfo) {
+      await waitForFirebaseReady();
+
+      const db = window.firebaseDb;
+
+      if (!db || !window.doc || !window.collection || !window.getDocs || !window.runTransaction) {
+        console.warn('Firebase not fully initialized for guest order + inventory transaction');
+        throw new Error('Checkout is temporarily unavailable. Please try again later.');
+      }
+
+      const cartItems = getGuestCart();
+      if (!Array.isArray(cartItems) || !cartItems.length) {
+        throw new Error('Your cart is empty.');
+      }
+
+      const MENU_COLLECTION = 'menu';
+      const STOCK_COLLECTION = 'stocks';
+
+      return await window.runTransaction(db, async (transaction) => {
+        const ingredientRequirements = {}; // stockId -> amount needed
+        const insufficient = [];
+        const orderItems = [];
+        const stockSnapshots = {}; // stockId -> document snapshot (read once per stock)
+
+        for (const cartItem of cartItems) {
+          const qty =
+            typeof cartItem.quantity === 'number'
+              ? cartItem.quantity
+              : Number(cartItem.quantity) || 1;
+
+          const linePrice =
+            typeof cartItem.price === 'number'
+              ? cartItem.price
+              : Number(cartItem.price) || 0;
+
+          const unitPrice = qty > 0 ? linePrice / qty : linePrice;
+
+          orderItems.push({
+            itemId: cartItem.itemId || cartItem.id,
+            name: cartItem.name || 'Item',
+            quantity: qty,
+            unitPrice: unitPrice,
+            lineTotal: linePrice || unitPrice * qty
+          });
+
+          const menuId = cartItem.itemId;
+          if (!menuId) continue;
+
+          const menuRef = window.doc(db, MENU_COLLECTION, menuId);
+          const menuSnap = await transaction.get(menuRef);
+          if (!menuSnap.exists()) continue;
+
+          const menuData = menuSnap.data() || {};
+          const ingredients = Array.isArray(menuData.ingredients) ? menuData.ingredients : [];
+
+          ingredients.forEach((ing) => {
+            const stockId = ing.stockId || ing.ingredientId || ing.ingredientName;
+            if (!stockId) return;
+
+            const perDish =
+              typeof ing.amountPerDish === 'number'
+                ? ing.amountPerDish
+                : typeof ing.baseAmountPerDish === 'number'
+                  ? ing.baseAmountPerDish
+                  : typeof ing.baseAmountPerDishGrams === 'number'
+                    ? ing.baseAmountPerDishGrams
+                    : 0;
+            if (!perDish) return;
+
+            const required = perDish * qty;
+            ingredientRequirements[stockId] = (ingredientRequirements[stockId] || 0) + required;
+          });
+        }
+
+        // Check stock (all reads happen before any writes)
+        for (const [stockId, required] of Object.entries(ingredientRequirements)) {
+          const stockRef = window.doc(db, STOCK_COLLECTION, stockId);
+          const stockSnap = await transaction.get(stockRef);
+
+          // Cache snapshot so we don't read after writes
+          stockSnapshots[stockId] = stockSnap;
+
+          // Skip ingredients that don't have a matching stock document configured,
+          // so multi-ingredient dishes don't fail just because one ingredient
+          // isn't tracked in inventory yet.
+          if (!stockSnap.exists()) {
+            continue;
+          }
+
+          const stockData = stockSnap.data() || {};
+
+          const available =
+            typeof stockData.amount === 'number'
+              ? stockData.amount
+              : typeof stockData.quantity === 'number'
+                ? stockData.quantity
+                : typeof stockData.stock === 'number'
+                  ? stockData.stock
+                  : 0;
+
+          if (available < required) {
+            insufficient.push({
+              stockId,
+              required,
+              available
+            });
+          }
+        }
+
+        // Guests also cannot order when tracked stock is insufficient.
+        if (insufficient.length > 0) {
+          const details = insufficient
+            .map((i) => `${i.stockId} (need ${i.required}, have ${i.available})`)
+            .join(', ');
+          const error = new Error(`Insufficient stock for: ${details}`);
+          error.code = 'inventory/insufficient';
+          throw error;
+        }
+
+        // Deduct stock (writes only, using cached snapshots from the read phase)
+        for (const [stockId, required] of Object.entries(ingredientRequirements)) {
+          const stockRef = window.doc(db, STOCK_COLLECTION, stockId);
+          const stockSnap = stockSnapshots[stockId];
+
+          // Only adjust inventory for stock items that actually exist.
+          if (!stockSnap || !stockSnap.exists()) {
+            continue;
+          }
+
+          const stockData = stockSnap.data() || {};
+
+          const available =
+            typeof stockData.amount === 'number'
+              ? stockData.amount
+              : typeof stockData.quantity === 'number'
+                ? stockData.quantity
+                : typeof stockData.stock === 'number'
+                  ? stockData.stock
+                  : 0;
+
+          const newAmount = Math.max(0, available - required);
+          const updatePayload = {};
+          if (typeof stockData.amount === 'number') {
+            updatePayload.amount = newAmount;
+          } else if (typeof stockData.quantity === 'number') {
+            updatePayload.quantity = newAmount;
+          } else {
+            updatePayload.amount = newAmount;
+          }
+
+          transaction.update(stockRef, updatePayload);
+        }
+
+        // Create order document for guest
+        const ordersCol = window.collection(db, 'orders');
+        const orderRef = window.doc(ordersCol);
+
+        const now = new Date();
+        const dateOnly = now.toISOString().split('T')[0];
+
+        const orderDoc = {
+          userId: null,
+          isGuest: true,
+          items: orderItems,
+          total: orderTotal,
+          deliveryInfo: {
+            serviceType: deliveryInfo.serviceType,
+            tableNumber: deliveryInfo.tableNumber || null,
+            storeLocation: deliveryInfo.storeLocation || null,
+            address: deliveryInfo.address || null
+          },
+          customerInfo: {
+            name: customerInfo && customerInfo.name ? customerInfo.name : null,
+            phone: customerInfo && customerInfo.phone ? customerInfo.phone : null,
+            email: customerInfo && customerInfo.email ? customerInfo.email : null,
+            notes: customerInfo && customerInfo.notes ? customerInfo.notes : null
+          },
+          payment: {
+            method: paymentInfo && paymentInfo.method ? paymentInfo.method : null,
+            gcashProofUrl: paymentInfo && paymentInfo.gcashProofUrl ? paymentInfo.gcashProofUrl : null,
+            gcashProofPath: paymentInfo && paymentInfo.gcashProofPath ? paymentInfo.gcashProofPath : null
+          },
+          timestamp: dateOnly,
+          status: 'pending'
+        };
+
+        transaction.set(orderRef, orderDoc);
+
+        return orderRef.id;
+      });
+    }
+
+    async function waitForFirebaseReady(maxAttempts = 40, delayMs = 50) {
+      let attempts = 0;
+      while (!window.firebaseReady && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        attempts++;
+      }
+    }
+
+    async function loadCheckoutTotalsFromFirestore(authUser) {
+      try {
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+
+        if (!db || !auth || !window.doc || !window.collection || !window.getDocs) {
+          console.warn('Firebase not fully initialized for checkout summary');
+          baseSubtotal = 0;
+          initPointsSummary();
+          return;
+        }
+
+        const user = authUser || auth.currentUser;
+        if (!user) {
+          console.warn('No authenticated user on checkout page; using guest cart for summary');
+          await loadCheckoutTotalsFromGuestCart();
+          return;
+        }
+
+        const customerRef = window.doc(db, 'customers', user.uid);
+        const cartItemsCol = window.collection(customerRef, 'cartItems');
+        const snap = await window.getDocs(cartItemsCol);
+
+        let subtotal = 0;
+        let rowsHtml = '';
+
+        snap.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          const name = data.name || 'Item';
+          const quantity =
+            typeof data.quantity === 'number'
+              ? data.quantity
+              : Number(data.quantity) || 1;
+          const numericPrice =
+            typeof data.price === 'number'
+              ? data.price
+              : Number(data.price) || 0;
+
+          subtotal += numericPrice;
+
+          rowsHtml += `
+            <div class="summary-row">
+              <span class="summary-label">${name} x ${quantity}</span>
+              <span class="summary-value">₱${numericPrice.toFixed(2)}</span>
+            </div>
+          `;
+        });
+
+        const lineItemsContainer = document.getElementById('summaryLineItems');
+        if (lineItemsContainer) {
+          lineItemsContainer.innerHTML = rowsHtml;
+        }
+
+        baseSubtotal = subtotal;
+      } catch (error) {
+        console.error('Error loading checkout totals from Firestore:', error);
+        baseSubtotal = 0;
+      }
+
+      initPointsSummary();
+    }
+
+    async function loadCheckoutTotalsFromGuestCart() {
+      try {
+        const cart = getGuestCart();
+
+        let subtotal = 0;
+        let rowsHtml = '';
+
+        cart.forEach((item) => {
+          const name = item.name || 'Item';
+          const quantity =
+            typeof item.quantity === 'number'
+              ? item.quantity
+              : Number(item.quantity) || 1;
+          const lineTotal =
+            typeof item.price === 'number'
+              ? item.price
+              : Number(item.price) || 0;
+
+          subtotal += lineTotal;
+
+          rowsHtml += `
+            <div class="summary-row">
+              <span class="summary-label">${name} x ${quantity}</span>
+              <span class="summary-value">₱${lineTotal.toFixed(2)}</span>
+            </div>
+          `;
+        });
+
+        const lineItemsContainer = document.getElementById('summaryLineItems');
+        if (lineItemsContainer) {
+          lineItemsContainer.innerHTML = rowsHtml;
+        }
+
+        baseSubtotal = subtotal;
+      } catch (error) {
+        console.error('Error loading checkout totals from guest cart:', error);
+        baseSubtotal = 0;
+      }
+
+      initPointsSummary();
+    }
+
+    async function loadAddressesForCheckout(authUser) {
+      try {
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+
+        if (!db || !auth || !window.doc || !window.getDoc) {
+          console.warn('Firebase not fully initialized for checkout addresses');
+          return;
+        }
+
+        const user = authUser || auth.currentUser;
+        if (!user) {
+          console.warn('No authenticated user on checkout page; no saved addresses');
+          return;
+        }
+
+        const userDocRef = window.doc(db, 'customers', user.uid);
+        const userSnap = await window.getDoc(userDocRef);
+        const select = document.getElementById('delivery-address');
+        const nameInput = document.getElementById('contactName');
+        const phoneInput = document.getElementById('contactPhone');
+        const emailInput = document.getElementById('contactEmail');
+
+        let addresses = [];
+        let userData = null;
+        if (userSnap.exists()) {
+          userData = userSnap.data() || {};
+          addresses = Array.isArray(userData.addresses) ? userData.addresses : [];
+        }
+
+        // Prefill contact details for logged-in customers
+        if (nameInput && user) {
+          const fullName = `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || user.displayName || '';
+          nameInput.value = fullName;
+        }
+        if (phoneInput && userData && userData.phone) {
+          phoneInput.value = userData.phone;
+        }
+        if (emailInput) {
+          emailInput.value = (userData && userData.email) || user.email || '';
+        }
+
+        if (select) {
+          checkoutAddresses = addresses;
+
+          let optionsHtml = '<option value=\"\">Select saved address</option>';
+          addresses.forEach((address) => {
+            const id = address.id || `addr-${Date.now()}`;
+            const barangay = address.barangay || address.province || '';
+            const fullAddr =
+              address.fullAddress ||
+              `${address.street || ''}, ${address.city || ''}, ${barangay} ${address.postal || ''}`;
+            const label = address.label || 'Other';
+            optionsHtml += `<option value=\"${id}\">${label} - ${fullAddr}</option>`;
+          });
+          optionsHtml += '<option value=\"new\">+ Add New Address</option>';
+
+          select.innerHTML = optionsHtml;
+        }
+      } catch (error) {
+        console.error('Error loading checkout addresses from Firestore:', error);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      const service = (params.get('service') || '').toLowerCase();
+      const table = (params.get('table') || '').trim();
+
+      const dinePill = document.querySelector('.service-pill[data-service="dinein"]');
+      const dinePanel = document.getElementById('service-dinein');
+      const tableInput = document.getElementById('table-number');
+
+      const isDineInFromQr = service === 'dinein' && !!table;
+
+      // For normal customers (not from a table QR), completely hide
+      // the Dine-In option so they cannot select it.
+      if (!isDineInFromQr) {
+        if (dinePill) dinePill.classList.add('hidden');
+        if (dinePanel) dinePanel.classList.add('hidden');
+      } else {
+        // QR from a table: show dine-in and auto-fill the table number.
+        if (dinePill) dinePill.classList.remove('hidden');
+        if (dinePanel) dinePanel.classList.remove('hidden');
+        if (tableInput) {
+          tableInput.value = table;
+          tableInput.readOnly = true;
+        }
+      }
+
+      const initialService = getInitialServiceType();
+      setServiceType(initialService);
+
+      document.querySelectorAll('.service-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const type = btn.dataset.service;
+          if (type) setServiceType(type);
+        });
+      });
+
+      // Load totals based on cart contents for the logged-in user or guest
+      if (window.firebaseAuth && window.onAuthStateChanged) {
+        window.onAuthStateChanged(window.firebaseAuth, (user) => {
+          loyaltyEnabled = !!user;
+          if (user) {
+            loadCheckoutTotalsFromFirestore(user);
+            loadAddressesForCheckout(user);
+          } else {
+            loadCheckoutTotalsFromGuestCart();
+            loadAddressesForCheckout(null);
+          }
+        });
+      } else {
+        loyaltyEnabled = false;
+        loadCheckoutTotalsFromGuestCart();
+        loadAddressesForCheckout(null);
+      }
+    });
+  </script>
+
+  <style>
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #eee;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #2196f3;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .required {
+      color: #e53935;
+      margin-left: 2px;
+    }
+
+    .service-type-section {
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    .service-type-toggle {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      background: #f8f9fa;
+      padding: 6px;
+      border-radius: 999px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .service-pill {
+      border: none;
+      background: transparent;
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #555;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .service-pill i {
+      font-size: 0.9rem;
+    }
+
+    .service-pill.active {
+      background: #fff;
+      color: #e53935;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .gcash-details {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      margin-top: 8px;
+    }
+
+    .gcash-details.show {
+      max-height: 800px;
+    }
+
+    .gcash-info-card {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 8px;
+    }
+
+    .gcash-header h4 {
+      margin: 0 0 8px 0;
+      color: #333;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .gcash-header p {
+      margin: 0 0 16px 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .gcash-content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .gcash-number,
+    .gcash-name {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .gcash-number i,
+    .gcash-name i {
+      width: 20px;
+      color: #dc3545;
+      font-size: 16px;
+    }
+
+    .gcash-number div,
+    .gcash-name div {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .gcash-number .label,
+    .gcash-name .label {
+      font-size: 12px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .gcash-number .value,
+    .gcash-name .value {
+      font-size: 14px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .gcash-qr {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .gcash-qr .label {
+      font-size: 12px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .qr-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #e9ecef;
+    }
+
+    .qr-image {
+      width: 120px;
+      height: 120px;
+      object-fit: contain;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+    }
+
+    .qr-container p {
+      margin: 0;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+
+    .payment-proof {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .payment-proof .label {
+      font-size: 12px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .proof-upload {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .upload-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .upload-btn:hover {
+      background: #c82333;
+    }
+
+    .upload-btn i {
+      font-size: 16px;
+    }
+
+    .upload-preview {
+      min-height: 20px;
+    }
+
+    .preview-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: white;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #e9ecef;
+    }
+
+    .preview-image {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid #dee2e6;
+    }
+
+    .preview-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .file-name {
+      font-size: 12px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .preview-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .remove-btn {
+      align-self: flex-start;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background-color 0.3s ease;
+    }
+
+    .remove-btn:hover {
+      background: #c82333;
+    }
+
+    .remove-text-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .remove-text-btn:hover {
+      background: #c82333;
+    }
+
+    .remove-text-btn i {
+      font-size: 12px;
+    }
+
+    .option-arrow {
+      margin-left: auto;
+      color: #666;
+      transition: transform 0.3s ease;
+    }
+
+    /* Simple error highlight for missing checkout fields */
+    .checkout-error {
+      border-color: #e53935 !important;
+      box-shadow: 0 0 0 1px rgba(229, 57, 53, 0.2);
+    }
+
+    .delivery-options.checkout-error {
+      border: 1px solid #e53935;
+      border-radius: 12px;
+      padding: 8px;
+    }
+
+    /* Ensure equal size and alignment for checkout action buttons */
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .action-buttons .add-more-btn,
+    .action-buttons .proceed-btn {
+      padding: 14px 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 12px;
+      height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 360px;
+      box-sizing: border-box;
+    }
+
+    @media (max-width: 600px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .service-type-toggle {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</body>
+</html>
+
+

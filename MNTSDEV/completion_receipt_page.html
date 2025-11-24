@@ -18,6 +18,9 @@
       <div class="nav-icon home-icon" title="Home" onclick="goHome()">
         <i class="fas fa-home"></i>
       </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
+      </div>
       <div class="nav-icon account-icon" title="Account" onclick="goToAccount()">
         <i class="fas fa-user"></i>
       </div>
@@ -30,23 +33,7 @@
       <div class="cart-header">
         <div class="cart-title-section">
           <h2 class="cart-title">Your Order</h2>
-          <p class="cart-subtitle">Review your items before checkout</p>
-        </div>
-        <div class="cart-status">
-          <div class="status-indicator completed">
-            <i class="fas fa-shopping-cart"></i>
-            <span>Cart</span>
-          </div>
-          <div class="status-line completed"></div>
-          <div class="status-indicator completed">
-            <i class="fas fa-credit-card"></i>
-            <span>Checkout & Payment</span>
-          </div>
-          <div class="status-line completed"></div>
-          <div class="status-indicator active">
-            <i class="fas fa-check-circle"></i>
-            <span>Complete</span>
-          </div>
+          <p class="cart-subtitle">Order summary</p>
         </div>
       </div>
 
@@ -92,63 +79,53 @@
 
           <div class="order-items">
             <h3 class="items-title">Order Items</h3>
-            <div class="item-row">
-              <span class="item-name">Baby Back Ribs</span>
-              <span class="item-price">₱150.00</span>
-            </div>
-            <div class="item-row">
-              <span class="item-name">Iced Tea - Large</span>
-              <span class="item-price">₱101.00</span>
-            </div>
+            <div id="orderItems"></div>
           </div>
 
           <div class="total-section">
             <div class="total-row">
               <span class="total-label">Sub-Total</span>
-              <span class="total-value">₱251.00</span>
+              <span class="total-value" id="receiptSubtotal">₱251.00</span>
+            </div>
+            <div class="total-row" id="receiptDeliveryFeeRow" style="display:none;">
+              <span class="total-label">Delivery Fee</span>
+              <span class="total-value" id="receiptDeliveryFee">₱0.00</span>
             </div>
             <div class="total-row discount">
               <span class="total-label">Points Applied</span>
-              <span class="total-value">-₱30.00</span>
+              <span class="total-value" id="receiptPoints">-₱30.00</span>
             </div>
             <div class="total-row final-total">
               <span class="total-label">Total</span>
-              <span class="total-value">₱221.00</span>
+              <span class="total-value" id="receiptTotal">₱221.00</span>
             </div>
           </div>
         </div>
 
-        <div class="receipt-message">
-          <p>Your order has been received and will be prepared shortly.</p>
-          <p>Please proceed to the counter to complete your payment.</p>
-        </div>
       </div>
 
       <!-- Action Buttons -->
       <div class="action-buttons">
         <button class="add-more-btn" onclick="goToMenu()">
-          <i class="fas fa-home"></i>
           <span>Back to Menu</span>
         </button>
         <button class="proceed-btn" onclick="printReceipt()">
-          <i class="fas fa-print"></i>
           <span>Print Receipt</span>
         </button>
       </div>
     </div>
   </main>
 
+  <script type="module" src="firebase-init.js"></script>
   <script>
-    // Generate random order number
+    // Get URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+
+    // Fallback order number and time (will be overridden if we can load real order)
     document.getElementById('orderNumber').textContent = Math.floor(Math.random() * 9000) + 1000;
-    
-    // Set current time
     const now = new Date();
     document.getElementById('orderTime').textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-    // Get URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    
     // Get payment method from URL parameter
     const paymentMethod = urlParams.get('payment') || 'Cash Payment';
     document.getElementById('paymentMethod').textContent = paymentMethod;
@@ -177,25 +154,6 @@
       }
     }
 
-    // Get contact number from URL parameter (for delivery)
-    const contactNumber = urlParams.get('contact');
-    if (contactNumber) {
-      // Add contact number row if it exists
-      const receiptInfo = document.querySelector('.receipt-info');
-      const contactRow = document.createElement('div');
-      contactRow.className = 'info-row';
-      contactRow.innerHTML = `
-        <span class="info-label">Contact Number:</span>
-        <span class="info-value">${contactNumber}</span>
-      `;
-      // Insert after address row or table number row
-      const addressRow = document.querySelector('.info-row:nth-child(3)');
-      const insertAfter = addressRow || document.querySelector('.info-row:nth-child(2)');
-      if (insertAfter) {
-        insertAfter.parentNode.insertBefore(contactRow, insertAfter.nextSibling);
-      }
-    }
-
     // Get store location from URL parameter (for pickup)
     const storeLocation = urlParams.get('store');
     if (storeLocation) {
@@ -215,13 +173,17 @@
     }
 
     // Update service type based on URL parameters
-    const serviceType = document.querySelector('.info-row:first-child .info-value');
+    const serviceTypeEl = document.querySelector('.info-row:first-child .info-value');
+    const tableRow = document.querySelector('.info-row:nth-child(2)');
     if (deliveryAddress) {
-      serviceType.textContent = 'Delivery';
+      serviceTypeEl.textContent = 'Delivery';
+      if (tableRow) tableRow.style.display = 'none';
     } else if (storeLocation) {
-      serviceType.textContent = 'Pickup';
+      serviceTypeEl.textContent = 'Pickup';
+      if (tableRow) tableRow.style.display = 'none';
     } else {
-      serviceType.textContent = 'Dine-In';
+      serviceTypeEl.textContent = 'Dine-In';
+      if (tableRow) tableRow.style.display = '';
     }
 
     // Update estimated time based on service type
@@ -235,7 +197,7 @@
     }
 
     function goHome() {
-      window.location.href = 'menu.html';
+      window.location.href = 'index.html';
     }
 
     function goToAccount() {
@@ -249,6 +211,116 @@
     function printReceipt() {
       window.print();
     }
+
+    // -------- Load real order data from Firestore based on orderId --------
+    async function waitForFirebaseReady(maxAttempts = 40, delayMs = 50) {
+      let attempts = 0;
+      while (!window.firebaseReady && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        attempts++;
+      }
+    }
+
+    async function loadOrderFromFirestore() {
+      const orderId = urlParams.get('orderId');
+      if (!orderId) return;
+
+      try {
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        if (!db || !window.doc || !window.getDoc) {
+          console.warn('Firebase not fully initialized for receipt order load');
+          return;
+        }
+
+        const orderRef = window.doc(db, 'orders', orderId);
+        const snap = await window.getDoc(orderRef);
+        if (!snap.exists()) {
+          console.warn('Order not found for receipt page:', orderId);
+          return;
+        }
+
+        const order = snap.data() || {};
+        populateReceiptFromOrder(order, orderId);
+      } catch (error) {
+        console.error('Error loading order for receipt:', error);
+      }
+    }
+
+    function populateReceiptFromOrder(order, orderId) {
+      // Order number
+      const orderNumberEl = document.getElementById('orderNumber');
+      if (orderNumberEl) {
+        orderNumberEl.textContent = orderId;
+      }
+
+      // Items list
+      const itemsContainer = document.getElementById('orderItems');
+      if (itemsContainer && Array.isArray(order.items)) {
+        let html = '';
+        let subtotal = 0;
+
+        order.items.forEach((item) => {
+          const name = item.name || 'Item';
+          const qty =
+            typeof item.quantity === 'number'
+              ? item.quantity
+              : Number(item.quantity) || 1;
+          const lineTotal =
+            typeof item.lineTotal === 'number'
+              ? item.lineTotal
+              : Number(item.lineTotal) || 0;
+
+          subtotal += lineTotal;
+
+          html += `
+            <div class="item-row">
+              <span class="item-name">${name} x ${qty}</span>
+              <span class="item-price">₱${lineTotal.toFixed(2)}</span>
+            </div>
+          `;
+        });
+
+        itemsContainer.innerHTML = html;
+
+        // Totals
+        const total =
+          typeof order.total === 'number'
+            ? order.total
+            : Number(order.total) || subtotal;
+
+        // Determine if this is a delivery order
+        const serviceType =
+          (order.deliveryInfo && order.deliveryInfo.serviceType) || null;
+        const isDelivery = serviceType == 'delivery';
+        const deliveryFee = isDelivery ? 50 : 0;
+
+        // Discount is any difference between subtotal + fee and final total
+        const discount = Math.max(0, subtotal + deliveryFee - total);
+
+        const subEl = document.getElementById('receiptSubtotal');
+        const ptsEl = document.getElementById('receiptPoints');
+        const totEl = document.getElementById('receiptTotal');
+        const feeRowEl = document.getElementById('receiptDeliveryFeeRow');
+        const feeValEl = document.getElementById('receiptDeliveryFee');
+
+        if (subEl) subEl.textContent = `₱${subtotal.toFixed(2)}`;
+        if (feeRowEl && feeValEl) {
+          if (isDelivery) {
+            feeRowEl.style.display = 'flex';
+            feeValEl.textContent = `₱${deliveryFee.toFixed(2)}`;
+          } else {
+            feeRowEl.style.display = 'none';
+          }
+        }
+        if (ptsEl) ptsEl.textContent = `-₱${discount.toFixed(2)}`;
+        if (totEl) totEl.textContent = `₱${total.toFixed(2)}`;
+      }
+    }
+
+    // Load order details on page load
+    document.addEventListener('DOMContentLoaded', loadOrderFromFirestore);
   </script>
 
   <style>
@@ -415,23 +487,6 @@
       color: #333;
     }
 
-    .receipt-message {
-      background: #f8f9fa;
-      padding: 16px;
-      border-radius: 8px;
-      border-left: 4px solid #2196f3;
-    }
-
-    .receipt-message p {
-      margin: 0 0 8px 0;
-      font-size: 14px;
-      color: #333;
-    }
-
-    .receipt-message p:last-child {
-      margin-bottom: 0;
-    }
-
     /* Status indicator styles - exact copy from style.css */
     .cart-status {
       display: flex;
@@ -481,6 +536,31 @@
       height: 2px;
       background: #e0e0e0;
       border-radius: 1px;
+    }
+
+    /* Ensure equal size and alignment for completion page action buttons */
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .action-buttons .add-more-btn,
+    .action-buttons .proceed-btn {
+      padding: 14px 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 12px;
+      height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 360px;
+      box-sizing: border-box;
     }
 
     @media print {

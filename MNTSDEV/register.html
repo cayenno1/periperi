@@ -21,6 +21,9 @@
             <div class="nav-icon home-icon" title="Home" onclick="goHome()">
                 <i class="fas fa-home"></i>
             </div>
+            <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+                <i class="fas fa-utensils"></i>
+            </div>
         </div>
     </header>
 
@@ -41,31 +44,31 @@
             <form class="restaurant-auth-form" id="registerForm">
                 <div class="form-row">
                     <div class="restaurant-form-group">
-                        <label for="firstName" class="restaurant-form-label">First Name</label>
+                        <label for="firstName" class="restaurant-form-label">First Name <span style="color:#e53935;">*</span></label>
                         <input type="text" id="firstName" name="firstName" class="restaurant-form-input" placeholder="Enter first name" required>
                         <span class="error-message" id="firstNameError"></span>
                     </div>
                     <div class="restaurant-form-group">
-                        <label for="lastName" class="restaurant-form-label">Last Name</label>
+                        <label for="lastName" class="restaurant-form-label">Last Name <span style="color:#e53935;">*</span></label>
                         <input type="text" id="lastName" name="lastName" class="restaurant-form-input" placeholder="Enter last name" required>
                         <span class="error-message" id="lastNameError"></span>
                     </div>
                 </div>
 
                 <div class="restaurant-form-group">
-                    <label for="email" class="restaurant-form-label">Email Address</label>
+                    <label for="email" class="restaurant-form-label">Email Address <span style="color:#e53935;">*</span></label>
                     <input type="email" id="email" name="email" class="restaurant-form-input" placeholder="Enter your email" required>
                     <span class="error-message" id="emailError"></span>
                 </div>
 
                 <div class="restaurant-form-group">
-                    <label for="phone" class="restaurant-form-label">Phone Number</label>
+                    <label for="phone" class="restaurant-form-label">Phone Number <span style="color:#e53935;">*</span></label>
                     <input type="tel" id="phone" name="phone" class="restaurant-form-input" placeholder="Enter phone number" required>
                     <span class="error-message" id="phoneError"></span>
                 </div>
 
                 <div class="restaurant-form-group">
-                    <label for="password" class="restaurant-form-label">Password</label>
+                    <label for="password" class="restaurant-form-label">Password <span style="color:#e53935;">*</span></label>
                     <div class="password-input-container">
                         <input type="password" id="password" name="password" class="restaurant-form-input" placeholder="Create a password" required>
                         <button type="button" class="password-toggle" id="passwordToggle">
@@ -82,7 +85,7 @@
                 </div>
 
                 <div class="restaurant-form-group">
-                    <label for="confirmPassword" class="restaurant-form-label">Confirm Password</label>
+                    <label for="confirmPassword" class="restaurant-form-label">Confirm Password <span style="color:#e53935;">*</span></label>
                     <div class="password-input-container">
                         <input type="password" id="confirmPassword" name="confirmPassword" class="restaurant-form-input" placeholder="Confirm your password" required>
                         <button type="button" class="password-toggle" id="confirmPasswordToggle">
@@ -112,20 +115,25 @@
         </div>
     </div>
 
-    <!-- Success Modal -->
+    <!-- Success / Verification Modal -->
     <div class="success-modal" id="successModal">
         <div class="success-modal-content">
             <div class="success-checkmark">
-                <i class="fas fa-check-circle"></i>
+                <i class="fas fa-exclamation-triangle" style="color:#ffb300;"></i>
             </div>
-            <h2 class="success-title">Account Created Successfully!</h2>
-            <p class="success-message">Redirecting to login page</p>
+            <h2 class="success-title">Verify Your Email</h2>
+            <p class="success-message">
+                We sent a verification link to your email. Please verify your account, then click the button below to proceed to the login page.
+            </p>
+            <button class="restaurant-auth-button" id="successCloseBtn">
+                Proceed to Login
+            </button>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -144,6 +152,7 @@
         window.firebaseAuth = auth;
         window.firebaseDb = db;
         window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.sendEmailVerification = sendEmailVerification;
         window.setDoc = setDoc;
         window.doc = doc;
     </script>
@@ -152,6 +161,9 @@
         // Navigation
         function goHome() {
             window.location.href = 'index.html';
+        }
+        function goToMenu() {
+            window.location.href = 'menu.html';
         }
 
         // Password toggle
@@ -444,13 +456,22 @@
         });
         document.getElementById('terms').addEventListener('change', () => clearError('terms'));
 
-        // Success modal
+        // Success / verification modal
         function showSuccessModal() {
             const modal = document.getElementById('successModal');
+            const closeBtn = document.getElementById('successCloseBtn');
+
+            if (!modal) return;
+
             modal.style.display = 'flex';
-            setTimeout(() => {
-                window.location.href = 'login.html';
-            }, 2000);
+
+            if (closeBtn) {
+                closeBtn.onclick = function () {
+                    // Optionally hide modal, then go to login
+                    modal.style.display = 'none';
+                    window.location.href = 'login.html';
+                };
+            }
         }
 
         // Form submission
@@ -535,6 +556,9 @@
                 if (!user || !user.uid) {
                     throw new Error('Account creation failed');
                 }
+
+                // Send Firebase built-in email verification
+                await window.sendEmailVerification(user);
 
                 // Save user data to database
                 await window.setDoc(window.doc(window.firebaseDb, "customers", user.uid), {

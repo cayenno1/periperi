@@ -32,9 +32,9 @@
               <span class="profile-email" id="profileEmail">user@example.com</span>
             </div>
           </div>
-          <a href="account.html" class="profile-item"><span>Manage account</span></a>
-          <a href="orders.html" class="profile-item"><span>Orders</span></a>
-          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <a href="account.html" class="profile-item profile-manage-account" data-nav-target="account" data-hide-on-body="account-page"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item" data-nav-target="orders" data-hide-on-body="orders-page"><span>Orders</span></a>
+          <a href="help.html" class="profile-item" data-nav-target="help" data-hide-on-body="help-page"><span>Help & support</span></a>
           <div class="profile-divider"></div>
           <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
             <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
@@ -45,10 +45,12 @@
   </header>
 
   <div class="header-banner">
-    <div class="banner-content">
-      <i class="fas fa-fire banner-icon"></i>
-      <span>Tara na sa Pablo's Maiba naman!</span>
-    </div>
+    <nav class="banner-nav" aria-label="Main navigation">
+      <div class="banner-content">
+        <a href="index.html" class="banner-nav-link banner-nav-link-home">Home</a>
+        <a href="menu.html" class="banner-nav-link banner-nav-link-menu">Menu</a>
+      </div>
+    </nav>
   </div>
 
   <nav class="menu-nav" aria-label="Menu navigation">
@@ -147,92 +149,294 @@
   <script src="profile-auth.js"></script>
 
   <script>
-    const menus = {
-      hot: [
-        { name: "Whole Chicken", price: "P120.00", img: "food_img.png", rating: 4.5, reviews: 128, popular: true },
-        { name: "Baby Back Ribs", price: "P120.00", img: "food_img.png", rating: 4.3, reviews: 95, popular: false },
-        { name: "Rib Rice Meal", price: "P120.00", img: "food_img.png", rating: 4.7, reviews: 156, popular: true },
-        { name: "Chicken Rice Meal", price: "P120.00", img: "food_img.png", rating: 4.2, reviews: 89, popular: false },
-        { name: "Steak", price: "P120.00", img: "food_img.png", rating: 4.6, reviews: 112, popular: true },
-        { name: "Pork Rice Meal", price: "P120.00", img: "food_img.png", rating: 4.1, reviews: 73, popular: false }
-      ],
-      limited: [
-        { name: "Sizzling Sisig", price: "P150.00", img: "food_img.png", rating: 4.8, reviews: 203, badge: "Limited", popular: true },
-        { name: "Shawarma Buy 1 Take 2", price: "P130.00", img: "food_img.png", rating: 4.4, reviews: 167, badge: "Promo", popular: true }
-      ],
-      chicken: [
-        { name: "Grilled Chicken", price: "P110.00", img: "food_img.png", rating: 4.3, reviews: 134, popular: false },
-        { name: "Whole Chicken", price: "P100.00", img: "food_img.png", rating: 4.5, reviews: 198, popular: true }
-      ],
-      rice: [
-        { name: "Chicken Rice Meal", price: "P90.00", img: "food_img.png", rating: 4.2, reviews: 87, popular: false },
-        { name: "Ribs Rice Meal", price: "P120.00", img: "food_img.png", rating: 4.6, reviews: 145, popular: true }
-      ],
-      beverages: [
-        { name: "Iced Tea Regular", price: "₱79.00", img: "tea.png", popular: false },
-        { name: "Iced Tea Medium", price: "₱90.00", img: "tea.png", popular: true },
-        { name: "Iced Tea Large", price: "₱101.00", img: "tea.png", popular: false },
-      ]
-    };
+    (function() {
+      'use strict';
 
+      const CART_COUNT_KEY = 'ppp_cart_count';
+      const ROUTES = {
+        home: 'index.html',
+        menu: 'menu.html',
+        cart: 'cart_review.html',
+        help: 'help.html'
+      };
+
+      function safeNumber(value, fallback = 0) {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed) || !Number.isFinite(parsed)) {
+          return fallback;
+        }
+        return parsed;
+      }
+
+      function getStoredCartCount() {
+        try {
+          const raw = window.localStorage?.getItem(CART_COUNT_KEY);
+          return safeNumber(raw, 0);
+        } catch (error) {
+          console.warn('Cart count read failed:', error);
+          return 0;
+        }
+      }
+
+      function storeCartCount(count) {
+        try {
+          window.localStorage?.setItem(CART_COUNT_KEY, String(count));
+        } catch (error) {
+          console.warn('Cart count save failed:', error);
+        }
+      }
+
+      function updateCartBadges(count = getStoredCartCount()) {
+        const badges = document.querySelectorAll('.cart-badge');
+        badges.forEach((badge) => {
+          badge.textContent = Math.max(0, safeNumber(count, 0));
+        });
+      }
+
+      function broadcastCartCount(count) {
+        document.dispatchEvent(new CustomEvent('cart:count-changed', {
+          detail: { count }
+        }));
+      }
+
+      function navigateTo(key) {
+        const target = ROUTES[key];
+        if (target) {
+          window.location.href = target;
+        }
+      }
+
+      window.goHome = () => navigateTo('home');
+      window.goToMenu = () => navigateTo('menu');
+      window.goToHelp = () => navigateTo('help');
+      window.goToCart = () => navigateTo('cart');
+
+      window.getCartCount = getStoredCartCount;
+
+      window.setCartCount = function setCartCount(count) {
+        const next = Math.max(0, safeNumber(count, 0));
+        storeCartCount(next);
+        updateCartBadges(next);
+        broadcastCartCount(next);
+        return next;
+      };
+
+      window.incrementCartCount = function incrementCartCount(delta = 1) {
+        const current = getStoredCartCount();
+        return window.setCartCount(current + safeNumber(delta, 0));
+      };
+
+      window.resetCartCount = function resetCartCount() {
+        return window.setCartCount(0);
+      };
+
+      document.addEventListener('DOMContentLoaded', () => {
+        updateCartBadges();
+      });
+      document.addEventListener('cart:sync', () => updateCartBadges());
+    })();
+
+    const MENU_COLLECTION = 'menu';
+    const GUEST_CART_KEY = 'ppp_guest_cart';
     let currentFilter = 'all';
     let currentCategory = 'hot';
-    let cartItemsCount = 0;
 
-    function renderMenu(menuKey) {
+    // ----- Guest cart helpers (localStorage only, used when not logged in) -----
+    function getGuestCart() {
+      try {
+        const raw = window.localStorage?.getItem(GUEST_CART_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.warn('Failed to read guest cart:', e);
+        return [];
+      }
+    }
+
+    function setGuestCart(cart) {
+      try {
+        window.localStorage?.setItem(GUEST_CART_KEY, JSON.stringify(cart || []));
+      } catch (e) {
+        console.warn('Failed to save guest cart:', e);
+      }
+    }
+
+    function addGuestCartItem({ itemId, name, imageUrl, price, quantity }) {
+      const cart = getGuestCart();
+
+      const numericPrice = typeof price === 'number' ? price : Number(price) || 0;
+      const numericQty = typeof quantity === 'number' ? quantity : Number(quantity) || 1;
+
+      // Try to match existing item by itemId (preferred) or name
+      let existingIndex = -1;
+      if (itemId) {
+        existingIndex = cart.findIndex((item) => item.itemId === itemId);
+      }
+      if (existingIndex === -1 && name) {
+        existingIndex = cart.findIndex((item) => item.name === name);
+      }
+
+      if (existingIndex !== -1) {
+        const existing = cart[existingIndex] || {};
+        const currentQty = typeof existing.quantity === 'number' ? existing.quantity : Number(existing.quantity) || 0;
+        const currentPrice = typeof existing.price === 'number' ? existing.price : Number(existing.price) || 0;
+
+        existing.quantity = currentQty + numericQty;
+        // Treat price as line total for this cart row
+        existing.price = currentPrice + numericPrice * numericQty;
+        cart[existingIndex] = existing;
+      } else {
+        const id =
+          itemId ||
+          `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        cart.push({
+          id,
+          itemId: itemId || null,
+          name: name || null,
+          imageUrl: imageUrl || null,
+          // Price is stored as total for this line (unit price * quantity)
+          price: numericPrice * numericQty,
+          quantity: numericQty
+        });
+      }
+
+      setGuestCart(cart);
+    }
+
+    async function waitForFirebaseReady(maxAttempts = 40, delayMs = 50) {
+      let attempts = 0;
+      while (!window.firebaseReady && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        attempts++;
+      }
+    }
+
+    async function fetchMenuItems(categoryKey) {
+      await waitForFirebaseReady();
+
+      if (!window.firebaseDb || !window.collection || !window.getDocs) {
+        console.warn('Firebase not ready for menu fetch');
+        return [];
+      }
+
+      try {
+        const colRef = window.collection(window.firebaseDb, MENU_COLLECTION);
+        // For now fetch all menu documents; categories can be mapped client-side later
+        const snap = await window.getDocs(colRef);
+        const items = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data && data.active === false) return; // skip inactive
+          items.push({ id: docSnap.id, ...data });
+        });
+        return items;
+      } catch (error) {
+        console.error('Error fetching menu items:', error);
+        return [];
+      }
+    }
+
+    async function renderMenu(menuKey) {
       currentCategory = menuKey;
       const menuContent = document.getElementById('menuContent');
       const featuredSection = document.getElementById('featuredSection');
-      
-      // Show/hide featured section
+
+      if (!menuContent || !featuredSection) return;
+
+      // Show/hide featured section like before
       featuredSection.style.display = (menuKey === 'hot') ? 'block' : 'none';
-      
-      if (menuKey === 'beverages') {
-        menuContent.innerHTML = menus.beverages.map(item => `
-          <div class="menu-card" data-popular="${item.popular}">
+
+      // Clear while loading
+      menuContent.innerHTML = `
+        <div class="menu-loading">
+          <i class="fas fa-spinner fa-spin"></i>
+          <span>Loading item...</span>
+        </div>
+      `;
+
+      const items = await fetchMenuItems(menuKey);
+
+      if (!items.length) {
+        menuContent.innerHTML = '';
+        updateEmptyState();
+        return;
+      }
+
+      menuContent.innerHTML = items.map((item) => {
+        const rawImg = item.img || item.image || item.imageDataUrl || '';
+        const hasImage = !!rawImg;
+        const imgSrc = hasImage ? rawImg : '';
+        const popular = !!item.popular;
+        const badge = item.badge || '';
+
+        // Derive a display name from known fields (name/title/first ingredient)
+        const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
+        const primaryIngredient = ingredients[0] || {};
+        const displayName =
+          item.name ||
+          item.title ||
+          primaryIngredient.ingredientName ||
+          'Menu item';
+        const attrSafeName = String(displayName).replace(/"/g, '&quot;');
+        const attrSafeImg = String(imgSrc).replace(/"/g, '&quot;');
+
+        // Hardcoded price for now, with a small fallback from ingredient if present
+        const basePrice =
+          typeof item.price === 'number'
+            ? item.price
+            : typeof primaryIngredient.baseAmountPerDish === 'number'
+              ? primaryIngredient.baseAmountPerDish
+              : 150;
+        const price = `₱${basePrice}.00`;
+
+        // Static default rating display: 0.0 (0 reviews), no dynamic stars
+        const ratingHtml = `
+          <div class="card-rating">
+            <div class="stars-container">
+              <span class="rating-text">0.0 (0 reviews)</span>
+            </div>
+            ${popular ? '<span class="popular-tag">Popular</span>' : ''}
+          </div>
+        `;
+
+        const imageHtml = hasImage
+          ? `<img src="${imgSrc}" alt="${displayName}" class="card-image">`
+          : `<div class="card-image" style="display:flex;align-items:center;justify-content:center;background:#f5f5f5;color:#666;font-size:0.9rem;">
+               No photo available
+             </div>`;
+
+        return `
+          <div class="menu-card" data-popular="${popular}" onclick="openFoodItem('${item.id}')">
             <div class="card-image-container">
-              <img src="${item.img || 'placeholder.png'}" alt="${item.name}" class="card-image">
+              ${imageHtml}
+              ${
+                badge
+                  ? `<div class="badge"><i class="fas fa-star"></i> ${badge}</div>`
+                  : ''
+              }
             </div>
             <div class="card-content">
-              <h3 class="card-title">${item.name}</h3>
+              <h3 class="card-title">${displayName}</h3>
+              ${ratingHtml}
               <div class="price-row">
-                <div class="card-price">${item.price}</div>
-                <button class="add-plus-btn" onclick="addToCart('${item.name}')">
+                <div class="card-price">${price}</div>
+                <button
+                  class="add-plus-btn"
+                  data-item-id="${item.id}"
+                  data-item-name="${attrSafeName}"
+                  data-item-price="${basePrice}"
+                  data-item-img="${attrSafeImg}"
+                  onclick="addToCart(event)"
+                >
                   <i class="fas fa-plus"></i>
                 </button>
               </div>
             </div>
           </div>
-        `).join('');
-        updateEmptyState();
-        return;
-      }
-      
-      menuContent.innerHTML = menus[menuKey].map(item => `
-        <div class="menu-card" data-popular="${item.popular}">
-          <div class="card-image-container">
-            <img src="${item.img}" alt="${item.name}" class="card-image" onclick="openFoodItem('${item.name}')">
-            ${item.badge ? `<div class="badge"><i class="fas fa-star"></i> ${item.badge}</div>` : ''}
-          </div>
-          <div class="card-content">
-            <h3 class="card-title">${item.name}</h3>
-            <div class="card-rating">
-              <div class="stars-container">
-                <span class="stars">${'★'.repeat(Math.floor(item.rating))}${'☆'.repeat(5-Math.floor(item.rating))}</span>
-                <span class="rating-text">${item.rating} (${item.reviews})</span>
-              </div>
-              ${item.popular ? '<span class="popular-tag">Popular</span>' : ''}
-            </div>
-            <div class="price-row">
-              <div class="card-price">${item.price}</div>
-              <button class="add-plus-btn" onclick="addToCart('${item.name}')">
-                <i class="fas fa-plus"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      `).join('');
-      
+        `;
+      }).join('');
+
       applyFilter();
       updateEmptyState();
     }
@@ -250,16 +454,123 @@
       updateEmptyState();
     }
 
-    function openFoodItem(itemName) {
-      window.location.href = 'food_item.html';
+    function openFoodItem(itemId) {
+      if (!itemId) return;
+      const url = `food_item.html?id=${encodeURIComponent(itemId)}`;
+      window.location.href = url;
     }
 
-    function addToCart(itemName) {
-      event.stopPropagation();
-      const btn = event.target.closest('.add-plus-btn');
+    function addToCart(e) {
+      if (!e) return;
+      e.stopPropagation();
+
+      const btn = e.target.closest('.add-plus-btn');
       if (!btn) return;
+
+      const itemId = btn.dataset.itemId || '';
+      const itemName = btn.dataset.itemName || '';
+      const imageUrl = btn.dataset.itemImg || '';
+      const priceValue = Number(btn.dataset.itemPrice || '0') || 0;
+      const quantity = 1;
+
+      window.incrementCartCount(1);
+
       btn.innerHTML = '<i class="fas fa-check"></i>';
       btn.setAttribute('aria-pressed', 'true');
+
+      // Revert back to plus icon after 1 second
+      setTimeout(() => {
+        if (!btn.isConnected) return;
+        btn.innerHTML = '<i class="fas fa-plus"></i>';
+        btn.setAttribute('aria-pressed', 'false');
+      }, 1000);
+      
+      // If user is logged in, save cart item to their Firestore cart;
+      // otherwise, fall back to a local guest cart stored in localStorage.
+      const user = window.firebaseAuth?.currentUser;
+      if (user) {
+        saveCartItemToFirestore({
+          itemId,
+          name: itemName,
+          imageUrl,
+          price: priceValue,
+          quantity
+        });
+      } else {
+        addGuestCartItem({
+          itemId,
+          name: itemName,
+          imageUrl,
+          price: priceValue,
+          quantity
+        });
+      }
+    }
+
+    async function saveCartItemToFirestore({ itemId, name, imageUrl, price, quantity }) {
+      try {
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+
+        if (!db || !auth || !window.doc || !window.collection || !window.setDoc) {
+          console.warn('Firebase not fully initialized for cart save');
+          return;
+        }
+
+        const user = auth.currentUser;
+        if (!user) {
+          console.warn('No authenticated user; skipping save to Firestore cart');
+          return;
+        }
+
+        const customerRef = window.doc(db, 'customers', user.uid);
+        const cartItemsCol = window.collection(customerRef, 'cartItems');
+
+        const numericPrice = typeof price === 'number' ? price : Number(price) || 0;
+        const numericQty = typeof quantity === 'number' ? quantity : Number(quantity) || 1;
+
+        // Check if this item already exists in the cart
+        let existingSnap = null;
+        if (itemId) {
+          const q = window.query(cartItemsCol, window.where('itemId', '==', itemId));
+          const existingQuerySnap = await window.getDocs(q);
+          existingQuerySnap.forEach((docSnap) => {
+            if (!existingSnap) existingSnap = docSnap;
+          });
+        }
+
+        if (existingSnap) {
+          // Update existing cart item: add to quantity and price (treat price as running total)
+          const data = existingSnap.data() || {};
+          const currentQty = typeof data.quantity === 'number' ? data.quantity : Number(data.quantity) || 0;
+          const currentPrice = typeof data.price === 'number' ? data.price : Number(data.price) || 0;
+
+          const newQty = currentQty + numericQty;
+          const newPrice = currentPrice + numericPrice;
+
+          await window.updateDoc(existingSnap.ref, {
+            quantity: newQty,
+            price: newPrice,
+            updatedAt: new Date()
+          });
+        } else {
+          // Create new cart item document
+          const cartItemRef = window.doc(cartItemsCol);
+          await window.setDoc(cartItemRef, {
+            itemId: itemId || null,
+            name: name || null,
+            imageUrl: imageUrl || null,
+            // For a new item, price is the total for this line (unit price * quantity)
+            price: numericPrice * numericQty,
+            quantity: numericQty,
+            createdAt: new Date()
+          });
+        }
+      } catch (error) {
+        console.error('Error saving cart item to Firestore:', error);
+      }
     }
 
     // Tabs
@@ -332,12 +643,28 @@
         emptyState.classList.remove('show');
       }
     }
-
-
-
-    function goToCart() {
-      window.location.href = 'cart_review.html';
+    function syncFloatingCartCount() {
+      const floatingCounter = document.getElementById('cartCount');
+      if (!floatingCounter || !window.getCartCount) return;
+      floatingCounter.textContent = window.getCartCount();
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      syncFloatingCartCount();
+
+      // Highlight current page in banner nav
+      const path = window.location.pathname.split('/').pop() || 'menu.html';
+      const homeLink = document.querySelector('.banner-nav-link-home');
+      const menuLink = document.querySelector('.banner-nav-link-menu');
+
+      if (path === 'menu.html' && menuLink) {
+        menuLink.classList.add('is-active');
+      } else if ((path === '' || path === 'index.html') && homeLink) {
+        homeLink.classList.add('is-active');
+      }
+    });
+
+    document.addEventListener('cart:count-changed', syncFloatingCartCount);
 
     renderMenu('hot');
   </script>
