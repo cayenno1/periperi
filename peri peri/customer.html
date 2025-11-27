@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Management - Pablo's Peri Peri</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        // Hide restricted navigation immediately on page load (runs before page renders)
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const userRole = staffSession.role || '';
+                    if (userRole !== 'Owner' && userRole !== 'Admin') {
+                        const style = document.createElement('style');
+                        style.id = 'restrict-admin-profile';
+                        style.textContent = 'a[href*="admin-profile.html"] { display: none !important; }';
+                        (document.head || document.documentElement).appendChild(style);
+                        
+                        const hideNavItem = function() {
+                            const links = document.querySelectorAll('a[href*="admin-profile.html"]');
+                            links.forEach(link => {
+                                const navItem = link.closest('.nav-item');
+                                if (navItem) {
+                                    navItem.style.display = 'none';
+                                }
+                            });
+                        };
+                        
+                        if (document.body) {
+                            hideNavItem();
+                        }
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', hideNavItem);
+                        } else {
+                            setTimeout(hideNavItem, 0);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not hide navigation immediately:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="periperilogo.png" alt="Pablo's Peri Peri Logo" class="logo-image">
+                    </div>
+                </div>
+                <div class="brand-text">
+                    <h1>PABLO'S</h1>
+                    <p>PERI PERI</p>
+                    <span>Administrator Side</span>
+                </div>
+            </div>
+            
+            <nav class="navigation">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="adminindex.html" class="nav-link">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>Orders</span>
+                        </a>
+                    </li>
+                    <li class="nav-item active">
+                        <a href="customer.html" class="nav-link">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Customer</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="drivers.html" class="nav-link">
+                            <i class="fas fa-car"></i>
+                            <span>Drivers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="menu.html" class="nav-link">
+                            <i class="fas fa-shopping-basket"></i>
+                            <span>Menu</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="sales.html" class="nav-link">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Sales</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="admin-profile.html" class="nav-link">
+                            <i class="fas fa-user"></i>
+                            <span>Admin Profile</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="activity-logs.html" class="nav-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Activity Logs</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="content-header">
+                <div class="page-title">
+                    <div class="title-bar"></div>
+                    <h2>Customer Management</h2>
+                </div>
+                <div class="user-profile">
+                    <button class="profile-btn" onclick="toggleDropdown('adminDropdown')">
+                        <i class="fas fa-user"></i>
+                        <span id="profileName"></span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="adminDropdown">
+                        <a href="#" class="dropdown-item">Profile Settings</a>
+                        <a href="#" class="dropdown-item">Account Settings</a>
+                        <a href="#" class="dropdown-item">Logout</a>
+                    </div>
+                </div>
+            </header>
+
+            <script>
+                // Update profile name immediately on page load
+                (function() {
+                    try {
+                        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                        if (session) {
+                            const staffSession = JSON.parse(session);
+                            const profileName = document.getElementById('profileName');
+                            if (profileName) {
+                                if (staffSession.firstName && staffSession.lastName) {
+                                    let displayName = staffSession.firstName + ' ' + staffSession.lastName;
+                                    if (staffSession.suffix) {
+                                        displayName += ' ' + staffSession.suffix;
+                                    }
+                                    profileName.textContent = displayName;
+                                } else if (staffSession.email) {
+                                    const emailName = staffSession.email.split('@')[0];
+                                    profileName.textContent = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                                } else if (staffSession.staffId) {
+                                    profileName.textContent = staffSession.staffId;
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.warn('Could not update profile name immediately:', e);
+                    }
+                })();
+            </script>
+
+            <!-- Search and Filter Bar -->
+            <div class="search-filter-bar">
+                <div class="show-dropdown">
+                    <label>Show</label>
+                    <select>
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search customers...">
+                </div>
+            </div>
+
+            <!-- Customer Management Content -->
+            <div class="customer-management">
+                <!-- Left Panel - Customer Profile -->
+                <div class="customer-profile-panel">
+                    <div class="panel-header">
+                        <div class="title-bar"></div>
+                        <h3>Customer Profile</h3>
+                    </div>
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Search">
+                    </div>
+                    <div class="customer-list">
+                        <div class="customer-item" onclick="selectCustomer(1)">
+                            <div class="customer-avatar">👤</div>
+                            <span>Customer</span>
+                        </div>
+                        <div class="customer-item selected" onclick="selectCustomer(2)">
+                            <span>Customer</span>
+                        </div>
+                        <div class="customer-item" onclick="selectCustomer(3)">
+                            <div class="customer-avatar">👤</div>
+                            <span>Customer</span>
+                        </div>
+                        <div class="customer-item" onclick="selectCustomer(4)">
+                            <span>Customer</span>
+                        </div>
+                        <div class="customer-item" onclick="selectCustomer(5)">
+                            <span>Customer</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel - Customer Details -->
+                <div class="customer-details-panel">
+                    <div class="tab-navigation">
+                        <button class="tab-btn" onclick="switchTab('reviews')">Review & Rating</button>
+                        <button class="tab-btn active" onclick="switchTab('rewards')">Reward Point and Most Ordered</button>
+                    </div>
+
+                    <div class="tab-content" id="rewardsTab">
+                        <div class="section">
+                            <div class="section-header">
+                                <div class="title-bar"></div>
+                                <h4>Loyalty Points</h4>
+                            </div>
+                            <div class="points-list">
+                                <div class="points-item">
+                                    <span>Total Points</span>
+                                    <span class="points">1,250</span>
+                                </div>
+                                <div class="points-item">
+                                    <span>Available Points</span>
+                                    <span class="points">850</span>
+                                </div>
+                                <div class="points-item">
+                                    <span>Redeemed Points</span>
+                                    <span class="points">400</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="section">
+                            <div class="loyalty-status">
+                                <span>Loyalty Status</span>
+                                <span class="status-badge">Gold Member</span>
+                            </div>
+                        </div>
+
+                        <div class="section">
+                            <div class="section-header">
+                                <div class="title-bar"></div>
+                                <h4>Most Ordered Items</h4>
+                            </div>
+                            <div class="reviews-list">
+                                <div class="review-item">
+                                    <div class="review-header">
+                                        <span class="order-id">Baby Back Ribs</span>
+                                        <span class="restaurant">P299.00</span>
+                                    </div>
+                                    <div class="review-content">
+                                        <div class="food-image">
+                                            <img src="babybackribs.png" alt="Baby Back Ribs">
+                                        </div>
+                                        <div class="review-details">
+                                            <h5>Ordered 10x</h5>
+                                            <p>Most popular item</p>
+                                        </div>
+                                        <button class="more-btn" onclick="toggleReviewOptions(1)">⋯</button>
+                                    </div>
+                                </div>
+                                <div class="review-item">
+                                    <div class="review-header">
+                                        <span class="order-id">Chicken Shawarma</span>
+                                        <span class="restaurant">P299.00</span>
+                                    </div>
+                                    <div class="review-content">
+                                        <div class="food-image">
+                                            <img src="shawarma.png" alt="Chicken Shawarma">
+                                        </div>
+                                        <div class="review-details">
+                                            <h5>Ordered 21x</h5>
+                                            <p>Customer favorite</p>
+                                        </div>
+                                        <button class="more-btn" onclick="toggleReviewOptions(2)">⋯</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content" id="reviewsTab" style="display: none;">
+                        <div class="section">
+                            <div class="section-header">
+                                <div class="title-bar"></div>
+                                <h4>Recent Reviews</h4>
+                            </div>
+                            <div class="reviews-list">
+                                <div class="review-item">
+                                    <div class="review-header">
+                                        <span class="order-id">Order #12345</span>
+                                        <span class="restaurant">Pablo's Peri Peri</span>
+                                    </div>
+                                    <div class="review-content">
+                                        <div class="food-image">
+                                            <img src="chickenrice.png" alt="Chicken Rice Meal">
+                                        </div>
+                                        <div class="review-details">
+                                            <h5>Chicken Rice Meal</h5>
+                                            <p>Great food, fast delivery!</p>
+                                            <div class="review-meta">
+                                                <span class="date">2 days ago</span>
+                                                <div class="rating">
+                                                    <span class="stars">★★★★★</span>
+                                                    <span class="rating-text">5.0</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button class="more-btn" onclick="toggleReviewOptions(1)">⋯</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Firebase Initialization -->
+    <script type="module" src="firebase-init.js"></script>
+    
+    <!-- Session Check - Must be after Firebase init -->
+    <script src="session-check.js"></script>
+    
+    <!-- Update User Profile Display -->
+    <script src="update-user-profile.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>

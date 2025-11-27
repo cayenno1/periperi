@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory - Pablo's Peri Peri</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        // Hide restricted navigation immediately on page load (runs before page renders)
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const userRole = staffSession.role || '';
+                    if (userRole !== 'Owner' && userRole !== 'Admin') {
+                        const style = document.createElement('style');
+                        style.id = 'restrict-admin-profile';
+                        style.textContent = 'a[href*="admin-profile.html"] { display: none !important; }';
+                        (document.head || document.documentElement).appendChild(style);
+                        
+                        const hideNavItem = function() {
+                            const links = document.querySelectorAll('a[href*="admin-profile.html"]');
+                            links.forEach(link => {
+                                const navItem = link.closest('.nav-item');
+                                if (navItem) {
+                                    navItem.style.display = 'none';
+                                }
+                            });
+                        };
+                        
+                        if (document.body) {
+                            hideNavItem();
+                        }
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', hideNavItem);
+                        } else {
+                            setTimeout(hideNavItem, 0);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not hide navigation immediately:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="periperilogo.png" alt="Pablo's Peri Peri Logo" class="logo-image">
+                    </div>
+                </div>
+                <div class="brand-text">
+                    <h1>PABLO'S</h1>
+                    <p>PERI PERI</p>
+                    <span>Administrator Side</span>
+                </div>
+            </div>
+            
+            <nav class="navigation">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="adminindex.html" class="nav-link">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>Orders</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="drivers.html" class="nav-link">
+                            <i class="fas fa-car"></i>
+                            <span>Drivers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="menu.html" class="nav-link">
+                            <i class="fas fa-shopping-basket"></i>
+                            <span>Menu</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="customer.html" class="nav-link">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Customer</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="sales.html" class="nav-link">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Sales</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="admin-profile.html" class="nav-link">
+                            <i class="fas fa-user"></i>
+                            <span>Admin Profile</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="activity-logs.html" class="nav-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Activity Logs</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="content-header">
+                <div class="page-title">
+                    <div class="title-bar"></div>
+                    <h2>Inventory</h2>
+                </div>
+                <div class="user-profile">
+                    <button class="profile-btn" onclick="toggleDropdown('adminDropdown')">
+                        <i class="fas fa-user"></i>
+                        <span id="profileName"></span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="adminDropdown">
+                        <a href="#" class="dropdown-item">Profile Settings</a>
+                        <a href="#" class="dropdown-item">Account Settings</a>
+                        <a href="#" class="dropdown-item">Logout</a>
+                    </div>
+                </div>
+            </header>
+
+            <script>
+                // Update profile name immediately on page load
+                (function() {
+                    try {
+                        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                        if (session) {
+                            const staffSession = JSON.parse(session);
+                            const profileName = document.getElementById('profileName');
+                            if (profileName) {
+                                if (staffSession.firstName && staffSession.lastName) {
+                                    let displayName = staffSession.firstName + ' ' + staffSession.lastName;
+                                    if (staffSession.suffix) {
+                                        displayName += ' ' + staffSession.suffix;
+                                    }
+                                    profileName.textContent = displayName;
+                                } else if (staffSession.email) {
+                                    const emailName = staffSession.email.split('@')[0];
+                                    profileName.textContent = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                                } else if (staffSession.staffId) {
+                                    profileName.textContent = staffSession.staffId;
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.warn('Could not update profile name immediately:', e);
+                    }
+                })();
+            </script>
+
+            <!-- Search and Filter Bar -->
+            <div class="search-filter-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Q Search...">
+                </div>
+                <div class="filter-buttons">
+                    <button class="filter-btn" onclick="toggleDropdown('sortDropdown')">
+                        <i class="fas fa-th"></i>
+                        Sort by Quantity
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="sortDropdown">
+                        <a href="#" class="dropdown-item">Low to high</a>
+                        <a href="#" class="dropdown-item">High to low</a>
+                    </div>
+                    
+                    <button class="filter-btn" onclick="toggleDropdown('categoryDropdown')">
+                        <i class="fas fa-th"></i>
+                        Categories
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="categoryDropdown">
+                        <a href="#" class="dropdown-item">Menu Items</a>
+                        <a href="#" class="dropdown-item">Packaging Supplies</a>
+                        <a href="#" class="dropdown-item">Beverages</a>
+                        <a href="#" class="dropdown-item">Condiments</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Table -->
+            <div class="table-container">
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>Menu ID</th>
+                            <th>Item name</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>ID01</td>
+                            <td>Utensils</td>
+                            <td>99</td>
+                            <td>P10,100</td>
+                            <td class="actions">
+                                <button class="action-btn edit" onclick="editItem('ID01')"><i class="fas fa-edit"></i></button>
+                                <button class="action-btn delete" onclick="deleteItem('ID01')"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>ID02</td>
+                            <td>Cups</td>
+                            <td>99</td>
+                            <td>P10,100</td>
+                            <td class="actions">
+                                <button class="action-btn edit" onclick="editItem('ID02')"><i class="fas fa-edit"></i></button>
+                                <button class="action-btn delete" onclick="deleteItem('ID02')"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>ID03</td>
+                            <td>Take-out Box</td>
+                            <td>99</td>
+                            <td>P10,100</td>
+                            <td class="actions">
+                                <button class="action-btn edit" onclick="editItem('ID03')"><i class="fas fa-edit"></i></button>
+                                <button class="action-btn delete" onclick="deleteItem('ID03')"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>ID04</td>
+                            <td>Utensils</td>
+                            <td>99</td>
+                            <td>P10,100</td>
+                            <td class="actions">
+                                <button class="action-btn edit" onclick="editItem('ID04')"><i class="fas fa-edit"></i></button>
+                                <button class="action-btn delete" onclick="deleteItem('ID04')"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>ID05</td>
+                            <td>Cups</td>
+                            <td>99</td>
+                            <td>P10,100</td>
+                            <td class="actions">
+                                <button class="action-btn edit" onclick="editItem('ID05')"><i class="fas fa-edit"></i></button>
+                                <button class="action-btn delete" onclick="deleteItem('ID05')"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- Firebase Initialization -->
+    <script type="module" src="firebase-init.js"></script>
+    
+    <!-- Session Check - Must be after Firebase init -->
+    <script src="session-check.js"></script>
+    
+    <!-- Update User Profile Display -->
+    <script src="update-user-profile.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
