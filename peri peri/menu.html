@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Management - Pablo's Peri Peri</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        // Hide restricted navigation immediately on page load (runs before page renders)
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const userRole = staffSession.role || '';
+                    if (userRole !== 'Owner' && userRole !== 'Admin') {
+                        const style = document.createElement('style');
+                        style.id = 'restrict-admin-profile';
+                        style.textContent = 'a[href*="admin-profile.html"] { display: none !important; }';
+                        (document.head || document.documentElement).appendChild(style);
+                        
+                        const hideNavItem = function() {
+                            const links = document.querySelectorAll('a[href*="admin-profile.html"]');
+                            links.forEach(link => {
+                                const navItem = link.closest('.nav-item');
+                                if (navItem) {
+                                    navItem.style.display = 'none';
+                                }
+                            });
+                        };
+                        
+                        if (document.body) {
+                            hideNavItem();
+                        }
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', hideNavItem);
+                        } else {
+                            setTimeout(hideNavItem, 0);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not hide navigation immediately:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="periperilogo.png" alt="Pablo's Peri Peri Logo" class="logo-image">
+                    </div>
+                </div>
+                <div class="brand-text">
+                    <h1>PABLO'S</h1>
+                    <p>PERI PERI</p>
+                    <span>Administrator Side</span>
+                </div>
+            </div>
+            
+            <nav class="navigation">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="adminindex.html" class="nav-link">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>Orders</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="drivers.html" class="nav-link">
+                            <i class="fas fa-car"></i>
+                            <span>Drivers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item active menu-nav-dropdown">
+                        <button type="button" class="nav-link menu-toggle" onclick="toggleMenuTabDropdown()">
+                            <i class="fas fa-shopping-basket"></i>
+                            <span>Menu</span>
+                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                        </button>
+                        <ul class="menu-nav-submenu" id="menuTabDropdown">
+                            <li><a href="menu.html#menu-catalogue">Menu Catalogue</a></li>
+                            <li><a href="menu.html#menu-list">Menu List</a></li>
+                            <li><a href="menu.html#addFoodDashboard">Add Product</a></li>
+                            <li><a href="menu.html#menu-product-detail">Product Detail</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item menu-nav-dropdown">
+                        <button type="button" class="nav-link menu-toggle" onclick="toggleCustomerTabDropdown()">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Customer</span>
+                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                        </button>
+                        <ul class="menu-nav-submenu" id="customerTabDropdown">
+                            <li><a href="customer.html#customer-profile">Customer Profile</a></li>
+                            <li><a href="customer.html#reviews">Reviews</a></li>
+                            <li><a href="customer.html#most-ordered">Most Ordered</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="sales.html" class="nav-link">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Sales</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="admin-profile.html" class="nav-link">
+                            <i class="fas fa-user"></i>
+                            <span>Admin Profile</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="activity-logs.html" class="nav-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Activity Logs</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="content-header">
+                <div class="page-title">
+                    <div class="title-bar"></div>
+                    <h2>Menu</h2>
+                </div>
+                <div class="user-profile">
+                    <button class="profile-btn" onclick="toggleDropdown('adminDropdown')">
+                        <i class="fas fa-user"></i>
+                        <span id="profileName"></span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="adminDropdown">
+                        <a href="#" class="dropdown-item">Profile Settings</a>
+                        <a href="#" class="dropdown-item">Logout</a>
+                    </div>
+                </div>
+            </header>
+
+            <script>
+                // Update profile name immediately on page load
+                (function() {
+                    try {
+                        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                        if (session) {
+                            const staffSession = JSON.parse(session);
+                            const profileName = document.getElementById('profileName');
+                            if (profileName) {
+                                if (staffSession.firstName && staffSession.lastName) {
+                                    let displayName = staffSession.firstName + ' ' + staffSession.lastName;
+                                    if (staffSession.suffix) {
+                                        displayName += ' ' + staffSession.suffix;
+                                    }
+                                    profileName.textContent = displayName;
+                                } else if (staffSession.email) {
+                                    const emailName = staffSession.email.split('@')[0];
+                                    profileName.textContent = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                                } else if (staffSession.staffId) {
+                                    profileName.textContent = staffSession.staffId;
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.warn('Could not update profile name immediately:', e);
+                    }
+                })();
+            </script>
+
+            <!-- Add Food Dashboard (Hidden by default / Add Product section) -->
+            <div class="add-food-dashboard" id="addFoodDashboard" style="display: none;">
+                <form class="add-food-form" id="menuItemForm">
+                    <div class="form-section">
+                        <h3>Food Image</h3>
+                        <div class="image-upload-section">
+                            <div class="image-preview-container">
+                                <div class="image-preview" id="imagePreview" onclick="document.getElementById('imageFileInput').click()" style="cursor: pointer;" title="Click to select image">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-image"></i>
+                                        <span>Click to Select Image</span>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-secondary remove-image-btn" onclick="removeImage()">
+                                    <i class="fas fa-trash"></i>
+                                    Remove
+                                </button>
+                            </div>
+                            <input type="file" id="imageFileInput" accept="image/*" style="display: none;" onchange="handleImageFileSelect(event)">
+                            <div id="imageUploadProgress" style="display: none; margin-top: 10px;">
+                                <div style="background: #f0f0f0; border-radius: 4px; height: 20px; overflow: hidden;">
+                                    <div id="imageUploadProgressBar" style="background: #dc3545; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                                <small id="imageUploadStatus" style="display: block; margin-top: 5px; color: #666;">Uploading...</small>
+                            </div>
+                            <div class="ingredients-section-right">
+                                <h4>Ingredients</h4>
+                                <div class="ingredients-scroll-container">
+                                    <div id="dishIngredientsList" class="dish-ingredients-list"></div>
+                                </div>
+                                <button type="button" class="btn btn-secondary" id="addIngredientRowBtn">
+                                    <i class="fas fa-plus"></i>
+                                    Add Ingredient
+                                </button>
+                                <p class="form-hint">Select ingredients that are already registered in inventory to keep dishes synced with stock.</p>
+                                <datalist id="menuIngredientsOptions"></datalist>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3>Food Details</h3>
+                        <div class="food-details-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                            <!-- Left Column: Category and Food name -->
+                            <div class="food-details-left">
+                                <div class="form-group">
+                                    <label for="category">Category <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                                    <div class="category-input-wrapper">
+                                        <select id="category" class="form-control" onchange="handleCategorySelect('category')">
+                                        <option value="Popular">Popular</option>
+                                        <option value="Starter">Starter</option>
+                                        <option value="Main Menu">Main Menu</option>
+                                        <option value="Ala Carte">Ala Carte</option>
+                                        <option value="Side">Side</option>
+                                        <option value="Beverage">Beverage</option>
+                                            <option value="">-- Add New Category --</option>
+                                    </select>
+                                        <input type="text" id="categoryCustom" class="form-control" placeholder="Type new category name..." style="display: none; margin-top: 8px;" onblur="handleCategoryCustomInput('category')" onkeypress="if(event.key==='Enter') handleCategoryCustomInput('category')">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="foodName">Food name <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                                    <input type="text" id="foodName" class="form-control" placeholder="Enter food name" required>
+                                    <small class="form-hint">Internal name used for identification and variations</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="displayName">Display name (Optional)</label>
+                                    <input type="text" id="displayName" class="form-control" placeholder="Enter display name">
+                                    <small class="form-hint">Customer-facing name. If left empty, food name will be used.</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column: ID -->
+                            <div class="food-details-right">
+                                <div class="form-group">
+                                    <label for="foodId">ID</label>
+                                    <input type="text" id="foodId" class="form-control" placeholder="Generating..." readonly style="background-color: #f8f9fa; cursor: not-allowed;">
+                                    <small class="form-hint">8-digit ID will be automatically generated</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Price and Quantity - Full Width Grid -->
+                        <div class="form-group" style="margin-top: 20px;">
+                            <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+                                <div class="form-group">
+                                    <label for="price">Price <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                                    <input type="text" id="price" class="form-control" placeholder="PHP 0.00" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="quantity">Quantity Available <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                                    <input type="number" id="quantity" class="form-control" min="0" step="1" placeholder="0" required>
+                                    <small class="form-hint">How many servings of this dish are currently available.</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Description - Full Width -->
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label for="description">Description <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                            <textarea id="description" class="form-control" rows="3" placeholder="Write ingredients. Separate by comma (,)" required></textarea>
+                        </div>
+                        
+                        <!-- Allergens - Full Width -->
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label for="allergens">Allergens (Optional)</label>
+                            <input type="text" id="allergens" class="form-control" placeholder="e.g., Contains nuts, dairy, gluten. Leave empty if no allergens.">
+                            <small class="form-hint">List any allergens present in this food item. Separate multiple allergens by comma.</small>
+                        </div>
+                        
+                        <!-- Variations - Full Width with room to expand -->
+                        <div class="form-group variations-section-full">
+                            <label>Variations (Optional)</label>
+                            <div id="variationsContainer" class="variations-container">
+                                <div class="variations-list" id="variationsList">
+                                    <!-- Variations will be added here dynamically -->
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="addVariation()" style="margin-top: 10px;">
+                                    <i class="fas fa-plus"></i>
+                                    Add Variation
+                                </button>
+                            </div>
+                            <small class="form-hint">Add additional variations for this meal (e.g., Medium, Large, or different flavors). The initial product details above will be saved as the first variation. Each variation can have its own price and ingredient amount (in grams or kg).</small>
+                        </div>
+                        
+                        <!-- Link to Another Meal -->
+                        <div class="form-group">
+                            <label for="linkedMeal">Link to Another Meal (Optional)</label>
+                            <select id="linkedMeal" class="form-control">
+                                <option value="">None</option>
+                            </select>
+                            <small class="form-hint">Link this meal to another meal item (e.g., combo meals, meal pairs).</small>
+                        </div>
+                        
+                        <div class="form-group" id="limitedMealTimelineGroup" style="display: none;">
+                            <label>Limited Meal Timeline</label>
+                            <div class="timeline-container">
+                                <div class="timeline-row">
+                                    <label for="limitedStartDate">Start Date & Time</label>
+                                    <input type="datetime-local" id="limitedStartDate" class="form-control">
+                                </div>
+                                <div class="timeline-row">
+                                    <label for="limitedEndDate">End Date & Time</label>
+                                    <input type="datetime-local" id="limitedEndDate" class="form-control">
+                                </div>
+                            </div>
+                            <small class="form-hint">Set when this limited meal will be available for ordering.</small>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-large">
+                            <i class="fas fa-plus"></i>
+                            Add Food
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Menu Catalogue / List Section -->
+            <div class="food-section" id="foodSection" style="display: none;">
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <div class="search-filter-group">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" placeholder="Search...">
+                        </div>
+                        <div class="filter-container">
+                            <button class="filter-btn" onclick="toggleDropdown('filterDropdown')">
+                                <i class="fas fa-filter"></i>
+                                Filter
+                            </button>
+                            <div class="dropdown-menu" id="filterDropdown">
+                                <div class="filter-section">
+                                    <div class="filter-section-title">Status</div>
+                                    <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="all">All Status</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="active">Active</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="inactive">Inactive</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="for-deleted">For Deletion</a>
+                                </div>
+                                <div class="filter-section">
+                                    <div class="filter-section-title">Category</div>
+                                    <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="all">All Categories</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="popular">Popular</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="starter">Starter</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="main menu">Main Menu</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="ala carte">Ala Carte</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="side">Side</a>
+                                    <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="beverage">Beverage</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Food Items Cards Grid (Menu Catalogue) -->
+                <div class="menu-catalogue-grid" id="menu-catalogue-grid">
+                    <div id="menuTableBody" class="menu-cards-container">
+                        <div class="empty-catalogue">Menu items will appear after you add dishes.</div>
+                    </div>
+                </div>
+
+                <!-- Menu List Table (Active Items Only) -->
+                <div class="menu-list-table-container" id="menu-list" style="display: none;">
+                    <table class="orders-table">
+                        <thead>
+                            <tr>
+                                <th>Menu ID</th>
+                                <th>Name</th>
+                                <th>Quantity Available</th>
+                                <th>Status</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody id="menuListTableBody">
+                            <tr>
+                                <td colspan="5" class="empty-table">No active menu items found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Menu Details Carousel Section -->
+            <section class="menu-detail-section" id="menu-product-detail">
+                <div class="menu-detail-container">
+                    <div class="menu-detail-image-wrapper">
+                        <div class="menu-detail-slide-indicator" id="menuDetailSlideIndicator">0 / 0</div>
+                        <button class="menu-detail-nav menu-detail-nav-left" type="button" onclick="prevMenuDetail()">
+                            <span>&lt;</span>
+                        </button>
+                        <button class="menu-detail-nav menu-detail-nav-right" type="button" onclick="nextMenuDetail()">
+                            <span>&gt;</span>
+                        </button>
+                        <div class="menu-detail-image" id="menuDetailImageContainer">
+                            <img id="menuDetailImage" src="" alt="Menu item image">
+                            <div class="menu-detail-image-caption" id="menuDetailName">No menu selected</div>
+                        </div>
+                        <input type="file" id="menuDetailImageInput" accept="image/*" style="display: none;" onchange="handleMenuDetailImageSelect(event)">
+                    </div>
+
+                    <div class="menu-detail-info">
+                        <div class="menu-detail-info-left">
+                            <h4>Product Info</h4>
+                            <div class="detail-row">
+                                <span class="detail-label">Price</span>
+                                <span class="detail-value" id="menuDetailPrice">—</span>
+                                <input type="number" class="detail-input" id="menuDetailPriceInput" min="0" step="0.01" placeholder="0.00" style="display: none;">
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Availability</span>
+                                <span class="detail-value" id="menuDetailAvailability">—</span>
+                                <select class="detail-input" id="menuDetailAvailabilityInput" style="display: none;">
+                                    <option value="true">Active</option>
+                                    <option value="false">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Product Category</span>
+                                <span class="detail-value" id="menuDetailCategory">—</span>
+                                <div class="category-input-wrapper" id="menuDetailCategoryInputWrapper" style="display: none;">
+                                    <select class="detail-input" id="menuDetailCategoryInput" onchange="handleCategorySelect('menuDetailCategoryInput')">
+                                    <option value="Popular">Popular</option>
+                                    <option value="Starter">Starter</option>
+                                    <option value="Main Menu">Main Menu</option>
+                                    <option value="Ala Carte">Ala Carte</option>
+                                    <option value="Side">Side</option>
+                                    <option value="Beverage">Beverage</option>
+                                        <option value="">-- Add New Category --</option>
+                                </select>
+                                    <input type="text" id="menuDetailCategoryCustom" class="detail-input" placeholder="Type new category name..." style="display: none; margin-top: 8px;" onblur="handleCategoryCustomInput('menuDetailCategoryInput')" onkeypress="if(event.key==='Enter') handleCategoryCustomInput('menuDetailCategoryInput')">
+                                </div>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Menu ID</span>
+                                <span class="detail-value" id="menuDetailMenuId">—</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Total Orders</span>
+                                <span class="detail-value" id="menuDetailOrdersCount">0</span>
+                            </div>
+                            <div class="detail-row" id="menuDetailChangeImageRow" style="display: none;">
+                                <button type="button" class="menu-detail-change-image-btn" id="menuDetailChangeImageBtn" onclick="document.getElementById('menuDetailImageInput').click()" title="Change Image">
+                                    <i class="fas fa-camera"></i>
+                                    Change Image
+                                </button>
+                            </div>
+                            <div class="menu-detail-ingredients-section">
+                                <h5>Ingredients Linked</h5>
+                                <ul class="menu-edit-ingredients" id="menuDetailIngredients">
+                                    <li class="empty-state">No ingredients linked yet.</li>
+                                </ul>
+                            </div>
+                            <div class="menu-detail-variations-section">
+                                <h5>Variations</h5>
+                                <div id="menuDetailVariations" class="menu-detail-variations-list">
+                                    <div class="empty-state">No variations added yet.</div>
+                                </div>
+                            </div>
+                            <div class="menu-detail-actions">
+                                <button type="button" class="btn btn-secondary" id="menuDetailEditBtn" onclick="toggleMenuDetailEdit()">Edit</button>
+                                <button type="button" class="btn btn-warning" id="menuDetailDiscardBtn" onclick="discardMenuDetailEdit()" style="display: none;">Discard Edit</button>
+                                <button type="button" class="btn btn-danger" onclick="handleMenuItemDeleteFromDetail()">Delete</button>
+                            </div>
+                        </div>
+                        <div class="menu-detail-info-right">
+                            <h4>Product Details</h4>
+                            <p id="menuDetailDescription">—</p>
+                            <textarea class="detail-input detail-textarea" id="menuDetailDescriptionInput" style="display: none;"></textarea>
+                            
+                            <h4 style="margin-top: 20px;">Allergens</h4>
+                            <p id="menuDetailAllergens">—</p>
+                            <input type="text" class="detail-input" id="menuDetailAllergensInput" style="display: none;" placeholder="e.g., Contains nuts, dairy, gluten">
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Menu Item Editor Modal -->
+    <div id="menuItemModal" class="modal" aria-hidden="true">
+        <div class="modal-content menu-item-modal">
+            <div class="modal-header">
+                <div>
+                    <h2>Product Details</h2>
+                    <p class="modal-subtitle">View this dish’s details, sales, and status. You can also edit or delete it here.</p>
+                </div>
+                <span class="close-modal" onclick="closeMenuItemModal()">&times;</span>
+            </div>
+            <form id="menuItemEditForm">
+                <div class="modal-body">
+                    <div class="menu-edit-grid">
+                        <div class="menu-edit-section">
+                            <label for="menuEditName">Dish Name (Internal)</label>
+                            <input type="text" id="menuEditName" class="form-control" placeholder="Enter dish name" required>
+                            <small class="form-hint">Internal name used for identification and variations</small>
+                        </div>
+                        <div class="menu-edit-section">
+                            <label for="menuEditDisplayName">Display Name (Optional)</label>
+                            <input type="text" id="menuEditDisplayName" class="form-control" placeholder="Enter display name">
+                            <small class="form-hint">Customer-facing name. If empty, internal name will be used.</small>
+                        </div>
+                        <div class="menu-edit-section">
+                            <label for="menuEditMenuId">Menu ID</label>
+                            <input type="text" id="menuEditMenuId" class="form-control" placeholder="Enter menu ID">
+                        </div>
+                        <div class="menu-edit-section">
+                            <label for="menuEditCategory">Category</label>
+                            <div class="category-input-wrapper">
+                                <select id="menuEditCategory" class="form-control" onchange="handleCategorySelect('menuEditCategory')">
+                                <option value="Popular">Popular</option>
+                                <option value="Starter">Starter</option>
+                                <option value="Main Menu">Main Menu</option>
+                                <option value="Ala Carte">Ala Carte</option>
+                                <option value="Side">Side</option>
+                                <option value="Beverage">Beverage</option>
+                                    <option value="">-- Add New Category --</option>
+                            </select>
+                                <input type="text" id="menuEditCategoryCustom" class="form-control" placeholder="Type new category name..." style="display: none; margin-top: 8px;" onblur="handleCategoryCustomInput('menuEditCategory')" onkeypress="if(event.key==='Enter') handleCategoryCustomInput('menuEditCategory')">
+                            </div>
+                        </div>
+                        <div class="menu-edit-section">
+                            <label for="menuEditPrice">Price (PHP)</label>
+                            <input type="number" id="menuEditPrice" class="form-control" min="0" step="0.01" placeholder="0.00">
+                        </div>
+                        <div class="menu-edit-section">
+                            <label for="menuEditQuantity">Quantity Available</label>
+                            <input type="number" id="menuEditQuantity" class="form-control" min="0" step="1" placeholder="0">
+                        </div>
+                        <div class="menu-edit-section">
+                        </div>
+                        <div class="menu-edit-section">
+                            <label>Status</label>
+                            <span class="status-badge active" id="menuEditStatusBadge">Active</span>
+                        </div>
+                        <div class="menu-edit-section">
+                            <label>Preview</label>
+                            <div class="menu-edit-image" id="menuEditImage">
+                                <div class="image-placeholder large">?</div>
+                            </div>
+                        </div>
+                        <div class="menu-edit-section full-width">
+                            <label for="menuEditDescription">Description</label>
+                            <textarea id="menuEditDescription" class="form-control" rows="3" placeholder="Describe the dish"></textarea>
+                        </div>
+                        <div class="menu-edit-section full-width">
+                            <label for="menuEditAllergens">Allergens (Optional)</label>
+                            <input type="text" id="menuEditAllergens" class="form-control" placeholder="e.g., Contains nuts, dairy, gluten. Leave empty if no allergens.">
+                        </div>
+                        <div class="menu-edit-section full-width">
+                            <label>Ingredients Linked</label>
+                            <ul class="menu-edit-ingredients" id="menuEditIngredients">
+                                <li class="empty-state">Select a dish to display ingredients.</li>
+                            </ul>
+                        </div>
+                        <div class="menu-edit-section full-width">
+                            <label>Product Summary</label>
+                            <div class="product-summary" id="menuEditSummary">
+                                <div class="summary-row">
+                                    <span class="summary-label">Menu ID</span>
+                                    <span class="summary-value" id="summaryMenuId">—</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span class="summary-label">Category</span>
+                                    <span class="summary-value" id="summaryCategory">—</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span class="summary-label">Price</span>
+                                    <span class="summary-value" id="summaryPrice">—</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span class="summary-label">Availability</span>
+                                    <span class="summary-value" id="summaryStatus">—</span>
+                                </div>
+                                <div class="summary-row">
+                                </div>
+                                <div class="summary-row">
+                                    <span class="summary-label">Orders Received</span>
+                                    <span class="summary-value" id="summaryOrdersCount">0</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span class="summary-label">Description</span>
+                                    <span class="summary-value" id="summaryDescription">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeMenuItemModal()">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="menuEditDeleteBtn">Delete</button>
+                    <button type="button" class="btn btn-secondary" id="menuEditDeactivateBtn">Deactivate</button>
+                    <button type="submit" class="btn btn-primary" id="menuEditSaveBtn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Image Gallery Modal -->
+    <div id="imageGalleryModal" class="modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.5);">
+        <div class="modal-content" style="max-width: 900px; max-height: 80vh; background-color: #fefefe; margin: 5% auto; padding: 0; border: none; border-radius: 10px; width: 90%; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);">
+            <div class="modal-header" style="padding: 20px 30px; background-color: #f8f9fa; border-bottom: 1px solid #e9ecef; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #495057; font-size: 24px;">Select Food Image</h3>
+                <button class="modal-close" onclick="closeImageGallery()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:#777; padding: 0; line-height: 1;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 30px; max-height: 60vh; overflow-y: auto;">
+                <div id="imageGalleryLoading" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2em; color: #dc3545;"></i>
+                    <p>Loading images...</p>
+                </div>
+                <div id="imageGalleryGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; padding: 20px;">
+                    <!-- Images will be loaded here -->
+                </div>
+                <div id="imageGalleryEmpty" style="display: none; text-align: center; padding: 40px; color: #666;">
+                    <i class="fas fa-image" style="font-size: 3em; margin-bottom: 16px; opacity: 0.3;"></i>
+                    <p>No images found in menuImages folder.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Initialization -->
+    <script type="module" src="firebase-init.js"></script>
+    
+    <!-- Session Check - Must be after Firebase init -->
+    <script src="session-check.js"></script>
+    
+    <!-- Update User Profile Display -->
+    <script src="update-user-profile.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
