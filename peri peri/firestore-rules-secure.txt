@@ -1,0 +1,184 @@
+// Firestore Security Rules - Secure Version
+// This version enforces security at the Firestore level
+// Note: Since this app uses custom authentication, we enforce data validation
+// and field restrictions. For full requester identification, consider migrating to Firebase Auth.
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to validate role value
+    function isValidRole(role) {
+      return role in ['Staff', 'Admin', 'Manager', 'Owner', 'System_Admin'];
+    }
+    
+    // Helper function to validate status value
+    function isValidStatus(status) {
+      return status in ['active', 'suspended', 'inactive', 'deleted'];
+    }
+    
+    // Helper function to validate email format (basic check)
+    function isValidEmail(email) {
+      return email is string && 
+             email.matches('.*@.*\\..*') &&
+             email.size() > 0 &&
+             email.size() <= 254;
+    }
+
+    function isValidUnitType(unitType) {
+      return unitType in ['weight', 'count'];
+    }
+
+    function isValidBaseUnit(unitType, baseUnit) {
+      return (unitType == 'count' && baseUnit == 'pcs') ||
+             (unitType == 'weight' && baseUnit in ['g', 'kg']);
+    }
+
+    function isNonNegativeNumber(value) {
+      return value is number && value >= 0;
+    }
+
+    function hasValidTimestamps(data) {
+      return (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidStockDocument(data) {
+      return data.keys().hasAll(['name', 'unitType', 'baseUnit', 'quantity', 'reorderLevel']) &&
+             data.name is string && data.name.size() > 0 &&
+             isValidUnitType(data.unitType) &&
+             isValidBaseUnit(data.unitType, data.baseUnit) &&
+             isNonNegativeNumber(data.quantity) &&
+             isNonNegativeNumber(data.reorderLevel) &&
+             hasValidTimestamps(data);
+    }
+
+    function isValidStockUpdate(newData, existingData) {
+      return isValidStockDocument(newData) &&
+             newData.name == existingData.name &&
+             newData.unitType == existingData.unitType &&
+             newData.baseUnit == existingData.baseUnit &&
+             newData.quantity >= 0;
+    }
+
+// CUSTOMERS COLLECTION
+    match /customers/{userId} {
+      // Allow authenticated users to create their own user document
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Allow users to read their own user document
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Allow users to update their own user document
+      allow update: if request.auth != null && request.auth.uid == userId;
+
+      // Prevent deletion
+      allow delete: if false;
+    }
+
+// STAFF COLLECTION
+    match /staff/{staffId} {
+      // Allow creation without authentication (for registration page)
+      // But validate the data structure
+      allow create: if (
+        // Validate required fields
+        request.resource.data.keys().hasAll(['firstName', 'lastName', 'email', 'staffId', 'role', 'status']) &&
+        
+        // Validate firstName and lastName
+        request.resource.data.firstName is string &&
+        request.resource.data.firstName.size() > 0 &&
+        request.resource.data.firstName.size() <= 100 &&
+        request.resource.data.lastName is string &&
+        request.resource.data.lastName.size() > 0 &&
+        request.resource.data.lastName.size() <= 100 &&
+        
+        // Validate email
+        isValidEmail(request.resource.data.email) &&
+        
+        // Validate role
+        request.resource.data.role is string &&
+        isValidRole(request.resource.data.role) &&
+        
+        // Validate status
+        request.resource.data.status is string &&
+        request.resource.data.status == 'active' &&
+        
+        // Validate staffId matches document ID
+        request.resource.data.staffId == staffId &&
+        
+        // Validate password exists (for new accounts)
+        request.resource.data.password is string &&
+        request.resource.data.password.size() >= 6
+      );
+
+      // Allow read without authentication (needed for duplicate checking)
+      allow read: if true;
+
+      // Allow updates with strict validation
+      allow update: if (
+        // Only allow updating specific fields (prevent unauthorized field changes)
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['firstName', 'middleName', 'lastName', 'suffix', 'email', 
+                   'role', 'status', 'updatedAt', 'passwordResetToken', 
+                   'passwordResetExpiry', 'passwordResetRequestedAt']) &&
+        
+        // Ensure required fields are present
+        request.resource.data.keys().hasAll(['firstName', 'lastName', 'email', 'role', 'status', 'staffId']) &&
+        
+        // Validate firstName (required, non-empty, max length)
+        request.resource.data.firstName is string &&
+        request.resource.data.firstName.size() > 0 &&
+        request.resource.data.firstName.size() <= 100 &&
+        
+        // Validate lastName (required, non-empty, max length)
+        request.resource.data.lastName is string &&
+        request.resource.data.lastName.size() > 0 &&
+        request.resource.data.lastName.size() <= 100 &&
+        
+        // Validate middleName (optional, but if present must be string)
+        (!('middleName' in request.resource.data) || 
+         (request.resource.data.middleName is string && 
+          request.resource.data.middleName.size() <= 100)) &&
+        
+        // Validate suffix (optional, but if present must be string)
+        (!('suffix' in request.resource.data) || 
+         (request.resource.data.suffix is string && 
+          request.resource.data.suffix.size() <= 20)) &&
+        
+        // Validate email format and length
+        isValidEmail(request.resource.data.email) &&
+        
+        // Validate role is one of the allowed values
+        request.resource.data.role is string &&
+        isValidRole(request.resource.data.role) &&
+        
+        // Validate status is one of the allowed values
+        request.resource.data.status is string &&
+        isValidStatus(request.resource.data.status) &&
+        
+        // Prevent changing staffId (immutable identifier)
+        request.resource.data.staffId == resource.data.staffId &&
+        
+        // Prevent direct password changes (password can only be set during creation or reset)
+        // Allow passwordResetToken fields to be updated (for password reset functionality)
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['password']) ||
+         request.resource.data.password == resource.data.password)
+      );
+
+      // Prevent deletion (use status: 'deleted' instead for soft delete)
+      allow delete: if false;
+    }
+
+// STOCKS COLLECTION (Inventory)
+    match /stocks/{stockId} {
+      allow read: if true;
+
+      allow create: if isValidStockDocument(request.resource.data);
+
+      allow update: if isValidStockUpdate(request.resource.data, resource.data);
+
+      allow delete: if false;
+    }
+  }
+}
+
