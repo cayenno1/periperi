@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Pablo's Peri Peri</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .dashboard-hero {
+            display: grid;
+            gap: 16px;
+        }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 16px;
+        }
+        .panel {
+            border: 1px solid #3d2817;
+            border-radius: 12px;
+            background: #fffaf5;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        }
+        .panel h3 {
+            color: #3d2817;
+            margin: 0 0 8px 0;
+        }
+        .panel small { color: #6b5b4a; }
+        .metric-value { font-size: 26px; font-weight: 800; color: #3d2817; }
+        .metric-sub { color: #7E2021; font-weight: 600; }
+        .pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 10px; border-radius: 20px;
+            background: #f9e4e4; color: #7E2021; font-weight: 600; font-size: 12px;
+        }
+        .quick-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+        .quick-card {
+            border: 1px solid #3d2817; border-radius: 12px; background: #fffaf5;
+            padding: 14px; display: flex; align-items: center; gap: 12px;
+            text-decoration: none; color: #3d2817; transition: transform 0.1s ease, box-shadow 0.15s ease;
+        }
+        .quick-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08); }
+        .quick-icon {
+            width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 10px; background: #f9e4e4; color: #7E2021; font-size: 18px;
+        }
+        .low-stock-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+        .low-stock-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-radius: 10px; background: #f3ede5; color: #3d2817; }
+        .spark-bar {
+            height: 6px; border-radius: 999px; background: #f3ede5; position: relative; overflow: hidden;
+        }
+        .spark-fill {
+            position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: #7E2021; width: var(--percent, 0%);
+        }
+        .financial-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+        .track-order {
+            display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+        }
+        .track-order input {
+            width: 100%; padding: 12px 14px; border: 1px solid #d8cfc4; border-radius: 10px;
+            background: #fff; color: #3d2817;
+        }
+        .track-order button {
+            padding: 12px 14px; border: 1px solid #7E2021; background: #7E2021; color: #fff;
+            border-radius: 10px; cursor: pointer;
+        }
+        .badge-soft { padding: 4px 10px; border-radius: 14px; background: #f3ede5; color: #3d2817; font-weight: 600; font-size: 12px; }
+    </style>
+    <script>
+        // Hide restricted navigation immediately on page load (runs before page renders)
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const userRole = staffSession.role || '';
+                    if (userRole !== 'Owner' && userRole !== 'Admin') {
+                        const style = document.createElement('style');
+                        style.id = 'restrict-admin-profile';
+                        style.textContent = 'a[href*="admin-profile.html"] { display: none !important; }';
+                        (document.head || document.documentElement).appendChild(style);
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not hide navigation immediately:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="dashboard">
+        <button class="mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Toggle menu">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <aside class="sidebar" id="sidebar">
+            <div class="logo-section">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="periperilogo.png" alt="Pablo's Peri Peri Logo" class="logo-image">
+                    </div>
+                </div>
+                <div class="brand-text">
+                    <h1>PABLO'S</h1>
+                    <p>PERI PERI</p>
+                    <span>Administrator Side</span>
+                </div>
+            </div>
+            
+            <nav class="navigation">
+                <ul class="nav-list">
+                    <li class="nav-item active">
+                        <a href="index.html" class="nav-link">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="orders.html" class="nav-link">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span>Orders</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="drivers.html" class="nav-link">
+                            <i class="fas fa-car"></i>
+                            <span>Drivers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item menu-nav-dropdown">
+                        <button type="button" class="nav-link menu-toggle" onclick="toggleMenuTabDropdown()">
+                            <i class="fas fa-shopping-basket"></i>
+                            <span>Menu</span>
+                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                        </button>
+                        <ul class="menu-nav-submenu" id="menuTabDropdown">
+                            <li><a href="menu.html#menu-catalogue">Menu Catalogue</a></li>
+                            <li><a href="menu.html#menu-list">Menu List</a></li>
+                            <li><a href="menu.html#addFoodDashboard" onclick="event.preventDefault(); window.location.href='menu.html#addFoodDashboard';">Add Product</a></li>
+                            <li><a href="menu.html#menu-product-detail">Product Detail</a></li>
+                            <li><a href="menu.html#tableNumbers">Table Number</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item menu-nav-dropdown">
+                        <button type="button" class="nav-link menu-toggle" onclick="togglePromotionTabDropdown()">
+                            <i class="fas fa-bullhorn"></i>
+                            <span>Promotion</span>
+                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                        </button>
+                        <ul class="menu-nav-submenu" id="promotionTabDropdown">
+                            <li><a href="menu.html#bannerCatalogue">Banner Catalogue</a></li>
+                            <li><a href="menu.html#promotionDashboard">Create Banner</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item menu-nav-dropdown">
+                        <button type="button" class="nav-link menu-toggle" onclick="toggleCustomerTabDropdown()">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Customer</span>
+                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                        </button>
+                        <ul class="menu-nav-submenu" id="customerTabDropdown">
+                            <li><a href="customer.html#customer-profile">Customer Profile</a></li>
+                            <li><a href="customer.html#reviews">Reviews</a></li>
+                            <li><a href="customer.html#most-ordered">Most Ordered</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item menu-nav-dropdown">
+                        <button type="button" class="nav-link menu-toggle" onclick="toggleAnalyticsTabDropdown()">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Analytics</span>
+                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                        </button>
+                        <ul class="menu-nav-submenu" id="analyticsTabDropdown">
+                            <li><a href="sales.html#sales">Sales</a></li>
+                            <li><a href="sales.html#inventory">Inventory</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="admin-profile.html" class="nav-link">
+                            <i class="fas fa-user"></i>
+                            <span>Admin Profile</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="activity-logs.html" class="nav-link">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Activity Logs</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="content-header">
+                <div class="page-title">
+                    <div class="title-bar"></div>
+                    <h2>Dashboard</h2>
+                </div>
+                <div class="user-profile">
+                    <button class="profile-btn" onclick="event.stopPropagation(); toggleDropdown('adminDropdown');">
+                        <i class="fas fa-user"></i>
+                        <span id="profileName"></span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu" id="adminDropdown">
+                        <a href="#" class="dropdown-item" onclick="showUserProfile()">Profile Settings</a>
+                        <a href="#" class="dropdown-item">Logout</a>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-hero">
+                <!-- Operational Metrics -->
+                <div class="metric-grid">
+                    <div class="panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3>Total Orders</h3>
+                            <span class="badge-soft">Today</span>
+                        </div>
+                        <div class="metric-value" id="totalOrdersMetric">—</div>
+                        <div class="spark-bar" style="margin-top:8px;"><div class="spark-fill" id="ordersSpark" style="--percent:40%;"></div></div>
+                        <small id="ordersSubtext" class="metric-sub">Awaiting data</small>
+                    </div>
+
+                    <div class="panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3>Ongoing Deliveries</h3>
+                            <span class="badge-soft">Live</span>
+                        </div>
+                        <div class="metric-value" id="ongoingDeliveriesMetric">—</div>
+                        <div class="spark-bar" style="margin-top:8px;"><div class="spark-fill" id="deliveriesSpark" style="--percent:25%;"></div></div>
+                        <small id="deliveriesSubtext" class="metric-sub">Awaiting data</small>
+                    </div>
+
+                    <div class="panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3>Active Staff</h3>
+                            <span class="badge-soft">Shift</span>
+                        </div>
+                        <div class="metric-value" id="activeStaffMetric">—</div>
+                        <div class="spark-bar" style="margin-top:8px;"><div class="spark-fill" id="staffSpark" style="--percent:60%;"></div></div>
+                        <small id="staffSubtext" class="metric-sub">Awaiting data</small>
+                    </div>
+
+                    <div class="panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3>Low Stock Alerts</h3>
+                            <span class="badge-soft">Inventory</span>
+                        </div>
+                        <div class="metric-value" id="lowStockMetric">—</div>
+                        <ul class="low-stock-list" id="lowStockList" style="margin-top:12px;"></ul>
+                    </div>
+                </div>
+
+                <!-- Track Order + Quick Links -->
+                <div class="panel" style="display:grid; gap:16px;">
+                    <h3>Track Order</h3>
+                    <div class="track-order">
+                        <input type="text" id="trackOrderInput" placeholder="Type order ID and find the order">
+                        <button onclick="handleTrackOrder()">Find</button>
+                    </div>
+                    <div class="quick-links">
+                        <a class="quick-card" href="orders.html">
+                            <div class="quick-icon"><i class="fas fa-shopping-cart"></i></div>
+                            <div>
+                                <div style="font-weight:700;">Orders</div>
+                                <small>Go to all orders</small>
+                            </div>
+                        </a>
+                        <a class="quick-card" href="drivers.html">
+                            <div class="quick-icon"><i class="fas fa-car"></i></div>
+                            <div>
+                                <div style="font-weight:700;">Drivers</div>
+                                <small>Availability & status</small>
+                            </div>
+                        </a>
+                        <a class="quick-card" href="menu.html#menu-catalogue">
+                            <div class="quick-icon" style="background:#fef4dc; color:#d08a1f;"><i class="fas fa-utensils"></i></div>
+                            <div>
+                                <div style="font-weight:700;">Menu</div>
+                                <small>Catalogue & items</small>
+                            </div>
+                        </a>
+                        <a class="quick-card" href="menu.html#bannerCatalogue">
+                            <div class="quick-icon"><i class="fas fa-bullhorn"></i></div>
+                            <div>
+                                <div style="font-weight:700;">Promotion</div>
+                                <small>Banners & promos</small>
+                            </div>
+                        </a>
+                        <a class="quick-card" href="customer.html#customer-profile">
+                            <div class="quick-icon"><i class="fas fa-user-friends"></i></div>
+                            <div>
+                                <div style="font-weight:700;">Customers</div>
+                                <small>Profiles & feedback</small>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Financial Widgets (role-controlled) -->
+                <div id="financialWidgets" class="panel" style="display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3>Financial & Audit</h3>
+                        <span class="pill">Admins / Owners</span>
+                    </div>
+                    <div class="financial-row">
+                        <div class="panel" style="padding:12px;">
+                            <div class="info-card-icon" style="background:#f3ede5; color:#7E2021; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;">
+                                <i class="fas fa-coins"></i>
+                            </div>
+                            <div class="metric-value" id="revenueMetric">$—</div>
+                            <small class="metric-sub" id="revenueSubtext">Awaiting data</small>
+                        </div>
+                        <div class="panel" style="padding:12px;">
+                            <div class="info-card-icon" style="background:#fef4dc; color:#d08a1f; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="metric-value" id="salesAnalyticsMetric">$—</div>
+                            <small class="metric-sub" id="salesSubtext">Awaiting data</small>
+                        </div>
+                        <div class="panel" style="padding:12px;">
+                            <div class="info-card-icon" style="background:#f9e4e4; color:#3d2817; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;">
+                                <i class="fas fa-clipboard-list"></i>
+                            </div>
+                            <div class="metric-value" id="auditLogsMetric">—</div>
+                            <small class="metric-sub" id="auditSubtext">Awaiting data</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Firebase Initialization -->
+    <script type="module" src="firebase-init.js"></script>
+    <!-- Session Check -->
+    <script src="session-check.js"></script>
+    <!-- Update User Profile Display -->
+    <script src="update-user-profile.js"></script>
+    <script src="script.js"></script>
+    <script>
+        // Update profile name immediately on page load
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const profileName = document.getElementById('profileName');
+                    if (profileName) {
+                        if (staffSession.firstName && staffSession.lastName) {
+                            let displayName = staffSession.firstName + ' ' + staffSession.lastName;
+                            if (staffSession.suffix) displayName += ' ' + staffSession.suffix;
+                            profileName.textContent = displayName;
+                        } else if (staffSession.email) {
+                            const emailName = staffSession.email.split('@')[0];
+                            profileName.textContent = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                        } else if (staffSession.staffId) {
+                            profileName.textContent = staffSession.staffId;
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn('Could not update profile name immediately:', e);
+            }
+        })();
+
+        // Role-based visibility for financial widgets
+        (function() {
+            try {
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                const financial = document.getElementById('financialWidgets');
+                if (!financial) return;
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const role = (staffSession.role || '').toLowerCase();
+                    if (role === 'owner' || role === 'admin') {
+                        financial.style.display = 'block';
+                    } else {
+                        financial.style.display = 'none';
+                    }
+                } else {
+                    financial.style.display = 'none';
+                }
+            } catch (e) {
+                console.warn('Could not set financial visibility:', e);
+            }
+        })();
+
+        async function loadDashboardData() {
+            const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            const setPercent = (id, pct) => { const el = document.getElementById(id); if (el) el.style.setProperty('--percent', `${Math.max(0, Math.min(100, pct))}%`); };
+
+            try {
+                if (typeof waitForFirebaseReady === 'function') {
+                    await waitForFirebaseReady();
+                }
+
+                // Load orders
+                if ((!window.ordersState || !window.ordersState.length) && typeof loadOrdersCollectionOnce === 'function') {
+                    await loadOrdersCollectionOnce();
+                }
+                const orders = Array.isArray(window.ordersState) ? window.ordersState : [];
+                setText('totalOrdersMetric', orders.length.toString());
+                const newToday = orders.filter(o => o.isNew).length;
+                setText('ordersSubtext', `New today: ${newToday}`);
+
+                const ongoingStatuses = new Set(['preparing', 'ready for delivery', 'out for delivery']);
+                const ongoing = orders.filter(o => ongoingStatuses.has((o.status || '').toLowerCase())).length;
+                setText('ongoingDeliveriesMetric', ongoing.toString());
+                setText('deliveriesSubtext', ongoing > 0 ? 'In progress' : 'No active deliveries');
+
+                // Staff (active)
+                let activeStaff = 0;
+                if (window.firestoreFunctions && window.db) {
+                    const { getDocs, collection, query, where } = window.firestoreFunctions;
+                    const staffSnap = await getDocs(query(collection(window.db, 'staff'), where('status', '==', 'active')));
+                    activeStaff = staffSnap.size;
+                }
+                setText('activeStaffMetric', activeStaff.toString());
+                setText('staffSubtext', 'Online / Active');
+
+                // Inventory low stock
+                if ((!window.inventoryState || !window.inventoryState.length) && window.InventoryStore && typeof window.InventoryStore.getItems === 'function') {
+                    window.inventoryState = await window.InventoryStore.getItems();
+                }
+                const inventory = Array.isArray(window.inventoryState) ? window.inventoryState : [];
+                const lowItems = inventory.filter(item => {
+                    const status = typeof getStockStatus === 'function' ? getStockStatus(item) : { level: 'unknown' };
+                    return status.level && status.level !== 'healthy';
+                });
+                setText('lowStockMetric', lowItems.length.toString());
+                const lowStockList = document.getElementById('lowStockList');
+                if (lowStockList) {
+                    const top = lowItems.slice(0, 5).map(item => {
+                        const status = typeof getStockStatus === 'function' ? getStockStatus(item) : { label: 'Low', className: 'low' };
+                        return `<li class="low-stock-item"><span>${item.name || 'Item'}</span><span class="pill" style="background:#f9e4e4;color:#7E2021;">${status.label || 'Low'}</span></li>`;
+                    }).join('');
+                    lowStockList.innerHTML = top || '<li class="low-stock-item"><span>No low stock items</span><span class="pill" style="background:#f3ede5;color:#3d2817;">OK</span></li>';
+                }
+
+                // Financial (admins/owners only)
+                const financialVisible = document.getElementById('financialWidgets')?.style.display === 'block';
+                if (financialVisible) {
+                    const paidOrders = orders.filter(isOrderPaid);
+                    const revenue = paidOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+                    const format = typeof formatCurrency === 'function' ? formatCurrency : (v) => `₱${Number(v || 0).toFixed(2)}`;
+                    setText('revenueMetric', format(revenue));
+                    setText('revenueSubtext', 'Paid orders total');
+
+                    // Simple sales analytics: paid orders count + avg ticket
+                    const avgTicket = paidOrders.length ? revenue / paidOrders.length : 0;
+                    setText('salesAnalyticsMetric', format(avgTicket));
+                    setText('salesSubtext', `${paidOrders.length} paid orders`);
+
+                    // Audit logs placeholder from activity logs collection (count docs)
+                    if (window.firestoreFunctions && window.db) {
+                        const { getDocs, collection } = window.firestoreFunctions;
+                        try {
+                            const auditSnap = await getDocs(collection(window.db, 'activityLogs'));
+                            setText('auditLogsMetric', auditSnap.size.toString());
+                            setText('auditSubtext', 'Activity log entries');
+                        } catch (e) {
+                            setText('auditLogsMetric', '—');
+                            setText('auditSubtext', 'Unable to load logs');
+                        }
+                    }
+                }
+
+                // Simple spark fills based on counts
+                const total = orders.length || 1;
+                setPercent('ordersSpark', Math.min(100, (newToday / total) * 100));
+                setPercent('deliveriesSpark', Math.min(100, (ongoing / total) * 100));
+                setPercent('staffSpark', Math.min(100, activeStaff * 5));
+
+            } catch (e) {
+                console.warn('Dashboard data load failed:', e);
+            }
+        }
+
+        function handleTrackOrder() {
+            const val = (document.getElementById('trackOrderInput')?.value || '').trim();
+            if (!val) return;
+            window.location.href = `orders.html?search=${encodeURIComponent(val)}`;
+        }
+
+        // Update logout links
+        document.addEventListener('DOMContentLoaded', function() {
+            const logoutLinks = document.querySelectorAll('a[href*="Logout"], .dropdown-item:last-child');
+            logoutLinks.forEach(link => {
+                if (link.textContent.toLowerCase().includes('logout')) {
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        if (typeof logout === 'function') {
+                            logout();
+                        } else {
+                            sessionStorage.removeItem('staffSession');
+                            localStorage.removeItem('staffSession');
+                            window.location.href = 'staff-login.html';
+                        }
+                    });
+                }
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', loadDashboardData);
+    </script>
+</body>
+</html>
+
