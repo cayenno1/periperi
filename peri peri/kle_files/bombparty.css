@@ -1,0 +1,283 @@
+html,
+body {
+  height: 100%;
+}
+
+body {
+  display: flex;
+}
+
+.page {
+  flex: 1;
+  display: flex;
+  flex-flow: column;
+  background: radial-gradient(ellipse, #564a42, #463d36 70%, #37302b), #37302b;
+  box-shadow: 0 0 1em #9b745938 inset;
+}
+
+.offline {
+  font-style: italic;
+  color: #777;
+}
+
+.top {
+  background: rgba(0, 0, 0, 0.1);
+  text-align: center;
+  color: #eee;
+  padding: 1em;
+  display: flex;
+}
+
+.top .seating {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.top .seating .startRoundNow a {
+  color: #fff;
+  font-size: smaller;
+}
+
+.middle {
+  display: flex;
+  flex: 1;
+  text-align: center;
+  align-items: stretch;
+  overflow: hidden;
+  position: relative;
+}
+
+.middle .canvasArea {
+  flex: 1;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.canvasArea .quickRules {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1em;
+  color: #eee;
+}
+
+.canvasArea .quickRules .dictionary .value {
+  white-space: nowrap;
+}
+
+.canvasArea .toggleRules {
+  margin-left: 0.5em;
+  white-space: nowrap;
+}
+
+.canvasArea button {
+  padding: 0.4em 0.8em;
+  color: #fff;
+  font-weight: bold;
+  border: 1px solid #ccc;
+  border-radius: 2em;
+  background: transparent;
+  user-select: none;
+  cursor: pointer;
+}
+
+.canvasArea button:hover,
+.canvasArea button:focus {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.canvasArea button:active {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.middle canvas {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  top: 2em;
+  height: calc(100% - 2em);
+}
+
+.middle .round,
+.middle .seating {
+  margin-top: 2em;
+  color: #aaa;
+  z-index: 1;
+}
+
+.middle .seating .lastRound {
+  color: #eee;
+  display: flex;
+  flex-flow: column;
+  align-items: center;
+  padding: 1em;
+  min-width: 15em;
+}
+
+.middle .seating .winnerPicture {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  margin-bottom: 1em;
+}
+
+.middle .seating .winnerPicture img {
+  width: 96px;
+  height: 96px;
+  box-shadow: 0 0 1em rgba(255, 255, 255, 0.3);
+}
+
+.middle .seating .winnerPicture .medal {
+  position: absolute;
+  top: 96px;
+  right: 0;
+  font-size: 2em;
+  line-height: 0;
+  left: 0;
+}
+
+.middle .seating .winnerNickname {
+  font-size: 2em;
+  max-width: 9em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.middle .round .syllable {
+  font-weight: bold;
+  font-size: larger;
+  color: #fff;
+}
+
+.bottom {
+  text-align: center;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  height: 4em;
+  color: #eee;
+}
+
+.bottom .seating,
+.bottom .round {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.bottom .seating .joined .leaveRound {
+  margin-left: 0.5em;
+}
+
+.syllable,
+.bottom .selfTurn input {
+  text-transform: uppercase;
+}
+
+.selfTurn {
+  flex: 1;
+  display: flex;
+}
+
+.selfTurn form {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+}
+
+.selfTurn input {
+  text-align: center;
+  border: none;
+  border-radius: 1em;
+  flex: 1;
+  display: block;
+  margin: 0 0.5em;
+  min-width: 0;
+  max-width: 600px;
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 1em rgba(0, 0, 0, 0.3) inset;
+  outline: none;
+  color: #eee;
+  font-size: 1.25em;
+}
+
+.rules {
+  z-index: 2;
+  position: absolute;
+  top: 5em;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.rules .promptDifficulty.rule .custom {
+  margin-top: 0.5em;
+}
+
+.bonusAlphabetField {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.letterField {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.letterField input {
+  width: 3rem;
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+.customBonusAlphabet button {
+  margin-top: 1em;
+  color: #eee;
+}
+
+.letterField input:disabled {
+  width: 3em;
+}
+
+.customBonusAlphabet .field {
+  display: grid;
+}
+
+.bonusAlphabetBulkEdit>input {
+  width: 4em;
+}
+
+.customBonusAlphabet .group {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.customBonusAlphabet .group>input,
+.customBonusAlphabet .group>button {
+  margin: 0.5em;
+}
+
+
+@media (min-width: 1000px) {
+  .rules {
+    position: initial;
+    top: 0;
+    width: 380px;
+  }
+}
