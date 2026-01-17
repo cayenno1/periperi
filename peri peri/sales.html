@@ -552,6 +552,44 @@
                         </table>
                     </div>
                 </div>
+                
+                <!-- Ingredient Logs Table -->
+                <div class="inventory-logs-section" style="margin-top: 40px;">
+                    <div class="inventory-table-header">
+                        <div>
+                            <h4>Ingredient Activity Logs</h4>
+                            <p class="inventory-subtitle">Real-time tracking of ingredients used and received</p>
+                        </div>
+                        <div class="inventory-table-actions">
+                            <input type="date" id="ingredientLogDateFilter" class="form-control" style="width: 180px; display: inline-block; margin-right: 10px;" onchange="filterIngredientLogs()">
+                            <select id="ingredientLogFilter" class="form-control" style="width: 200px; display: inline-block; margin-right: 10px;" onchange="filterIngredientLogs()">
+                                <option value="">All Ingredients</option>
+                            </select>
+                            <button class="export-btn" onclick="exportIngredientLogs()">
+                                <i class="fas fa-download"></i>
+                                Export Logs
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="orders-table inventory-logs-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Ingredient</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Order/Menu Item</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ingredientLogsTableBody">
+                                <tr>
+                                    <td colspan="5" class="empty-table">Loading logs...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
             </div>
         </main>
@@ -567,6 +605,10 @@
             if (hash === '#inventory') {
                 if (salesSection) salesSection.style.display = 'none';
                 if (inventorySection) inventorySection.style.display = 'block';
+                // Initialize ingredient logs when inventory section is shown
+                if (typeof initIngredientLogs === 'function') {
+                    setTimeout(() => initIngredientLogs(), 100);
+                }
             } else {
                 // Default to sales
                 if (salesSection) salesSection.style.display = 'block';

@@ -48,6 +48,13 @@ service cloud.firestore {
              newData.quantity >= 0;
     }
 
+    // ----- Order Counters (for sequential order numbering) -----
+    match /order_counters/{counterId} {
+      // Allow read and write for order counter generation
+      // This is needed for the sequential order ID system (POS)
+      allow read, write: if true;
+    }
+
     // ----- Customers -----
     match /customers/{userId} {
       allow create: if request.auth != null && request.auth.uid == userId;
@@ -184,8 +191,13 @@ service cloud.firestore {
                                request.resource.data.deliveredAt is timestamp);
         
         // Prevent changes to critical fields
+        // For guest/walk-in orders, userId might be null, so handle that case
+        let userIdUnchanged = 
+          (!('userId' in request.resource.data) && !('userId' in resource.data)) ||
+          (request.resource.data.userId == resource.data.userId);
+        
         let criticalFieldsUnchanged = 
-          request.resource.data.userId == resource.data.userId &&
+          userIdUnchanged &&
           request.resource.data.total == resource.data.total &&
           request.resource.data.items == resource.data.items;
         
@@ -193,7 +205,7 @@ service cloud.firestore {
       }
 
       // Customers can create their own orders (requires Firebase Auth)
-      // Also allow creation for guest orders (no auth required)
+      // Also allow creation for guest orders and POS/walk-in orders (no auth required)
       function isAuthedOrder() {
         return request.auth != null && request.resource.data.userId == request.auth.uid;
       }
@@ -204,7 +216,15 @@ service cloud.firestore {
                request.resource.data.isGuest == true;
       }
 
-      allow create: if isAuthedOrder() || isGuestOrder();
+      // POS/Walk-in orders: allow creation without auth if it's a walk-in order
+      function isWalkInOrder() {
+        return request.auth == null &&
+               request.resource.data.walkin == true &&
+               request.resource.data.isGuest == true &&
+               request.resource.data.status == 'completed';
+      }
+
+      allow create: if isAuthedOrder() || isGuestOrder() || isWalkInOrder();
 
       // Read access is open so the admin dashboard can list orders
       allow read: if true;
@@ -361,6 +381,71 @@ service cloud.firestore {
 
       // Allow deletion for managing table numbers
       allow delete: if true;
+    }
+
+    // ----- Daily Servings (Daily Serving Counts) -----
+    match /dailyServings/{servingId} {
+      // Allow reading daily serving counts (needed for menu availability checks)
+      allow read: if true;
+      
+      // Allow creating daily serving count documents
+      // Format: date_menuId (e.g., "2026-01-17_70552033")
+      // Fields: menuItemId, menuItemName, date, count, maxServings, createdAt, updatedAt
+      allow create: if (
+        request.resource.data.count is number &&
+        request.resource.data.count >= 0 &&
+        request.resource.data.menuItemId is string &&
+        request.resource.data.date is string &&
+        (!('maxServings' in request.resource.data) || 
+         request.resource.data.maxServings == null ||
+         (request.resource.data.maxServings is number && request.resource.data.maxServings >= 0))
+      );
+      
+      // Allow updating daily serving counts (incrementing when orders are placed)
+      // Only allow incrementing count (not decreasing)
+      allow update: if (
+        request.resource.data.count is number &&
+        request.resource.data.count >= 0 &&
+        request.resource.data.count >= resource.data.count &&
+        // Prevent changing menuItemId or date
+        request.resource.data.menuItemId == resource.data.menuItemId &&
+        request.resource.data.date == resource.data.date
+      );
+      
+      // Prevent deletion (for audit trail)
+      allow delete: if false;
+    }
+
+    // ----- Ingredient Logs (Usage and Restock Tracking) -----
+    match /ingredientLogs/{logId} {
+      // Helper function to validate ingredient log document
+      function isValidIngredientLog(data) {
+        return data.keys().hasAll(['ingredientId', 'ingredientName', 'type', 'amount', 'timestamp']) &&
+               data.ingredientId is string &&
+               data.ingredientId.size() > 0 &&
+               data.ingredientName is string &&
+               data.ingredientName.size() > 0 &&
+               data.type is string &&
+               data.type in ['used', 'received'] &&
+               data.amount is number &&
+               data.amount > 0 &&
+               data.timestamp is timestamp &&
+               (!('orderId' in data) || data.orderId is string || data.orderId == null) &&
+               (!('menuItemName' in data) || data.menuItemName is string || data.menuItemName == null) &&
+               (!('date' in data) || data.date is string);
+      }
+
+      // Allow reading ingredient logs (for reporting and analytics)
+      allow read: if true;
+      
+      // Allow creating ingredient logs (system logs usage and restocks)
+      allow create: if isValidIngredientLog(request.resource.data);
+      
+      // Prevent updates (logs should be immutable for audit trail)
+      allow update: if false;
+      
+      // Prevent deletion (logs should be kept for audit trail)
+      allow delete: if false;
     }
   }
 }

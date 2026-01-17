@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pablo's Peri Peri - Administrator</title>
+    <title>Point of Sale - Pablo's Peri Peri</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script>
-        // Hide restricted navigation immediately on page load (runs before page renders)
+        // Hide restricted navigation immediately on page load
         (function() {
             try {
                 const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
@@ -15,15 +15,12 @@
                     const staffSession = JSON.parse(session);
                     const userRole = staffSession.role || '';
                     
-                    // Hide Admin Profile link if user is not Owner or Admin
                     if (userRole !== 'Owner' && userRole !== 'Admin') {
-                        // Add CSS to hide immediately (hide both link and nav-item)
                         const style = document.createElement('style');
                         style.id = 'restrict-admin-profile';
                         style.textContent = 'a[href*="admin-profile.html"] { display: none !important; }';
                         (document.head || document.documentElement).appendChild(style);
                         
-                        // Also hide the parent nav-item via JavaScript when DOM is ready
                         const hideNavItem = function() {
                             const links = document.querySelectorAll('a[href*="admin-profile.html"]');
                             links.forEach(link => {
@@ -75,12 +72,12 @@
             <nav class="navigation">
                 <ul class="nav-list">
                     <li class="nav-item">
-                        <a href="pos.html" class="nav-link">
+                        <a href="pos.html" class="nav-link active">
                             <i class="fas fa-cash-register"></i>
                             <span>POS</span>
                         </a>
                     </li>
-                    <li class="nav-item active">
+                    <li class="nav-item">
                         <a href="index.html" class="nav-link">
                             <i class="fas fa-shopping-cart"></i>
                             <span>Orders</span>
@@ -162,7 +159,7 @@
             <header class="content-header">
                 <div class="page-title">
                     <div class="title-bar"></div>
-                    <h2>Orders</h2>
+                    <h2>Point of Sale</h2>
                 </div>
                 <div class="user-profile">
                     <button class="profile-btn" onclick="event.stopPropagation(); toggleDropdown('adminDropdown');">
@@ -206,176 +203,170 @@
                 })();
             </script>
 
-            <!-- Search, Filter, Pagination and Orders Table Container -->
-            <div class="orders-container">
-            <!-- Search and Filter Bar -->
-            <div class="search-filter-bar">
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="orderSearch" placeholder="Search Orders...." oninput="filterOrders()">
-                </div>
-                <div class="filter-dropdowns">
-                    <select id="orderSortFilter" class="filter-select" onchange="applyOrderFilters()">
-                        <option value="new-to-old">New to Old</option>
-                        <option value="old-to-new">Old to New</option>
-                    </select>
-                    <select id="orderStatusFilter" class="filter-select" onchange="applyOrderFilters()">
-                        <option value="">Status</option>
-                        <option value="pending">NEW ORDER</option>
-                        <option value="preparing">In Kitchen</option>
-                        <option value="ready">Ready</option>
-                        <option value="ready for delivery">Awaiting Driver</option>
-                        <option value="ready for pick-up">Ready for Pick-up</option>
-                        <option value="out-for-delivery">On the Way</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="declined">Declined</option>
-                    </select>
-                    <select id="orderServiceTypeFilter" class="filter-select" onchange="applyOrderFilters()">
-                        <option value="">Service Type</option>
-                        <option value="delivery">Delivery</option>
-                        <option value="dine-in">Dine In</option>
-                        <option value="pick-up">Pick Up</option>
-                    </select>
-                </div>
-            </div>
-                
-                <!-- Pagination Controls -->
-                <div class="orders-pagination" id="ordersPagination" style="display: none;">
-                    <button class="pagination-btn" id="prevPageBtn" onclick="changeOrdersPage(-1)" disabled>
-                        <i class="fas fa-chevron-left"></i> Previous
-                    </button>
-                    <span class="pagination-info" id="paginationInfo">Page 1 of 1</span>
-                    <button class="pagination-btn" id="nextPageBtn" onclick="changeOrdersPage(1)" disabled>
-                        Next <i class="fas fa-chevron-right"></i>
-                    </button>
+            <!-- POS Container -->
+            <div class="pos-container">
+                <!-- Products Section -->
+                <div class="pos-products-section">
+                    <div class="pos-section-header">
+                        <h3>Products</h3>
+                        <div class="pos-search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="posProductSearch" placeholder="Search products..." oninput="filterPOSProducts()">
+                        </div>
+                    </div>
+                    <!-- Category Filter Buttons -->
+                    <div class="pos-category-filters">
+                        <button class="pos-category-btn active" onclick="filterByCategory('all')" data-category="all">
+                            <i class="fas fa-th"></i> All
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Peri Chicken')" data-category="Peri Chicken">
+                            Peri Chicken
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Ribs')" data-category="Ribs">
+                            Ribs
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Rice Meals')" data-category="Rice Meals">
+                            Rice Meals
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Sides')" data-category="Sides">
+                            Sides
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Pasta')" data-category="Pasta">
+                            Pasta
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Peri Wraps')" data-category="Peri Wraps">
+                            Peri Wraps
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Sizzling')" data-category="Sizzling">
+                            Sizzling
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Beverage')" data-category="Beverage">
+                            Beverage
+                        </button>
+                        <button class="pos-category-btn" onclick="filterByCategory('Sauce')" data-category="Sauce">
+                            Sauce
+                        </button>
+                    </div>
+                    <div class="pos-products-grid" id="posProductsGrid">
+                        <div class="pos-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading products...</p>
+                        </div>
+                    </div>
                 </div>
 
-            <!-- Orders Table -->
-            <div class="table-container">
-                <table class="orders-table modern-orders-table">
-                    <thead>
-                        <tr>
-                            <th>Order ID</th>
-                            <th>User ID</th>
-                            <th>Order Type</th>
-                            <th>Address</th>
-                            <th>Status</th>
-                            <th>Time</th>
-                            <th>Price</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ordersTableBody">
-                    </tbody>
-                </table>
+                <!-- Cart and Payment Section -->
+                <div class="pos-cart-section">
+                    <!-- Cart -->
+                    <div class="pos-cart">
+                        <div class="pos-section-header">
+                            <h3>Cart</h3>
+                            <button class="btn btn-sm btn-secondary" onclick="clearCart()" id="clearCartBtn" style="display: none;">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                        </div>
+                        <div class="pos-cart-items" id="posCartItems">
+                            <div class="pos-empty-cart">
+                                <i class="fas fa-shopping-cart"></i>
+                                <p>Cart is empty</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Section -->
+                    <div class="pos-payment">
+                        <div class="pos-section-header">
+                            <h3>Payment</h3>
+                        </div>
+                        <div class="pos-payment-form">
+                            <div class="pos-payment-row">
+                                <label>Customer Name:</label>
+                                <input type="text" id="posCustomerName" class="form-control" placeholder="Enter customer name (optional)">
+                            </div>
+                            <div class="pos-payment-row">
+                                <label>Service Type:</label>
+                                <div class="pos-service-type-buttons">
+                                    <button class="btn btn-outline-primary pos-service-type-btn active" id="dineInBtn" onclick="selectServiceType('dine-in')">
+                                        <i class="fas fa-utensils"></i> Dine In
+                                    </button>
+                                    <button class="btn btn-outline-primary pos-service-type-btn" id="takeOutBtn" onclick="selectServiceType('take-out')">
+                                        <i class="fas fa-shopping-bag"></i> Take Out
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="pos-payment-row" id="tableNumberSection" style="display: flex;">
+                                <label>Table Number:</label>
+                                <input type="number" id="posTableNumber" class="form-control" placeholder="1-10" min="1" max="10" oninput="validateTableNumber()">
+                            </div>
+                            <div class="pos-payment-row">
+                                <label>
+                                    <input type="checkbox" id="posDiscountToggle" onchange="calculateChange()">
+                                    Senior/PWD Discount (20%)
+                                </label>
+                            </div>
+                            <div class="pos-payment-totals">
+                                <div class="pos-total-row">
+                                    <span>Subtotal:</span>
+                                    <span id="posSubtotalDisplay">₱0.00</span>
+                                </div>
+                                <div class="pos-total-row" id="posDiscountRow" style="display: none;">
+                                    <span>Discount (20%):</span>
+                                    <span id="posDiscountAmount">₱0.00</span>
+                                </div>
+                                <div class="pos-total-row">
+                                    <span>Total:</span>
+                                    <span id="posTotalDisplay" class="pos-total-amount">₱0.00</span>
+                                </div>
+                            </div>
+                            <div class="pos-payment-method-section">
+                                <label>Payment Method:</label>
+                                <div class="pos-payment-methods">
+                                    <button class="btn btn-outline-primary pos-payment-method-btn active" id="cashPaymentBtn" onclick="selectPaymentMethod('cash')">
+                                        <i class="fas fa-money-bill-wave"></i> Cash
+                                    </button>
+                                    <button class="btn btn-outline-success pos-payment-method-btn" id="gcashPaymentBtn" onclick="selectPaymentMethod('gcash')">
+                                        <i class="fas fa-mobile-alt"></i> GCash
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="pos-payment-row" id="cashPaymentSection">
+                                <label>Cash Received:</label>
+                                <input type="number" id="posCashReceived" class="form-control" placeholder="0.00" min="0" step="0.01" oninput="calculateChange()">
+                            </div>
+                            <div class="pos-payment-row" id="cashChangeSection">
+                                <label>Change:</label>
+                                <input type="text" id="posChange" class="form-control" value="₱0.00" readonly>
+                            </div>
+                            <div class="pos-payment-actions">
+                                <button class="btn btn-primary btn-large" onclick="processPayment()" id="processPaymentBtn" disabled>
+                                    <i class="fas fa-check"></i> Process Payment
+                                </button>
+                                <button class="btn btn-secondary btn-large" onclick="clearAll()">
+                                    <i class="fas fa-redo"></i> New Transaction
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Order Details Modal -->
-    <div id="orderDetailsModal" class="modal" style="display: none;">
-        <div class="modal-content">
+    <!-- Receipt Modal -->
+    <div id="posReceiptModal" class="modal" style="display: none;">
+        <div class="modal-content pos-receipt-modal">
             <div class="modal-header">
-                <h2>Order Details</h2>
-                <span class="close-modal" onclick="closeOrderDetailsModal()">&times;</span>
+                <h2>Receipt</h2>
+                <span class="close-modal" onclick="closeReceiptModal()">&times;</span>
             </div>
-            <div class="modal-body" id="orderDetailsContent">
-                <!-- Order details will be populated here -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Payment Receipt Modal -->
-    <div id="paymentReceiptModal" class="modal" style="display: none;">
-        <div class="modal-content receipt-modal-content">
-            <div class="modal-header">
-                <h2>Payment Receipt - GCash</h2>
-                <span class="close-modal" onclick="closePaymentReceiptModal()">&times;</span>
-            </div>
-            <div class="modal-body" id="paymentReceiptContent">
-                <div class="receipt-loading" id="receiptLoading">
-                    <i class="fas fa-spinner fa-spin"></i> Loading receipt...
-                </div>
-                <div class="receipt-error" id="receiptError" style="display: none;">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <p>Unable to load payment receipt. The receipt image may not be available.</p>
-                </div>
-                <div class="receipt-image-container" id="receiptImageContainer" style="display: none;">
-                    <img id="receiptImage" src="" alt="Payment Receipt" class="receipt-image-large">
-                    <div id="paymentHistoryContainer" style="display: none;"></div>
-                </div>
-            </div>
-            <div class="modal-footer" id="receiptModalFooter" style="display: none;">
-                <button class="btn btn-success" onclick="verifyPaymentConfirm()">
-                    <i class="fas fa-check-circle"></i> Verify
-                </button>
-                <button class="btn btn-secondary" onclick="closePaymentReceiptModal()">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Decline Payment Modal -->
-    <div id="declinePaymentModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h2>Decline Order</h2>
-                <span class="close-modal" onclick="closeDeclinePaymentModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <p style="margin-bottom: 20px;">Please select a reason for declining this order:</p>
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Payment did not transfer" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Payment did not transfer</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Location too far" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Location too far</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Invalid order details" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Invalid order details</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Equipment malfunction" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Equipment malfunction</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Out of stock" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Out of stock</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Other" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Other</span>
-                    </label>
-                </div>
-                <div id="declineOtherReasonContainer" style="display: none; margin-top: 15px;">
-                    <label for="declineOtherReason" style="display: block; margin-bottom: 5px; font-weight: bold;">Please specify:</label>
-                    <textarea id="declineOtherReason" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical;" placeholder="Enter your reason here..."></textarea>
-                </div>
+            <div class="modal-body" id="posReceiptContent">
+                <!-- Receipt content will be populated here -->
             </div>
             <div class="modal-footer">
-                <button class="btn btn-danger" onclick="confirmDeclinePayment()">
-                    <i class="fas fa-times-circle"></i> Confirm Decline
+                <button class="btn btn-primary" onclick="printReceipt()">
+                    <i class="fas fa-print"></i> Print
                 </button>
-                <button class="btn btn-secondary" onclick="closeDeclinePaymentModal()">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Driver Selection Modal -->
-    <div id="driverSelectionModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Assign Driver</h2>
-                <span class="close-modal" onclick="closeDriverSelectionModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <p>Select an available driver for this delivery order:</p>
-                <div class="drivers-selection-list" id="driversSelectionList">
-                    <!-- Available drivers will be loaded here -->
-                </div>
+                <button class="btn btn-secondary" onclick="closeReceiptModal()">Close</button>
             </div>
         </div>
     </div>
@@ -391,31 +382,12 @@
     
     <script src="script.js"></script>
     
+    <!-- POS Script -->
+    <script src="pos-script.js"></script>
+    
     <script>
-        // Remove any stray text nodes in body (like "m   ")
-        (function() {
-            if (document.body) {
-                const walker = document.createTreeWalker(
-                    document.body,
-                    NodeFilter.SHOW_TEXT,
-                    null,
-                    false
-                );
-                const textNodes = [];
-                let node;
-                while (node = walker.nextNode()) {
-                    // Check if text node is a direct child of body and contains only whitespace or single letters
-                    if (node.parentNode === document.body && /^\s*[a-z]\s*$/i.test(node.textContent)) {
-                        textNodes.push(node);
-                    }
-                }
-                textNodes.forEach(textNode => textNode.remove());
-            }
-        })();
-        
         // Update logout functionality
         document.addEventListener('DOMContentLoaded', function() {
-            // Update logout links to use the logout function
             const logoutLinks = document.querySelectorAll('a[href*="Logout"], .dropdown-item:last-child');
             logoutLinks.forEach(link => {
                 if (link.textContent.toLowerCase().includes('logout')) {
@@ -435,4 +407,3 @@
     </script>
 </body>
 </html>
-

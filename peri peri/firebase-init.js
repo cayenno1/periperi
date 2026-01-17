@@ -7,7 +7,7 @@
         // Import Firebase modules
         const { initializeApp } = await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js");
         const { getAnalytics } = await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-analytics.js");
-        const { getFirestore, doc, getDoc, collection, getDocs, updateDoc, setDoc, addDoc, deleteDoc, serverTimestamp, increment, onSnapshot, query, orderBy, deleteField, Timestamp } = await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js");
+        const { getFirestore, doc, getDoc, collection, getDocs, updateDoc, setDoc, addDoc, deleteDoc, serverTimestamp, increment, onSnapshot, query, orderBy, deleteField, Timestamp, runTransaction } = await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js");
         const { getStorage, ref, getDownloadURL, listAll, uploadBytes, deleteObject } = await import("https://www.gstatic.com/firebasejs/12.6.0/firebase-storage.js");
 
         // Your web app's Firebase configuration
@@ -44,7 +44,8 @@
                 query,
                 orderBy,
                 deleteField,
-                Timestamp
+                Timestamp,
+                runTransaction
             };
             
             // Make Storage functions available globally

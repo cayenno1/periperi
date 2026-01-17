@@ -874,39 +874,7 @@
             <div class="food-section" id="foodSection" style="display: none;">
                 <!-- Action Bar -->
                 <div class="action-bar">
-                    <div class="search-filter-group">
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" placeholder="Search...">
-                        </div>
-                        <div class="filter-container">
-                            <button class="filter-btn" onclick="toggleDropdown('filterDropdown')">
-                                <i class="fas fa-filter"></i>
-                                Filter
-                            </button>
-                            <div class="dropdown-menu" id="filterDropdown">
-                                <div class="filter-section">
-                                    <div class="filter-section-title">Status</div>
-                                    <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="all">All Status</a>
-                                    <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="active">Active</a>
-                                    <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="inactive">Inactive</a>
-                                    <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="for-deleted">For Deletion</a>
-                                </div>
-                                    <div class="filter-section">
-                                        <div class="filter-section-title">Category</div>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="all">All Categories</a>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="peri chicken">Peri Chicken</a>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="ribs">Ribs</a>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="rice meals">Rice Meals</a>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="sides">Sides</a>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="pasta">Pasta</a>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="peri wraps">Peri Wraps</a>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="sizzling">Sizzling</a>
-                                        <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="beverage">Beverage</a>
-                                    </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Search and filter removed - moved to menu list controls -->
                 </div>
 
                 <!-- Food Items Cards Grid (Menu Catalogue) -->
@@ -922,7 +890,11 @@
                         <!-- Filter and Sort Controls -->
                         <div class="menu-list-controls-bar">
                             <div class="menu-list-controls-group">
-                                <!-- Quantity mode controls removed - using stored quantity only -->
+                                <!-- Search Box -->
+                                <div class="search-box" style="margin-right: 10px;">
+                                    <i class="fas fa-search"></i>
+                                    <input type="text" id="menuListSearch" placeholder="Search menu items..." oninput="applyMenuListSearch()">
+                                </div>
                             </div>
                             <div class="menu-list-filters-group">
                                 <div class="filter-container">
@@ -943,6 +915,10 @@
                                         </div>
                                     </div>
                                 </div>
+                                <button class="btn btn-sm btn-link" onclick="showResetTimeInfo()" title="View Reset Time Information" style="margin-left: 8px; padding: 6px 12px; color: #6c757d; text-decoration: none;">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Reset Time</span>
+                                </button>
                                 <div class="sort-container">
                                     <select id="menuListSort" class="form-control" style="min-width: 200px;" onchange="applyMenuListSort()">
                                         <option value="name">Sort by Name</option>
