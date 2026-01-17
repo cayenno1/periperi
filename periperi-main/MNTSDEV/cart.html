@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cart - PABLO'S PERI PERI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon" title="Home">&#8962;</div>
+      <div class="nav-icon" title="Cart">&#128722;</div>
+      <div class="nav-icon" title="Profile">&#128100;</div>
+    </div>
+  </header>
+
+  <a href="menu.html" class="back-button"><span style="font-size:1.5em;">&#8592;</span>back</a>
+
+  <main class="drink-main-container">
+    <h1 class="drink-page-title">Your Cart</h1>
+    <div id="cart-items" class="drinks-container"></div>
+    <div style="text-align:right; margin: 1.5rem 0; font-size:1.2em; font-weight:bold; color:#e53935;">
+      Total: <span id="cart-total">P0.00</span>
+    </div>
+    <button class="drink-add-button" id="review-btn">Review/Update</button>
+  </main>
+
+  <script>
+    // Example cart data structure for demo (replace with your add-to-cart logic)
+    // localStorage.setItem('cart', JSON.stringify([
+    //   { name: 'Whole Chicken', qty: 1, price: 150 },
+    //   { name: 'Iced Tea (Large)', qty: 2, price: 50 },
+    //   { name: 'Coke', qty: 1, price: 150 }
+    // ]));
+
+    function loadCart() {
+      const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+      const cartItemsDiv = document.getElementById('cart-items');
+      cartItemsDiv.innerHTML = '';
+      let total = 0;
+      if (cart.length === 0) {
+        cartItemsDiv.innerHTML = '<div class="drink-no-thanks">Your cart is empty.</div>';
+      } else {
+        cart.forEach(item => {
+          const itemDiv = document.createElement('div');
+          itemDiv.className = 'drink-item';
+          itemDiv.innerHTML = `
+            <div class="drink-details">
+              <div class="drink-name">${item.name}</div>
+              <div class="drink-price">P${(item.price * item.qty).toFixed(2)}</div>
+            </div>
+            <div class="drink-quantity-controls">
+              <span class="drink-qty-value">${item.qty}</span>
+            </div>
+          `;
+          cartItemsDiv.appendChild(itemDiv);
+          total += item.price * item.qty;
+        });
+      }
+      document.getElementById('cart-total').textContent = 'P' + total.toFixed(2);
+    }
+
+    document.getElementById('review-btn').onclick = function() {
+      alert('Review/Update functionality coming soon!');
+    };
+
+    loadCart();
+  </script>
+</body>
+</html> 

@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<!-- saved from url=(0021)https://jklm.fun/WCAE -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><style>body {transition: opacity ease-in 0.2s; } 
+body[unresolved] {opacity: 0; display: block; overflow: hidden; position: relative; } 
+</style><meta http-equiv="origin-trial" content="A7vZI3v+Gz7JfuRolKNM4Aff6zaGuT7X0mf3wtoZTnKv6497cVMnhy03KDqX7kBz/q/iidW7srW31oQbBt4VhgoAAACUeyJvcmlnaW4iOiJodHRwczovL3d3dy5nb29nbGUuY29tOjQ0MyIsImZlYXR1cmUiOiJEaXNhYmxlVGhpcmRQYXJ0eVN0b3JhZ2VQYXJ0aXRpb25pbmczIiwiZXhwaXJ5IjoxNzU3OTgwODAwLCJpc1N1YmRvbWFpbiI6dHJ1ZSwiaXNUaGlyZFBhcnR5Ijp0cnVlfQ==">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>[WCAE] smd's room</title>
+  <meta name="description" content="Chill multiplayer minigames: trivia quiz, word, guessing, drawing games and more. Great for streams and hangouts!">
+  <link rel="stylesheet" href="./kle_files/fonts.css">
+  <link rel="stylesheet" href="./kle_files/base.css">
+  <link rel="stylesheet" href="./kle_files/room.css">
+  <link rel="manifest" href="https://jklm.fun/manifest.json">
+
+  <meta property="og:title" content="JKLM.FUN: Party games — PC &amp; Smartphone">
+  <meta property="og:description" content="Fun online browser games to play with friends or strangers. Free and easy. Great for streams and hangouts!">
+  <meta property="og:image" content="https://jklm.fun/images/icon512.png">
+  <meta property="og:url" content="https://jklm.fun/">
+  <meta name="robots" content="noindex">
+<style>
+   .chat.pane > .input {
+      position: relative;
+   }
+
+   .emojiOptions {
+      max-height: 400px;
+      overflow-y: auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      position: absolute;
+      bottom: 54px;
+      right: 0px;
+      z-index: 999;
+      background: #131313;
+      color: white;
+   }
+
+   .emojiOptions > span {
+      cursor: pointer;
+      padding: 5px;
+   }
+
+   .emojiOptions > span:hover {
+      background: rgba(255, 255, 255, .05);
+   }
+
+   .inputGroup:has(input[type="checkbox"]) {
+      flex-direction: column;
+   }
+
+   .inputGroup > label:has(> input[type="checkbox"]) {
+      display: flex;
+      gap: .3em;
+      align-items: center;
+      cursor: pointer;
+   }
+
+   .inputGroup > label > input[type="checkbox"] {
+      width: auto;
+      height: auto;
+   }
+
+   .statsTableContainer {
+      z-index: 999;
+      overflow: auto;
+   }
+
+   .statsTable {
+      border-collapse: collapse;
+      width: 100%;
+      height: 100%;
+      color: white;
+      font-size: 0.7em;
+      position: relative;
+      table-layout: auto;
+   }
+
+   .statsTable tr:nth-child(even) {
+      background: rgba(0, 0, 0, .15);
+   }
+
+   .statsTable tr.self {
+      color: #44dd44;
+   }
+
+   .statsTable tr.self.isDead {
+      color: #1b591b;
+   }
+
+   .statsTable tr.isDead {
+      color: #666;
+   }
+
+   .statsTable tr.isDead > .nickname {
+      text-decoration: line-through;
+   }
+
+   .statsTable th {
+      background: #181818;
+      position: sticky;
+      top: -1px;
+      padding: 7px 0;
+   }
+
+   .statsTable td {
+      padding: 5px;
+   }
+
+   .statsTable td.nickname {
+      max-width: 70px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+   }
+
+   .statsTable th,
+   .statsTable td {
+      text-align: center;
+      border: 1px solid #333;
+   }
+
+   .formGroup:not(:last-child) {
+      margin-bottom: 10px;
+   }
+
+   kbd {
+      background-color: #333;
+      border-radius: 3px;
+      border: 1px solid #555;
+      color: #ccc;
+      font-size: 0.9em;
+      padding: 0 3px;
+      white-space: nowrap;
+      font-family: monospace;
+   }
+
+   select,
+   input[type="color"],
+   input[type="button"] {
+      cursor: pointer;
+   }
+
+   input[type="color"] {
+      height: 27px;
+      padding: .3em;
+   }
+
+   input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+   }
+
+   .inputGroup {
+      display: flex;
+      gap: .3em;
+   }
+
+   .inputGroup > input[type="button"] {
+      width: fit-content;
+      padding: 0 10px;
+      align-self: stretch;
+   }
+
+   .top > .volume > input[type="range"]::-webkit-slider-thumb {
+      background: var(--background-color);
+      border-color: rgba(0, 0, 0, .4);
+   }
+
+   .top > .volume > input[type="range"]::-moz-range-thumb {
+      background: var(--background-color);
+      border-color: rgba(0, 0, 0, .4);
+   }
+
+   .top > .volume > input[type="range"]::-ms-thumb {
+      background: var(--background-color);
+      border-color: rgba(0, 0, 0, .4);
+   }
+
+   small {
+      font-size: .9em;
+   }
+</style></head>
+
+<body>
+  <div class="top" style="background-color: rgb(120, 85, 199); --background-color: #7855c7; color: rgb(238, 238, 238);">
+    <div class="info privateRoom">
+      <span class="url toCopy" data-tooltip-text="Copy room link">JKLM.FUN/<span class="roomCode">●●●●</span> <span class="icon">🔒</span></span>
+      <span class="room" title="smd&#39;s room"> <span class="playerCount">2</span> <span class="roomName">smd's room</span></span>
+    
+   <span class="gameStats" style="">
+      <span>⏱️</span>
+      <span class="time">00:00:14</span>
+      <span class="words">(2 words)</span>
+   </span>
+
+   <span class="trainingModeStats" style="margin-left: 10px; display: none;">
+      <span>🏋️</span>
+      <span>
+         <span class="correctWords">-</span> / <span class="totalWords">-</span>
+      </span>
+      <span class="successRate">(--%)</span>
+   </span>
+</div>
+    <div class="spacer"></div>
+    <div class="volume"><button class="toggleMute">🔊</button> <input type="range" min="0" max="100" step="5" value="50"></div>
+    <div class="mainBadge" title="You are " hidden=""></div>
+    <button class="sidebarToggle">▶</button>
+  </div>
+  <div class="pages">
+    <div class="loading page" hidden="">
+      <div data-text="loading">Loading…</div>
+      <div class="grecaptcha-notice">This site is protected by reCAPTCHA and the Google
+        <a href="https://policies.google.com/privacy">Privacy Policy</a> and
+        <a href="https://policies.google.com/terms">Terms of Service</a> apply
+      </div>
+    </div>
+    <div class="disconnected page" hidden="">
+      <div class="title" data-text="disconnected">Disconnected 🔌</div>
+      <div class="reason"></div>
+      <div class="reconnecting" data-text="reconnectAttempt" hidden="">
+        We're trying to reconnect, please wait...
+      </div>
+      <div><a href="https://jklm.fun/WCAE" data-text="reload">Reload</a> <span data-text="or">or</span> <a href="https://jklm.fun/" data-text="goHome">Go
+          home</a></div>
+    </div>
+    <div class="setNickname page" hidden="">
+      <form class="setNickname box">
+        <div data-text="enterYourNickname">Enter your nickname:</div>
+        <div class="line">
+          <input class="styled nickname" type="text" placeholder="Your name" data-placeholder-text="yourName" required="" minlength="2" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <button class="styled">OK</button>
+        </div>
+      </form>
+    </div>
+    <div class="main page">
+      <div class="game"><iframe src="./kle_files/bombparty.html"></iframe></div>
+      <div class="sidebar" style="background-color: rgb(32, 32, 32); width: 350px;">
+   <div class="statsTableContainer darkScrollbar" style="background-color: rgb(32, 32, 32); top: 0px; left: 0px; width: 100%; height: 190px; resize: vertical; display: block;">
+      <table class="statsTable" style="">
+         <thead>
+            <tr>
+               <th class="nickname" title="Player Username">Username</th>
+               <th class="words" title="Number of Words" style="display: table-cell;">Words</th>
+               <th class="alpha" title="Alpha Progress" style="display: table-cell;">Alpha</th>
+               <th class="hyphenatedWords" title="Number of Compound Words (with hyphen)" style="display: table-cell;">HP</th>
+               <th class="longWords" title="Number of Long Words (≥ 20 characters)" style="display: table-cell;">Long</th>
+               <th class="lives" title="Number of Lives Won (+) / Lost (-)" style="display: table-cell;">Lives</th>
+               <th class="durationWithoutDeath" title="Time Spent Without Dying" style="display: table-cell;">WT</th>
+               <th class="wordsPerMinute" title="Typing Speed in Words per Minute" style="display: table-cell;">Typing</th>
+               <th class="averageReactionTime" title="Average Reaction Time in Seconds" style="display: table-cell;">React.</th>
+            </tr>
+         </thead>
+         <tbody>
+                  <tr id="0">
+                     <td class="nickname" title="smd">smd</td>
+                     <td class="words" style="display: table-cell;">1</td>
+                     <td class="alpha" style="display: table-cell;">B (0)</td>
+                     <td class="hyphenatedWords" style="display: table-cell;">0</td>
+                     <td class="longWords" style="display: table-cell;">0</td>
+                     <td class="lives" style="display: table-cell;">+0 / -0</td>
+                     <td class="durationWithoutDeath" style="display: table-cell;">-</td>
+                     <td class="wordsPerMinute" style="display: table-cell;">116 wpm</td>
+                     <td class="averageReactionTime" style="display: table-cell;">1.71s</td>
+                  </tr>
+               
+                  <tr id="1" class="self">
+                     <td class="nickname" title="daddy">daddy</td>
+                     <td class="words" style="display: table-cell;">1</td>
+                     <td class="alpha" style="display: table-cell;">A (0)</td>
+                     <td class="hyphenatedWords" style="display: table-cell;">0</td>
+                     <td class="longWords" style="display: table-cell;">0</td>
+                     <td class="lives" style="display: table-cell;">+0 / -0</td>
+                     <td class="durationWithoutDeath" style="display: table-cell;">-</td>
+                     <td class="wordsPerMinute" style="display: table-cell;">18 wpm</td>
+                     <td class="averageReactionTime" style="display: table-cell;">-</td>
+                  </tr>
+               </tbody>
+      </table>
+   </div>
+
+        <div class="tabs">
+          <a href="https://jklm.fun/WCAE#" class="chat active" title="Chat" data-title-text="chat">💬️</a>
+          <a href="https://jklm.fun/WCAE#" class="room" title="Room" data-title-text="room">👨‍👩‍👧‍👦</a>
+          <a href="https://jklm.fun/WCAE#" class="changeGame" title="Change game" data-title-text="changeGame" hidden="">🕹️</a>
+          <a href="https://jklm.fun/WCAE#" class="leaveRoom" title="Leave room" data-title-text="leaveRoom">🏠</a>
+        
+   <a href="https://jklm.fun/WCAE#" class="settings" title="Settings">⚙️</a>
+</div>
+        <div class="chat pane">
+          <div class="log darkScrollbar" style="font-family: &quot;Varela Round&quot;; font-weight: 400; color: rgb(204, 204, 204);">
+            <button class="setChatFilter" title="Filter chat..." data-title-text="setChatFilter">🧼</button>
+          <div class="system" style="color: rgb(136, 170, 170);"><span class="time">15:29</span> <span class="text">💣 Round lasted 00:04:26 and 44 words were used.</span></div></div>
+          <div class="input"><textarea placeholder="Type here to chat" data-placeholder-text="typeHereToChat" maxlength="300"></textarea>
+   <div class="emojiOptions darkScrollbar" style="display: none;"></div>
+</div>
+        </div>
+        <div class="room pane" hidden="">
+          <div class="darkSettings">
+            <fieldset disabled="">
+              <div class="setting privacy">
+                <div class="label" data-text="roomPrivacy" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">👓 Room privacy</div>
+                <div class="field" style="display: none;">
+                  <select>
+                    <option value="public" data-text="roomPrivacy.public">🌎 Public</option>
+                    <option value="private" data-text="roomPrivacy.private">🔒 Private</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+            <fieldset disabled="">
+              <div class="setting">
+                <div class="label" data-text="chatMode" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">Chat mode</div>
+                <div class="field" style="display: none;">
+                  <select class="chatModeSelect">
+                    <option value="enabled" data-text="chatMode.enabled">Enabled for all</option>
+                    <option value="disabled" data-text="chatMode.disabled">Disabled for all</option>
+                    <option value="noGuests" data-text="chatMode.noGuests">Guests muted</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+          <div class="people">
+            <div class="loading" data-text="loading">Loading…</div>
+            <div class="content" hidden="">
+              <div class="filter">
+                <input type="search" class="styled" placeholder="Search people…" data-placeholder-text="searchPeople">
+              </div>
+              <div class="list darkScrollbar"></div>
+            </div>
+          </div>
+        </div>
+        <div class="userProfile pane" hidden="">
+          <div class="loading" data-text="loading">Loading…</div>
+          <div class="content" hidden="">
+            <div class="picture"><img width="64" height="64"></div>
+            <div class="nickname"></div>
+            <div class="auth"></div>
+            <div class="badges"></div>
+            <div class="manage">
+              <button class="styled toggleBan" data-text="ban">Ban</button>
+              <button class="styled toggleMod" data-text="mod">Mod</button>
+              <button class="styled toggleIgnore" data-text="ignore">Ignore</button>
+              <button class="styled makeLeader" data-text="makeLeader">Make leader</button>
+            </div>
+            <div class="ipAddress toCopy" hidden=""></div>
+          </div>
+        </div>
+      
+   <div class="settings pane" hidden="">
+   <div class="darkSettings darkScrollbar">
+      <fieldset>
+         <div class="setting notifications">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">🔔 Desktop Notifications</div>
+            <div class="field" style="display: none;">
+   <p>
+      Receive desktop notifications for certain events.
+   </p>
+   <div class="formGroup" title="Be notified when the current game ends.">
+      <label>
+         End of Game
+      </label>
+      <select id="notifyOnGameOver" data-type="number">
+         <option value="0" false="">
+            Always
+         </option>
+         <option value="1" false="">
+            Inactive Window
+         </option>
+         <option value="2" selected="">
+            Never
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Be notified when someone mentions you in the chat.">
+      <label>
+         Chat Mention
+      </label>
+      <select id="notifyOnChatMention" data-type="number">
+         <option value="0" false="">
+            Always
+         </option>
+         <option value="1" false="">
+            Inactive Window
+         </option>
+         <option value="2" selected="">
+            Never
+         </option>
+      </select>
+   </div>
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting chat">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">💬 Chat</div>
+            <div class="field" style="display: none;">
+   <p>
+      Customize your chat experience.
+   </p>
+   <div class="formGroup" title="Enable message retention to preserve them in case of page refresh." hidden="">
+      <label>
+         Message Retention
+      </label>
+      <select id="enableChatRetention" data-type="boolean">
+         <option value="1" selected="">
+            Enable
+         </option>
+         <option value="0" false="">
+            Disable
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Make links sent in the chat clickable." hidden="">
+      <label>
+         Clickable Links
+      </label>
+      <select id="linkifyChat" data-type="number" hidden="">
+         <option value="1" selected="">
+            Complets
+         </option>
+         <option value="0" false="">
+            Abrégés
+         </option>
+         <option value="2" false="">
+            Désactivés
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Change the words that will trigger the mention effect.">
+      <label>Mention Triggers (comma separated)</label>
+      <div class="inputGroup">
+         <input type="text" value="daddy" id="mentionTriggers">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+      <small>Case insensitive.</small>
+   </div>
+   <div class="formGroup" title="Change the timestamp format of messages.">
+      <label>Timestamp Format</label>
+      <select id="timestampFormat" data-type="number">
+         <option value="0" selected="">
+            Default (hh:mm)
+         </option>
+         <option value="1" false="">
+            Full (hh:mm:ss)
+         </option>
+      </select>
+      <small>
+         Old messages will not be affected by the change.
+      </small>
+   </div>
+   <div class="formGroup" title="Show the user&#39;s avatar next to their messages in the chat.">
+      <label>
+         Show Avatars
+      </label>
+      <select id="displayChatAvatars" data-type="boolean">
+         <option value="1" selected="">
+            Enable
+         </option>
+         <option value="0" false="">
+            Disable
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Change the font used in the chat.">
+      <label>Font</label>
+      <select id="chatFontFamily">
+         <option value="Varela Round" selected="">
+            Varela Round (default)
+         </option>
+         <option value="Montserrat" false="">
+            Montserrat
+         </option>
+         <option value="Roboto" false="">
+            Roboto
+         </option>
+         <option value="Open Sans" false="">
+            Open Sans
+         </option>
+         <option value="Lato" false="">
+            Lato
+         </option>
+         <option value="PT Sans" false="">
+            PT Sans
+         </option>
+         <option value="Nunito" false="">
+            Nunito
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Change the font weight used in the chat.">
+      <label>Font Weight</label>
+      <select id="chatFontWeight" data-type="number">
+         <option value="300" false="">
+            Light
+         </option>
+         <option value="400" selected="">
+            Normal
+         </option>
+         <option value="500" false="">
+            Medium
+         </option>
+         <option value="600" false="">
+            Semi-bold
+         </option>
+         <option value="700" false="">
+            Bold
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Enable emoji shortcuts (e.g., :fire: = 🔥)">
+      <label>
+         Emoji Shortcuts (e.g., :fire: = 🔥)
+      </label>
+      <select id="enableEmojiShortcuts" data-type="boolean">
+         <option value="1" selected="">
+            Enable
+         </option>
+         <option value="0" false="">
+            Disable
+         </option>
+      </select>
+   </div>
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting gameStats">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">📊 Game Statistics</div>
+            <div class="field" style="display: none;">
+   <p>
+      Customize game statistics.
+   </p>
+   <div class="formGroup" title="Show or hide the game statistics table.">
+      <label>
+         Table Display
+      </label>
+      <select id="displayGameStatsTable" data-type="boolean">
+         <option value="1" selected="">
+            Enable
+         </option>
+         <option value="0" false="">
+            Disable
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Make the table free and movable anywhere on the screen.">
+      <label>
+         Free Table Position
+      </label>
+      <select id="enableGameStatsTableFreePosition" data-type="boolean">
+         <option value="1" false="">
+            Enable
+         </option>
+         <option value="0" selected="">
+            Disable
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Select the different statistics to display in the table.">
+      <label>
+         Statistics to Display
+      </label>
+      <div class="inputGroup">
+         <label for="displayWordsStat">
+            <input type="checkbox" id="displayWordsStat" checked="">
+            Words
+         </label>
+         <label for="displayAlphaStat">
+            <input type="checkbox" id="displayAlphaStat" checked="">
+            Alpha
+         </label>
+         <label for="displayHyphenatedWordsStat">
+            <input type="checkbox" id="displayHyphenatedWordsStat" checked="">
+            Compound Words (CW)
+         </label>
+         <label for="displayLongWordsStat">
+            <input type="checkbox" id="displayLongWordsStat" checked="">
+            Long Words
+         </label>
+         <label for="displayLivesStat">
+            <input type="checkbox" id="displayLivesStat" checked="">
+            Lives (won/lost)
+         </label>
+         <label for="displayDurationWithoutDeathStat">
+            <input type="checkbox" id="displayDurationWithoutDeathStat" checked="">
+            Time Spent Without Dying (WT)
+         </label>
+         <label for="displayWordsPerMinuteStat">
+            <input type="checkbox" id="displayWordsPerMinuteStat" checked="">
+            Typing Speed
+         </label>
+         <label for="displayReactionTimeStat">
+            <input type="checkbox" id="displayReactionTimeStat" checked="">
+            Reaction Time
+         </label>
+      </div>
+   </div>
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting keyboard">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">⌨️ Keyboard</div>
+            <div class="field" style="display: none;">
+   <p>
+      Manage keys and keyboard shortcuts.
+   </p>
+   <div class="formGroup" title="Change the key to skip your turn by typing &#39;/suicide&#39;.">
+      <label>
+         Skip Turn
+      </label>
+      <div class="inputGroup">
+         <input type="text" class="keyInput" value="Delete" id="skipTurnShortcut" data-alt="undefined" data-ctrl="undefined" data-shift="undefined" data-key="Delete">
+         <select id="enableSkipTurnShortcut" data-type="boolean">
+            <option value="1" selected="">
+               Enable
+            </option>
+            <option value="0" false="">
+               Disable
+            </option>
+         </select>
+      </div>
+      <small><kbd>Enter</kbd> Confirm / <kbd>Escape</kbd> Cancel</small>
+   </div>
+   <div class="formGroup" title="Change the key to skip all your upcoming turns using &#39;/suicide&#39; until you have no lives left.">
+      <label>
+         Give Up Game
+      </label>
+      <div class="inputGroup">
+         <input type="text" class="keyInput" value="Alt + Delete" id="giveUpShortcut" data-alt="true" data-ctrl="undefined" data-shift="undefined" data-key="Delete">
+         <select id="enableGiveUpShortcut" data-type="boolean">
+            <option value="1" selected="">
+               Enable
+            </option>
+            <option value="0" false="">
+               Disable
+            </option>
+         </select>
+      </div>
+      <small><kbd>Enter</kbd> Confirm / <kbd>Escape</kbd> Cancel</small>
+   </div>
+   <div class="formGroup" title="Disabling this key prevents you from accidentally leaving the input field during the game.">
+      <label>
+         <kbd>⭾ Tab</kbd> Key
+      </label>
+      <select id="enableTabKey" data-type="boolean">
+         <option value="1" selected="">
+            Enable
+         </option>
+         <option value="0" false="">
+            Disable
+         </option>
+      </select>
+   </div>
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting inGameCommands">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">💻 In-Game Commands</div>
+            <div class="field" style="display: none;">
+   <p>
+      Manage shortcuts for in-game commands.
+   </p>
+   <div class="formGroup" title="Manage your in-game commands.">
+      <label>
+         Commands
+      </label>
+      <div class="inputGroup fqazgdfwje" style="display: flex; flex-direction: column; gap: 7px;">
+         
+      </div>
+      <input type="button" id="createInGameCommand" value="Add a command">
+   </div>   
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting customization">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">🎨 Customization</div>
+            <div class="field" style="display: none;">
+   <p>
+      Customize the interface as you like.
+   </p>
+   <div class="formGroup" title="Change the header background color.">
+      <label>Header Background</label>
+      <div class="inputGroup">
+         <input type="color" value="#7855c7" id="topbarBackgroundColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the header text color.">
+      <label>Header Text</label>
+      <div class="inputGroup">
+         <input type="color" value="#eeeeee" id="topbarTextColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the sidebar background color.">
+      <label>Sidebar Background</label>
+      <div class="inputGroup">
+         <input type="color" value="#202020" id="sidebarBackgroundColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the chat usernames color.">
+      <label>Chat Usernames</label>
+      <div class="inputGroup">
+         <input type="color" value="#eeeeee" id="chatNicknamesColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the chat messages color.">
+      <label>Chat Messages</label>
+      <div class="inputGroup">
+         <input type="color" value="#cccccc" id="chatMessagesColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the chat system messages color.">
+      <label>Chat System Messages</label>
+      <div class="inputGroup">
+         <input type="color" value="#88aaaa" id="chatSystemMessagesColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the clickable links color in the chat.">
+      <label>Clickable Links in Chat</label>
+      <div class="inputGroup">
+         <input type="color" value="#2266ff" id="chatLinksColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the mention background color in the chat.">
+      <label>Chat Mention Background</label>
+      <div class="inputGroup">
+         <input type="color" value="#9600ff" id="chatMentionColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the remaining bonus alphabet letters color.">
+      <label>Remaining Bonus Alphabet Letters</label>
+      <div class="inputGroup">
+         <input type="color" value="#ddbb66" id="remainingBonusLettersColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the used bonus alphabet letters color.">
+      <label>Used Bonus Alphabet Letters</label>
+      <div class="inputGroup">
+         <input type="color" value="#888888" id="usedBonusLettersColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the color of the players&#39; usernames present in the game.">
+      <label>Players' Usernames in Game</label>
+      <div class="inputGroup">
+         <input type="color" value="#ffffff" id="presentPlayerNicknamesColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the color of the players&#39; usernames not present (who have left) in the game.">
+      <label>Players' Usernames Not in Game</label>
+      <div class="inputGroup">
+         <input type="color" value="#888888" id="absentPlayerNicknamesColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the color of the current player&#39;s word.">
+      <label>Current Player's Word</label>
+      <div class="inputGroup">
+         <input type="color" value="#ffffff" id="currentPlayerWordColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the color of other players&#39; words.">
+      <label>Other Players' Words</label>
+      <div class="inputGroup">
+         <input type="color" value="#aaaaaa" id="otherPlayersWordColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the color of the syllable in words.">
+      <label>Syllable in Words</label>
+      <div class="inputGroup">
+         <input type="color" value="#44dd44" id="wordSyllableColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the life emoji.">
+      <label>Life Emoji</label>
+      <div class="inputGroup">
+         <input type="text" value="❤️" id="lifeEmoji">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the death emoji.">
+      <label>Death Emoji</label>
+      <div class="inputGroup">
+         <input type="text" value="☠️" id="deathEmoji">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the victory emoji.">
+      <label>Victory Emoji (refresh to update)</label>
+      <div class="inputGroup">
+         <input type="text" value="🥇" id="winEmoji">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the sidebar width.">
+      <label>Sidebar Width (pixels)</label>
+      <div class="inputGroup">
+         <input type="number" value="350" id="sidebarWidth">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+      <small class="errorMessage ewemiciosw" style="color: red;"></small>
+   </div>
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting gameBackground">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">🖼️ Game Background</div>
+            <div class="field" style="display: none;">
+   <p>
+      Customize the game background.
+   </p>
+   <p>
+      Refresh the page to apply changes.
+   </p>
+   <div class="formGroup" title="Select the type of background.">
+      <label>Type</label>
+      <select id="gameBackgroundType" data-type="number">
+         <option value="0" selected="">
+            Gradient
+         </option>
+         <option value="1" false="">
+            Solid Color
+         </option>
+         <option value="2" false="">
+            Online Image
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Change the gradient colors of the background.">
+      <label>
+         Gradient Colors
+      </label>
+      <div class="inputGroup">
+         <input type="color" value="#564a42" id="gradientColors">
+         <input type="color" value="#463d36" id="gradientColors">
+         <input type="color" value="#37302b" id="gradientColors">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the solid background color.">
+      <label>
+         Solid Color
+      </label>
+      <div class="inputGroup">
+         <input type="color" value="#564a42" id="solidColor">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Change the background image URL.">
+      <label>
+         Image URL
+      </label>
+      <div class="inputGroup">
+         <input type="text" value="" id="imageURL" placeholder="https://example.com/image.jpeg">
+         <input type="button" value="↺" title="Reset" id="reset">
+      </div>
+   </div>
+   <div class="formGroup" title="Enable the display of an inner shadow on the background.">
+      <label>
+         Inner Shadow
+      </label>
+      <select id="enableInnerShadow" data-type="boolean">
+         <option value="1" selected="">
+            Enable
+         </option>
+         <option value="0" false="">
+            Disable
+         </option>
+      </select>
+   </div>
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting streamerMode">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">🎥 Streamer Mode</div>
+            <div class="field" style="display: none;">
+   <p>
+      Manage streamer mode to hide potentially sensitive information.
+   </p>
+   <div class="formGroup" title="Hide players&#39; avatars in the game (except yours).">
+      <label>
+         Hide In-Game Avatars
+      </label>
+      <select id="hideInGameAvatars" data-type="boolean">
+         <option value="1" false="">
+            Enable
+         </option>
+         <option value="0" selected="">
+            Disable
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="Hide players&#39; usernames in the game (except yours).">
+      <label>
+         Hide In-Game Usernames
+      </label>
+      <select id="hideInGameNicknames" data-type="boolean">
+         <option value="1" false="">
+            Enable
+         </option>
+         <option value="0" selected="">
+            Disable
+         </option>
+      </select>
+   </div>
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting trainingMode">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">🏋️ Training Mode</div>
+            <div class="field" style="display: none;">
+   <p>
+      Training mode allows you to evaluate your mastery of a word list.
+   </p>
+   <p>
+      To import a list: text file (.txt, .text), one word per line.
+   </p>
+   <div class="formGroup" title="Select a list to train with.">
+      <label>
+         Selected List
+      </label>
+      <select id="trainListId">
+         <option value="null" selected="">
+            Export Settings
+         </option>
+         
+      </select>
+   </div>
+   <div class="formGroup" title="Select a list to train with.">
+      <label>
+         Import List
+      </label>
+      <input type="file" accept="text/plain" id="importTrainList">
+   </div>
+   <div class="formGroup" title="This setting will prevent you from sending words outside your training list.">
+      <label>
+         🏋️ Training Mode
+      </label>
+      <input type="button" id="deleteTrainList" value="Delete">
+   </div>
+   <div class="formGroup" title="Show messages indicating when you place a word from the list or outside the list.">
+      <label>
+         Import a word list.
+      </label>
+      <input type="button" id="exportTrainList" value="Export">
+      <a href="https://jklm.fun/WCAE#" download="" hidden="" class="exportTrainListAnchor"></a>
+   </div>
+   <div class="formGroup" title="undefined">
+      <label>
+         Delete Selected List
+      </label>
+      <select id="forceTrainList" data-type="boolean">
+         <option value="1" false="">
+            Enable
+         </option>
+         <option value="0" selected="">
+            Disable
+         </option>
+      </select>
+   </div>
+   <div class="formGroup" title="undefined">
+      <label>
+         Export the selected word list.
+      </label>
+      <select id="enableTrainMessages" data-type="boolean">
+         <option value="1" selected="">
+            Enable
+         </option>
+         <option value="0" false="">
+            Disable
+         </option>
+      </select>
+   </div>
+</div>
+         </div>
+      </fieldset>
+      <fieldset>
+         <div class="setting other">
+            <div class="label" style="background-color: rgba(255, 255, 255, 0.1); cursor: pointer;">🔧 Other</div>
+            <div class="field" style="display: none;">
+   <p>
+      Manage miscellaneous settings.
+   </p>
+   <div class="formGroup" title="Import and apply previously exported settings.">
+      <label>
+         Import Settings
+      </label>
+      <input type="file" accept="application/json" id="importSettings">
+   </div>
+   <div class="formGroup" title="Export the current settings for later import.">
+      <label>
+         Export Settings
+      </label>
+      <input type="button" id="exportSettings" value="Export Settings">
+      <a href="https://jklm.fun/WCAE#" download="" hidden="" class="exportSettingsAnchor"></a>
+   </div>
+   <div class="formGroup" title="Reset all your settings.">
+      <label>
+         Reset Settings
+      </label>
+      <input type="button" value="Reset" id="resetAll">
+   </div>
+</div>
+         </div>
+      </fieldset>
+   </div>
+   <div class="aexaxpxsmi" style="color: white; font-size: 16px; padding: 10px;">
+      Suggestion / Bug :
+      <ul>
+         <li>
+            <a href="https://discord.com/users/667302589213310997" target="_blank">PannH's Discord (Creator of this Overlay)</a>
+         </li>
+         <li>
+            <a href="https://discord.com/users/212984930802728960" target="_blank">Macadelic's Discord (JKLM Developer)</a>
+         </li>
+         <li>
+            <a href="https://jklm.fun/discord" target="_blank">Official JKLM Discord Server</a>
+         </li>
+         <li>
+            <a href="https://github.com/PannH/partyplus-overlay" target="_blank">GitHub</a>
+         </li>
+      </ul>
+   </div>
+</div>
+</div>
+    </div>
+  </div>
+  <script type="text/javascript" async="" charset="utf-8" src="./kle_files/recaptcha__en.js.download" crossorigin="anonymous" integrity="sha384-TnttG+UhZcM8I0YLwHFXmjuU0uVv/3X99Itc+0eiXTiqtrwYAZwNs8Q9WliKgfF8"></script><script src="./kle_files/socket.io.js.download"></script>
+  <script src="./kle_files/api.js.download"></script>
+  <script src="./kle_files/dom.js.download"></script>
+  <script src="./kle_files/audio.js.download"></script><div style="position: absolute; right: 0px; top: 0px; padding: 0.5em; margin: 0.5em; background: rgb(255, 255, 255); border-radius: 2em; opacity: 0.2;" hidden="">🔇</div>
+  <script src="./kle_files/settings.js.download"></script>
+  <script src="./kle_files/getPostJson.js.download"></script>
+  <script src="./kle_files/text.js.download"></script>
+  <script src="./kle_files/room.js.download"></script>
+  <script src="./kle_files/Autolinker.js.download"></script>
+  <script src="./kle_files/jquery.min.js.download"></script>
+  <script src="./kle_files/overlay.js.download"></script>
+<script defer="" src="./kle_files/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;c8be344ce8704c61a1709a0e8496ee3d&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
+
+
+<div><div class="grecaptcha-badge" data-style="bottomright" style="width: 256px; height: 60px; display: block; transition: right 0.3s; position: fixed; bottom: 14px; right: -186px; box-shadow: gray 0px 0px 5px; border-radius: 2px; overflow: hidden;"><div class="grecaptcha-logo"><iframe title="reCAPTCHA" width="256" height="60" role="presentation" name="a-vkjxrryw5q9p" frameborder="0" scrolling="no" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-top-navigation allow-modals allow-popups-to-escape-sandbox allow-storage-access-by-user-activation" src="./kle_files/anchor.html"></iframe></div><div class="grecaptcha-error"></div><textarea id="g-recaptcha-response-100000" name="g-recaptcha-response" class="g-recaptcha-response" style="width: 250px; height: 40px; border: 1px solid rgb(193, 193, 193); margin: 10px 25px; padding: 0px; resize: none; display: none;"></textarea></div><iframe style="display: none;" src="./kle_files/saved_resource(1).html"></iframe></div></body></html>

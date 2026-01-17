@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Details - PABLO'S PERI PERI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="orders-page order-details-page">
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+        <span class="profile-text" id="profileText">Sign In</span>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item profile-manage-account" data-nav-target="account" data-hide-on-body="account-page"><span>Manage account</span></a>
+          <a href="help.html" class="profile-item" data-nav-target="help" data-hide-on-body="help-page"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <a href="orders.html" class="back-button">
+      <i class="fas fa-arrow-left"></i>
+      <span>Back to Orders</span>
+    </a>
+
+    <section class="reviews-section order-details-shell">
+      <div class="reviews-header order-details-header">
+        <h2 class="section-title" id="orderTitle">Order Details</h2>
+        <div class="overall-rating order-status-badge" id="orderStatusBadge">
+          <span class="popular-tag" id="orderStatus" style="text-transform:capitalize;">status</span>
+        </div>
+      </div>
+
+      <!-- Single unified box -->
+      <div class="review-item od-card" id="orderBox">
+        <!-- Accent stripe -->
+        <div class="od-stripe"></div>
+        <!-- Image (optional) -->
+        <div id="imgSegment" class="od-image" style="display:none;">
+          <img id="orderImage" src="" alt="Order image" class="od-image-el">
+        </div>
+
+        <!-- Meta row -->
+        <div class="od-meta">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="reviewer-avatar"><i class="fas fa-receipt"></i></div>
+            <div class="reviewer-details">
+              <div class="reviewer-name" id="orderId">Order #</div>
+              <div class="review-date" id="orderDate">Date</div>
+            </div>
+          </div>
+          <div class="card-price" id="orderTotal">₱0.00</div>
+        </div>
+
+        <!-- Quick chips (service/payment) -->
+        <div id="metaChips" class="od-chips" style="display:none;"></div>
+
+        <!-- Items list -->
+        <div id="itemsSegment" class="od-section od-items">
+          <div class="od-section-title">Items</div>
+          <div id="orderItems" class="od-items-list"></div>
+        </div>
+
+        <!-- Service details -->
+        <div id="serviceSegment" class="od-section od-service" style="display:none;">
+          <div class="od-section-title">Service</div>
+          <div id="serviceDetails" class="od-text"></div>
+          <div id="tracker" class="od-tracker" style="display:none; margin-top:8px;"></div>
+        </div>
+
+        <!-- Receipt-like payment -->
+        <div id="receiptSegment" class="od-section od-payment">
+          <div class="od-section-title">Payment</div>
+          <div id="paymentSubtitle" class="od-payment-subtitle"></div>
+          <div id="receipt" class="od-receipt">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="od-actions">
+          <button class="filter-btn" id="reorderBtn"><span>Reorder</span></button>
+          <button class="filter-btn" id="receiptBtn"><span>View Receipt</span></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="firebase-init.js"></script>
+  <script src="profile-auth.js"></script>
+
+  <script>
+    function goHome() { window.location.href = 'index.html'; }
+    function goToMenu() { window.location.href = 'menu.html'; }
+    function goToCart() { window.location.href = 'cart_review.html'; }
+
+    let currentOrderForReceipt = null;
+    let currentOrderIdForReceipt = null;
+
+    async function waitForFirebaseReady(maxAttempts = 40, delayMs = 50) {
+      let attempts = 0;
+      while (!window.firebaseReady && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        attempts++;
+      }
+    }
+
+    function getSelectedOrderId() {
+      const params = new URLSearchParams(window.location.search);
+      let id = params.get('orderId');
+      if (id) return id;
+      try {
+        const stored = localStorage.getItem('selectedOrderId');
+        if (stored) return stored;
+      } catch (e) {}
+      return null;
+    }
+
+    async function fetchOrderFromFirestore(orderId) {
+      try {
+        await waitForFirebaseReady();
+        const db = window.firebaseDb;
+        if (!db || !window.doc || !window.getDoc) {
+          console.warn('Firebase not fully initialized for order_details load');
+          return null;
+        }
+        const ref = window.doc(db, 'orders', orderId);
+        const snap = await window.getDoc(ref);
+        if (!snap.exists()) return null;
+        return { id: snap.id, ...(snap.data() || {}) };
+      } catch (e) {
+        console.error('Error loading order from Firestore for details page:', e);
+        return null;
+      }
+    }
+
+    function populateOrder(order, orderId) {
+      const titleEl = document.getElementById('orderTitle');
+      const idEl = document.getElementById('orderId');
+      const dateEl = document.getElementById('orderDate');
+      const totalEl = document.getElementById('orderTotal');
+      const statusEl = document.getElementById('orderStatus');
+      const itemsContainer = document.getElementById('orderItems');
+      const serviceSegment = document.getElementById('serviceSegment');
+      const serviceDetailsEl = document.getElementById('serviceDetails');
+      const chipsEl = document.getElementById('metaChips');
+      const tracker = document.getElementById('tracker');
+      const paymentSubtitleEl = document.getElementById('paymentSubtitle');
+      const receiptEl = document.getElementById('receipt');
+      const reorderBtn = document.getElementById('reorderBtn');
+      const receiptBtn = document.getElementById('receiptBtn');
+
+      const displayId = orderId || order.id || '—';
+      if (titleEl) titleEl.textContent = `Order ${displayId}`;
+      if (idEl) idEl.textContent = `Order ${displayId}`;
+
+      // Date
+      const rawTs = order.timestamp || order.createdAt || null;
+      if (dateEl) {
+        if (rawTs) {
+          const d = new Date(rawTs);
+          dateEl.textContent = !Number.isNaN(d.getTime())
+            ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+            : String(rawTs);
+        } else {
+          dateEl.textContent = '';
+        }
+      }
+
+      // Status
+      const rawStatus = order.status || 'pending';
+      const displayStatus = rawStatus === 'pending' ? 'ongoing' : rawStatus;
+      if (statusEl) {
+        statusEl.textContent = displayStatus;
+        statusEl.parentElement.classList.toggle('completed', displayStatus === 'completed');
+      }
+
+      // Total
+      const numericTotal =
+        typeof order.total === 'number'
+          ? order.total
+          : Number(order.total) || 0;
+      if (totalEl) totalEl.textContent = `₱${numericTotal.toFixed(2)}`;
+
+      // Items list
+      const items = Array.isArray(order.items) ? order.items : [];
+      if (itemsContainer) {
+        itemsContainer.innerHTML = items
+          .map((it) => {
+            const name = it.name || 'Item';
+            const qty =
+              typeof it.quantity === 'number'
+                ? it.quantity
+                : Number(it.quantity) || 1;
+            const lineTotal =
+              typeof it.lineTotal === 'number'
+                ? it.lineTotal
+                : Number(it.lineTotal) || 0;
+            return `
+              <div class="od-item-row">
+                <span>${name} x ${qty}</span>
+                <span>₱${lineTotal.toFixed(2)}</span>
+              </div>
+            `;
+          })
+          .join('');
+      }
+
+      // Service info from deliveryInfo
+      const di = order.deliveryInfo || {};
+      if (di.serviceType) {
+        const type = di.serviceType;
+        let subtitle = '';
+        if (type === 'dinein' || type === 'dine-in') {
+          subtitle = `Dine-In${di.tableNumber ? ' • Table ' + di.tableNumber : ''}`;
+        } else if (type === 'pickup') {
+          subtitle = `Pickup${di.storeLocation ? ' • ' + di.storeLocation : ''}`;
+        } else if (type === 'delivery') {
+          subtitle = `Delivery${di.address ? ' • ' + di.address : ''}`;
+        } else {
+          subtitle = type;
+        }
+
+        if (serviceDetailsEl) {
+          const lines = [];
+          lines.push(`<div>Service: ${subtitle}</div>`);
+          if (type === 'delivery' && di.address) {
+            lines.push(`<div>Address: ${di.address}</div>`);
+          }
+          if ((type === 'dinein' || type === 'dine-in') && di.tableNumber) {
+            lines.push(`<div>Table: ${di.tableNumber}</div>`);
+          }
+          if (type === 'pickup' && di.storeLocation) {
+            lines.push(`<div>Store: ${di.storeLocation}</div>`);
+          }
+          serviceDetailsEl.innerHTML = lines.join('');
+        }
+        if (serviceSegment) serviceSegment.style.display = 'block';
+
+        if (chipsEl) {
+          chipsEl.style.display = 'flex';
+          const chip = document.createElement('span');
+          chip.className = 'popular-tag';
+          chip.textContent = subtitle;
+          chipsEl.appendChild(chip);
+        }
+
+        // Simple tracker for ongoing delivery
+        if (displayStatus === 'ongoing' && type === 'delivery' && tracker) {
+          const steps = ['Preparing', 'Out for delivery', 'Delivered'];
+          const activeIdx = 1;
+          tracker.style.display = 'grid';
+          tracker.innerHTML = steps
+            .map((s, i) => `<div class="od-step ${i === activeIdx ? 'active' : ''}">${s}</div>`)
+            .join('');
+        }
+      }
+
+      // Payment-style breakdown (like completion_receipt_page)
+      if (receiptEl) {
+        const itemsSubtotal = items.reduce((sum, it) => {
+          const lineTotal =
+            typeof it.lineTotal === 'number'
+              ? it.lineTotal
+              : Number(it.lineTotal) || 0;
+          return sum + lineTotal;
+        }, 0);
+
+        const isDelivery = (order.deliveryInfo && order.deliveryInfo.serviceType) === 'delivery';
+        const deliveryFee = isDelivery ? 50 : 0;
+        const discount = Math.max(0, itemsSubtotal + deliveryFee - numericTotal);
+
+        const lines = [];
+        lines.push(
+          `<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>
+             <span style="font-weight:700;">PABLO'S PERI PERI</span>
+             <span style="font-size:0.85em; color:#666;">${new Date().toLocaleDateString()}</span>
+           </div>`
+        );
+        lines.push(`<div style='height:1px; background:#e0e0e0; margin:6px 0 10px 0;'></div>`);
+        lines.push(
+          `<div style='display:flex; justify-content:space-between;'>
+             <span>Sub-Total</span><span>₱${itemsSubtotal.toFixed(2)}</span>
+           </div>`
+        );
+        if (isDelivery) {
+          lines.push(
+            `<div style='display:flex; justify-content:space-between;'>
+               <span>Delivery Fee</span><span>₱${deliveryFee.toFixed(2)}</span>
+             </div>`
+          );
+        }
+        if (discount > 0) {
+          lines.push(
+            `<div style='display:flex; justify-content:space-between; color:#4caf50;'>
+               <span>Discount / Points Applied</span><span>-₱${discount.toFixed(2)}</span>
+             </div>`
+          );
+        }
+        lines.push(`<div style='height:1px; background:#e0e0e0; margin:8px 0;'></div>`);
+        lines.push(
+          `<div style='display:flex; justify-content:space-between; font-weight:800;'>
+             <span>Total</span><span>₱${numericTotal.toFixed(2)}</span>
+           </div>`
+        );
+
+        receiptEl.innerHTML = lines.join('');
+      }
+
+      if (paymentSubtitleEl) {
+        // We don't store explicit payment method in the order; show a generic label
+        paymentSubtitleEl.textContent = 'See receipt for total breakdown';
+      }
+
+      // Actions
+      if (reorderBtn) {
+        if (displayStatus === 'completed') {
+          reorderBtn.style.display = '';
+          reorderBtn.onclick = function () {
+            alert('Reorder feature coming soon.');
+          };
+        } else {
+          reorderBtn.style.display = 'none';
+        }
+      }
+
+      if (receiptBtn) {
+        receiptBtn.onclick = function () {
+          if (currentOrderForReceipt) {
+            openReceiptWindow(currentOrderForReceipt, currentOrderIdForReceipt);
+          } else {
+            window.print();
+          }
+        };
+      }
+
+      // Cache for receipt window
+      currentOrderForReceipt = order;
+      currentOrderIdForReceipt = orderId || order.id || null;
+    }
+
+    function openReceiptWindow(order, orderId) {
+      const win = window.open('', '_blank');
+      if (!win) {
+        alert('Please allow popups to view the receipt.');
+        return;
+      }
+
+      const items = Array.isArray(order.items) ? order.items : [];
+      const itemsSubtotal = items.reduce((sum, it) => {
+        const lineTotal =
+          typeof it.lineTotal === 'number'
+            ? it.lineTotal
+            : Number(it.lineTotal) || 0;
+        return sum + lineTotal;
+      }, 0);
+
+      const di = order.deliveryInfo || {};
+      const serviceType = di.serviceType || 'dinein';
+      const isDelivery = serviceType === 'delivery';
+      const isPickup = serviceType === 'pickup';
+      const isDineIn = serviceType === 'dinein' || serviceType === 'dine-in';
+      const deliveryFee = isDelivery ? 50 : 0;
+
+      const numericTotal =
+        typeof order.total === 'number'
+          ? order.total
+          : Number(order.total) || 0;
+      const discount = Math.max(0, itemsSubtotal + deliveryFee - numericTotal);
+
+      let serviceLabel = 'Dine-In';
+      let tableLabel = '';
+      if (isDelivery) {
+        serviceLabel = 'Delivery';
+      } else if (isPickup) {
+        serviceLabel = 'Pickup';
+      }
+      if (isDineIn && di.tableNumber) {
+        tableLabel = String(di.tableNumber);
+      }
+
+      const paymentMethod = order.paymentMethod || 'Payment';
+
+      const orderNumberText = orderId || order.id || '—';
+      const now = new Date();
+      const orderTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const deliveryAddress = isDelivery ? (di.address || '') : '';
+      const storeLocation = isPickup ? (di.storeLocation || '') : '';
+
+      const itemsHtml = items
+        .map((it) => {
+          const name = it.name || 'Item';
+          const qty =
+            typeof it.quantity === 'number'
+              ? it.quantity
+              : Number(it.quantity) || 1;
+          const lineTotal =
+            typeof it.lineTotal === 'number'
+              ? it.lineTotal
+              : Number(it.lineTotal) || 0;
+          return `
+            <div class="item-row">
+              <span class="item-name">${name} x ${qty}</span>
+              <span class="item-price">₱${lineTotal.toFixed(2)}</span>
+            </div>
+          `;
+        })
+        .join('');
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Receipt - Pablo's Peri Peri</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .success-section {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 40px 20px;
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      border-radius: 16px;
+      margin: 20px 0 40px 0;
+    }
+
+    .checkmark-circle {
+      width: 120px;
+      height: 120px;
+      background: linear-gradient(135deg, #4caf50, #45a049);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
+    }
+
+    .checkmark-icon {
+      font-size: 48px;
+      color: white;
+    }
+
+    .success-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .success-subtitle {
+      font-size: 16px;
+      color: #666;
+      margin: 0;
+    }
+
+    .receipt-section {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      margin-bottom: 32px;
+    }
+
+    .receipt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .receipt-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+    }
+
+    .receipt-number {
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .receipt-info {
+      margin-bottom: 24px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .info-label {
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .info-value {
+      font-size: 14px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .order-items {
+      margin-bottom: 24px;
+    }
+
+    .items-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 16px;
+    }
+
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .item-name {
+      font-size: 14px;
+      color: #333;
+    }
+
+    .item-price {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .total-section {
+      border-top: 2px solid #f0f0f0;
+      padding-top: 16px;
+      margin-bottom: 24px;
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .total-label {
+      font-size: 14px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .total-value {
+      font-size: 14px;
+      color: #333;
+      font-weight: 600;
+    }
+
+    .total-row.discount .total-value {
+      color: #4caf50;
+    }
+
+    .total-row.final-total {
+      border-top: 1px solid #e0e0e0;
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+
+    .total-row.final-total .total-label,
+    .total-row.final-total .total-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+    }
+
+    @media print {
+      .header,
+      .action-buttons {
+        display: none;
+      }
+      
+      .cart-status {
+        display: none;
+      }
+      
+      .receipt-section {
+        box-shadow: none;
+        border: 2px solid #333;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .receipt-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <div class="cart-review-container">
+      <div class="cart-header">
+        <div class="cart-title-section">
+          <h2 class="cart-title">Your Order</h2>
+          <p class="cart-subtitle">Order summary</p>
+        </div>
+      </div>
+
+      <div class="success-section">
+        <div class="checkmark-circle">
+          <i class="fas fa-check checkmark-icon"></i>
+        </div>
+        <h1 class="success-title">Order Placed Successfully!</h1>
+        <p class="success-subtitle">Thank you for ordering at Pablo's Peri Peri</p>
+      </div>
+
+      <div class="receipt-section">
+        <div class="receipt-header">
+          <h2 class="receipt-title">Order Receipt</h2>
+          <div class="receipt-number">Order #<span id="orderNumber">${orderNumberText}</span></div>
+        </div>
+        
+        <div class="receipt-content">
+          <div class="receipt-info">
+            <div class="info-row">
+              <span class="info-label">Service Type:</span>
+              <span class="info-value">${serviceLabel}</span>
+            </div>
+            ${isDineIn && tableLabel ? `
+            <div class="info-row">
+              <span class="info-label">Table Number:</span>
+              <span class="info-value">${tableLabel}</span>
+            </div>` : ''}
+            ${deliveryAddress ? `
+            <div class="info-row">
+              <span class="info-label">Delivery Address:</span>
+              <span class="info-value">${deliveryAddress}</span>
+            </div>` : ''}
+            ${storeLocation ? `
+            <div class="info-row">
+              <span class="info-label">Store Location:</span>
+              <span class="info-value">${storeLocation}</span>
+            </div>` : ''}
+            <div class="info-row">
+              <span class="info-label">Payment Method:</span>
+              <span class="info-value">${paymentMethod}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Order Time:</span>
+              <span class="info-value">${orderTime}</span>
+            </div>
+          </div>
+
+          <div class="order-items">
+            <h3 class="items-title">Order Items</h3>
+            <div id="orderItems">
+              ${itemsHtml}
+            </div>
+          </div>
+
+          <div class="total-section">
+            <div class="total-row">
+              <span class="total-label">Sub-Total</span>
+              <span class="total-value" id="receiptSubtotal">₱${itemsSubtotal.toFixed(2)}</span>
+            </div>
+            ${isDelivery ? `
+            <div class="total-row" id="receiptDeliveryFeeRow">
+              <span class="total-label">Delivery Fee</span>
+              <span class="total-value" id="receiptDeliveryFee">₱${deliveryFee.toFixed(2)}</span>
+            </div>` : ''}
+            <div class="total-row discount">
+              <span class="total-label">Points Applied</span>
+              <span class="total-value" id="receiptPoints">-₱${discount.toFixed(2)}</span>
+            </div>
+            <div class="total-row final-total">
+              <span class="total-label">Total</span>
+              <span class="total-value" id="receiptTotal">₱${numericTotal.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button class="add-more-btn" onclick="window.close()">
+            <span>Close</span>
+          </button>
+          <button class="proceed-btn" onclick="window.print()">
+            <span>Print Receipt</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>`;
+
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    }
+
+    (async function loadOrder() {
+      const orderId = getSelectedOrderId();
+      let order = null;
+
+      if (orderId) {
+        order = await fetchOrderFromFirestore(orderId);
+      }
+
+      if (!order) {
+        // Fallback to local cached object
+        try {
+          const raw = localStorage.getItem('selectedOrder');
+          if (raw) order = JSON.parse(raw);
+        } catch (e) {}
+      }
+
+      if (!order) {
+        const titleEl = document.getElementById('orderTitle');
+        if (titleEl) titleEl.textContent = 'Order not found';
+        const box = document.getElementById('orderBox');
+        if (box) box.style.display = 'none';
+        return;
+      }
+
+      populateOrder(order, orderId || order.id || null);
+    })();
+  </script>
+
+  <script>
+    // Keep cart badge in sync on this page with shared localStorage value
+    (function() {
+      'use strict';
+      const CART_COUNT_KEY = 'ppp_cart_count';
+
+      function safeNumber(value, fallback = 0) {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return fallback;
+        return parsed;
+      }
+
+      function getStoredCartCount() {
+        try {
+          const raw = window.localStorage?.getItem(CART_COUNT_KEY);
+          return safeNumber(raw, 0);
+        } catch (e) {
+          console.warn('Cart count read failed on order_details page:', e);
+          return 0;
+        }
+      }
+
+      function updateCartBadges(count) {
+        const badges = document.querySelectorAll('.cart-badge');
+        badges.forEach((badge) => {
+          badge.textContent = String(Math.max(0, safeNumber(count, 0)));
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        updateCartBadges(getStoredCartCount());
+      });
+
+      document.addEventListener('cart:count-changed', (e) => {
+        const count = typeof e.detail?.count === 'number'
+          ? e.detail.count
+          : getStoredCartCount();
+        updateCartBadges(count);
+      });
+    })();
+  </script>
+</body>
+</html>
+
+

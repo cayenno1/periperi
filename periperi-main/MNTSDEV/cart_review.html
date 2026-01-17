@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cart Review - Pablo's Peri Peri</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+        <span class="profile-text" id="profileText">Sign In</span>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item profile-manage-account"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item"><span>Orders</span></a>
+          <a href="help.html" class="profile-item"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <div class="cart-review-container">
+      <div class="cart-header">
+        <div class="cart-title-section">
+          <h2 class="cart-title">Your Order</h2>
+          <p class="cart-subtitle">Review your items before checkout</p>
+        </div>
+        <div class="cart-status">
+          <div class="status-indicator active">
+            <i class="fas fa-shopping-cart"></i>
+            <span>Cart</span>
+          </div>
+          <div class="status-line"></div>
+          <div class="status-indicator">
+            <i class="fas fa-credit-card"></i>
+            <span>Payment</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cart-items-list">
+        <!-- Cart items will be injected dynamically -->
+      </div>
+
+      <div class="cart-summary">
+        <div class="summary-header">
+          <h3 class="summary-title">Order Summary</h3>
+        </div>
+        <div class="summary-items" id="summaryItems">
+          <!-- Filled dynamically from cart items -->
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="add-more-btn" onclick="addMoreItems()">
+          <i class="fas fa-plus"></i>
+          <span>Add More Items</span>
+        </button>
+        <button class="proceed-btn" onclick="proceedToCheckout()">
+          <span>Proceed to Checkout</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="firebase-init.js"></script>
+  <script src="profile-auth.js"></script>
+
+  <script>
+    const GUEST_CART_KEY = 'ppp_guest_cart';
+
+    function getGuestCart() {
+      try {
+        const raw = window.localStorage?.getItem(GUEST_CART_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.warn('Failed to read guest cart:', e);
+        return [];
+      }
+    }
+
+    function setGuestCart(cart) {
+      try {
+        window.localStorage?.setItem(GUEST_CART_KEY, JSON.stringify(cart || []));
+      } catch (e) {
+        console.warn('Failed to save guest cart:', e);
+      }
+    }
+
+    function updateGuestCartItemQuantity(guestId, newQty, unitPrice) {
+      if (!guestId) return;
+      const cart = getGuestCart();
+      const idx = cart.findIndex((item) => item.id === guestId);
+      if (idx === -1) return;
+
+      const item = cart[idx] || {};
+      const safeQty = Math.max(1, Number(newQty) || 1);
+      const numericUnit = typeof unitPrice === 'number' ? unitPrice : Number(unitPrice) || 0;
+
+      item.quantity = safeQty;
+      item.price = numericUnit * safeQty;
+      cart[idx] = item;
+      setGuestCart(cart);
+    }
+
+    function removeGuestCartItem(guestId) {
+      if (!guestId) return;
+      const cart = getGuestCart().filter((item) => item.id !== guestId);
+      setGuestCart(cart);
+    }
+
+    async function waitForFirebaseReady(maxAttempts = 40, delayMs = 50) {
+      let attempts = 0;
+      while (!window.firebaseReady && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        attempts++;
+      }
+    }
+
+    async function loadCartFromFirestore(authUser) {
+      const cartItemsList = document.querySelector('.cart-items-list');
+      if (!cartItemsList) return;
+
+      cartItemsList.innerHTML = '';
+
+      try {
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+
+        if (!db || !auth || !window.doc || !window.collection || !window.getDocs) {
+          console.warn('Firebase not fully initialized for cart load');
+          updateCartSummary();
+          return;
+        }
+
+        const user = authUser || auth.currentUser;
+        if (!user) {
+          console.warn('No authenticated user; cart will appear empty');
+          updateCartSummary();
+          return;
+        }
+
+        const customerRef = window.doc(db, 'customers', user.uid);
+        const cartItemsCol = window.collection(customerRef, 'cartItems');
+        const snap = await window.getDocs(cartItemsCol);
+
+        snap.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          const docId = docSnap.id;
+
+          const name = data.name || 'Item';
+          const quantity =
+            typeof data.quantity === 'number'
+              ? data.quantity
+              : Number(data.quantity) || 1;
+          const totalPrice =
+            typeof data.price === 'number'
+              ? data.price
+              : Number(data.price) || 0;
+          const unitPrice =
+            quantity > 0 ? totalPrice / quantity : totalPrice;
+
+          const imageUrl = data.imageUrl || 'food_img.png';
+
+          const itemEl = document.createElement('div');
+          itemEl.className = 'cart-item';
+          itemEl.dataset.cartDocId = docId;
+          itemEl.dataset.unitPrice = String(unitPrice);
+          itemEl.dataset.source = 'user';
+
+          itemEl.innerHTML = `
+            <div class="item-image-container">
+              <img src="${imageUrl}" alt="${name}" class="item-image">
+            </div>
+            <div class="cart-item-details">
+              <div class="item-info">
+                <h3 class="cart-item-title">${name}</h3>
+              </div>
+              <div class="item-options"></div>
+              <div class="item-price-section">
+                <div class="cart-item-price">₱${unitPrice.toFixed(2)}</div>
+                <div class="price-per-unit">₱${unitPrice.toFixed(2)} each</div>
+              </div>
+            </div>
+            <div class="cart-item-controls">
+              <button class="qty-btn minus-btn" onclick="updateQuantity(this, -1)">
+                <i class="fas fa-minus"></i>
+              </button>
+              <span class="qty-display">${quantity}</span>
+              <button class="qty-btn plus-btn" onclick="updateQuantity(this, 1)">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+            <button class="remove-btn" onclick="removeItem(this)">
+              <i class="fas fa-trash"></i>
+            </button>
+          `;
+
+          cartItemsList.appendChild(itemEl);
+        });
+      } catch (error) {
+        console.error('Error loading cart from Firestore:', error);
+      }
+
+      updateCartSummary();
+    }
+
+    function loadCartFromGuestCart() {
+      const cartItemsList = document.querySelector('.cart-items-list');
+      if (!cartItemsList) return;
+
+      cartItemsList.innerHTML = '';
+
+      const cart = getGuestCart();
+      if (!cart.length) {
+        updateCartSummary();
+        return;
+      }
+
+      cart.forEach((data) => {
+        const name = data.name || 'Item';
+        const quantity =
+          typeof data.quantity === 'number'
+            ? data.quantity
+            : Number(data.quantity) || 1;
+        const lineTotal =
+          typeof data.price === 'number'
+            ? data.price
+            : Number(data.price) || 0;
+        const unitPrice = quantity > 0 ? lineTotal / quantity : lineTotal;
+        const imageUrl = data.imageUrl || 'food_img.png';
+        const guestId = data.id || data.itemId || `guest-${name}`;
+
+        const itemEl = document.createElement('div');
+        itemEl.className = 'cart-item';
+        itemEl.dataset.guestId = guestId;
+        itemEl.dataset.unitPrice = String(unitPrice);
+        itemEl.dataset.source = 'guest';
+
+        itemEl.innerHTML = `
+          <div class="item-image-container">
+            <img src="${imageUrl}" alt="${name}" class="item-image">
+          </div>
+          <div class="cart-item-details">
+            <div class="item-info">
+              <h3 class="cart-item-title">${name}</h3>
+            </div>
+            <div class="item-options"></div>
+            <div class="item-price-section">
+              <div class="cart-item-price">₱${unitPrice.toFixed(2)}</div>
+              <div class="price-per-unit">₱${unitPrice.toFixed(2)} each</div>
+            </div>
+          </div>
+          <div class="cart-item-controls">
+            <button class="qty-btn minus-btn" onclick="updateQuantity(this, -1)">
+              <i class="fas fa-minus"></i>
+            </button>
+            <span class="qty-display">${quantity}</span>
+            <button class="qty-btn plus-btn" onclick="updateQuantity(this, 1)">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+          <button class="remove-btn" onclick="removeItem(this)">
+            <i class="fas fa-trash"></i>
+          </button>
+        `;
+
+        cartItemsList.appendChild(itemEl);
+      });
+
+      updateCartSummary();
+    }
+
+    async function updateQuantity(btn, change) {
+      const cartItem = btn.closest('.cart-item');
+      if (!cartItem) return;
+
+      const qtyDisplay = cartItem.querySelector('.qty-display');
+      if (!qtyDisplay) return;
+
+      let currentQty = parseInt(qtyDisplay.textContent, 10) || 0;
+      let newQty = currentQty + change;
+
+      if (newQty < 1) {
+        newQty = 1;
+      }
+
+      qtyDisplay.textContent = newQty;
+      updateCartSummary();
+
+      const docId = cartItem.dataset.cartDocId;
+      const guestId = cartItem.dataset.guestId;
+      const unitPrice = parseFloat(cartItem.dataset.unitPrice || '0') || 0;
+      const source = cartItem.dataset.source || (guestId ? 'guest' : 'user');
+
+      // Guest cart: update localStorage only
+      if (source === 'guest') {
+        updateGuestCartItemQuantity(guestId, newQty, unitPrice);
+        return;
+      }
+
+      if (!docId || !unitPrice) return;
+
+      try {
+        await waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+
+        if (!db || !auth || !window.doc || !window.updateDoc) {
+          console.warn('Firebase not fully initialized for cart update');
+          return;
+        }
+
+        const user = auth.currentUser;
+        if (!user) {
+          console.warn('No authenticated user; skipping Firestore cart update');
+          return;
+        }
+
+        const customerRef = window.doc(db, 'customers', user.uid);
+        const cartItemRef = window.doc(customerRef, 'cartItems', docId);
+        const newTotalPrice = unitPrice * newQty;
+
+        await window.updateDoc(cartItemRef, {
+          quantity: newQty,
+          price: newTotalPrice,
+          updatedAt: new Date()
+        });
+      } catch (error) {
+        console.error('Error updating cart item quantity:', error);
+      }
+    }
+
+    async function removeItem(btn) {
+      const cartItem = btn.closest('.cart-item');
+      if (!cartItem) return;
+
+      const docId = cartItem.dataset.cartDocId;
+      const guestId = cartItem.dataset.guestId;
+      const source = cartItem.dataset.source || (guestId ? 'guest' : 'user');
+
+      cartItem.style.animation = 'slideOut 0.3s ease forwards';
+      
+      setTimeout(async () => {
+        cartItem.remove();
+        updateCartSummary();
+
+        if (source === 'guest') {
+          removeGuestCartItem(guestId);
+          return;
+        }
+
+        if (!docId) return;
+
+        try {
+          await waitForFirebaseReady();
+
+          const db = window.firebaseDb;
+          const auth = window.firebaseAuth;
+
+          if (!db || !auth || !window.doc || !window.deleteDoc) {
+            console.warn('Firebase not fully initialized for cart delete');
+            return;
+          }
+
+          const user = auth.currentUser;
+          if (!user) {
+            console.warn('No authenticated user; skipping Firestore cart delete');
+            return;
+          }
+
+          const customerRef = window.doc(db, 'customers', user.uid);
+          const cartItemRef = window.doc(customerRef, 'cartItems', docId);
+
+          await window.deleteDoc(cartItemRef);
+        } catch (error) {
+          console.error('Error deleting cart item from Firestore:', error);
+        }
+      }, 300);
+    }
+
+    function updateCartSummary() {
+      const items = document.querySelectorAll('.cart-item');
+      const summaryItemsEl = document.getElementById('summaryItems');
+      const cartItemsList = document.querySelector('.cart-items-list');
+      const cartSummary = document.querySelector('.cart-summary');
+      const cartBadges = document.querySelectorAll('.cart-badge');
+      const proceedBtn = document.querySelector('.proceed-btn');
+      if (!summaryItemsEl || !cartItemsList || !cartSummary) return;
+
+      // If empty, reset badges and show empty state
+      if (items.length === 0) {
+        summaryItemsEl.innerHTML = '';
+        cartSummary.style.display = 'none';
+        cartItemsList.classList.add('empty-state');
+
+        // Hide proceed button when there are no items
+        if (proceedBtn) {
+          proceedBtn.style.display = 'none';
+        }
+
+        let emptyMessage = cartItemsList.querySelector('.empty-cart-message');
+        if (!emptyMessage) {
+          emptyMessage = document.createElement('div');
+          emptyMessage.className = 'empty-cart-message';
+          emptyMessage.textContent = 'Your cart is empty';
+          cartItemsList.appendChild(emptyMessage);
+        }
+
+        // Badge should be 0 when there are no items
+        cartBadges.forEach(badge => {
+          badge.textContent = '0';
+        });
+
+        // Also sync localStorage-based cart count used on other pages
+        try {
+          window.localStorage?.setItem('ppp_cart_count', '0');
+          document.dispatchEvent(new CustomEvent('cart:count-changed', {
+            detail: { count: 0 }
+          }));
+        } catch (e) {
+          console.warn('Failed to sync empty cart count to localStorage:', e);
+        }
+        return;
+      } else {
+        cartSummary.style.display = '';
+        cartItemsList.classList.remove('empty-state');
+        const existingEmpty = cartItemsList.querySelector('.empty-cart-message');
+        if (existingEmpty) existingEmpty.remove();
+
+        // Show proceed button when there are items
+        if (proceedBtn) {
+          proceedBtn.style.display = '';
+        }
+      }
+
+      let subtotal = 0;
+      let rowsHtml = '';
+      let totalCount = 0;
+
+      items.forEach((item) => {
+        const titleEl = item.querySelector('.cart-item-title');
+        const priceEl = item.querySelector('.cart-item-price');
+        const qtyEl = item.querySelector('.qty-display');
+
+        const title = titleEl ? titleEl.textContent.trim() : 'Item';
+        const priceText = priceEl ? priceEl.textContent : '₱0';
+        const qty = qtyEl ? parseInt(qtyEl.textContent, 10) || 1 : 1;
+
+        const numericPrice = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
+        const lineTotal = numericPrice * qty;
+        subtotal += lineTotal;
+        totalCount += qty;
+
+        rowsHtml += `
+          <div class="summary-row">
+            <span class="summary-label">${title} x ${qty}</span>
+            <span class="summary-value">₱${lineTotal.toFixed(2)}</span>
+          </div>
+        `;
+      });
+
+      const subtotalDisplay = `₱${subtotal.toFixed(2)}`;
+
+      rowsHtml += `
+        <div class="summary-row subtotal">
+          <span class="summary-label">Sub-Total</span>
+          <span class="summary-value" id="summarySubtotal">${subtotalDisplay}</span>
+        </div>
+        <div class="summary-row total">
+          <span class="summary-label">Total</span>
+          <span class="summary-value" id="summaryTotal">${subtotalDisplay}</span>
+        </div>
+      `;
+
+      summaryItemsEl.innerHTML = rowsHtml;
+
+      // Sync cart badge with total quantity from this page
+      cartBadges.forEach(badge => {
+        badge.textContent = String(totalCount);
+      });
+
+      // Also sync localStorage-based cart count used on other pages
+      try {
+        window.localStorage?.setItem('ppp_cart_count', String(totalCount));
+        document.dispatchEvent(new CustomEvent('cart:count-changed', {
+          detail: { count: totalCount }
+        }));
+      } catch (e) {
+        console.warn('Failed to sync cart count to localStorage:', e);
+      }
+    }
+
+    function addMoreItems() {
+      window.location.href = 'menu.html';
+    }
+
+    function proceedToCheckout() {
+      // Go to unified checkout; service type will be chosen there
+      window.location.href = 'checkout.html';
+    }
+
+    function goHome() {
+      window.location.href = 'index.html';
+    }
+
+    function goToMenu() {
+      window.location.href = 'menu.html';
+    }
+
+    function goToCart() {
+      window.location.href = 'cart_review.html';
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideOut {
+        to {
+          opacity: 0;
+          transform: translateX(-100%);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Wait for auth state so we get the correct current user before reading cart
+      if (window.firebaseAuth && window.onAuthStateChanged) {
+        window.onAuthStateChanged(window.firebaseAuth, (user) => {
+          if (user) {
+            loadCartFromFirestore(user);
+          } else {
+            // Guest cart stored locally
+            loadCartFromGuestCart();
+          }
+        });
+      } else {
+        // Fallback if auth isn't available for some reason – use guest cart
+        loadCartFromGuestCart();
+      }
+    });
+  </script>
+
+  <style>
+    .cart-items-list.empty-state {
+      min-height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .empty-cart-message {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #666;
+      text-align: center;
+    }
+
+    /* Ensure equal size and text styling for cart actions on this page */
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .action-buttons .add-more-btn,
+    .action-buttons .proceed-btn {
+      padding: 14px 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 12px;
+      height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 360px;
+      box-sizing: border-box;
+    }
+  </style>
+</body>
+</html>

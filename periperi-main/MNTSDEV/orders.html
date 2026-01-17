@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Orders - PABLO'S PERI PERI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="orders-page">
+  <header class="header">
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+      <div class="brand-name">PABLO'S<br>PERI PERI</div>
+    </div>
+    <div class="nav-icons">
+      <div class="nav-icon home-icon" title="Home" onclick="goHome()">
+        <i class="fas fa-home"></i>
+      </div>
+      <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
+        <i class="fas fa-utensils"></i>
+      </div>
+      <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+        <i class="fas fa-shopping-bag"></i>
+        <span class="cart-badge">0</span>
+      </div>
+      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+        <span class="profile-text" id="profileText">Sign In</span>
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-header">
+            <div class="profile-meta">
+              <span class="profile-name" id="profileName">Your Account</span>
+              <span class="profile-email" id="profileEmail">user@example.com</span>
+            </div>
+          </div>
+          <a href="account.html" class="profile-item profile-manage-account" data-nav-target="account" data-hide-on-body="account-page"><span>Manage account</span></a>
+          <a href="orders.html" class="profile-item" data-nav-target="orders" data-hide-on-body="orders-page"><span>Orders</span></a>
+          <a href="help.html" class="profile-item" data-nav-target="help" data-hide-on-body="help-page"><span>Help & support</span></a>
+          <div class="profile-divider"></div>
+          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <a href="menu.html" class="back-button">
+      <i class="fas fa-arrow-left"></i>
+      <span>Back to Menu</span>
+    </a>
+
+    <section class="review-section orders-section" style="max-width: 1000px;">
+      <div class="review-header" style="align-items:center;">
+        <h2 class="section-title">My Orders</h2>
+        <div class="menu-filters">
+          <button class="filter-btn active" data-status="all">All</button>
+          <button class="filter-btn" data-status="ongoing">Ongoing</button>
+          <button class="filter-btn" data-status="completed">Completed</button>
+        </div>
+      </div>
+
+      <div class="reviews-list orders-list" id="ordersList" style="gap:16px;">
+        <!-- Order cards inserted by JS -->
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="firebase-init.js"></script>
+
+  <script>
+    function goHome() { window.location.href = 'index.html'; }
+    function goToMenu() { window.location.href = 'menu.html'; }
+    function goToCart() { window.location.href = 'cart_review.html'; }
+
+    // Check authentication state and update profile UI
+    async function updateProfileUI(user) {
+      const profileText = document.getElementById('profileText');
+      const profileIcon = document.getElementById('profileIcon');
+      const profileName = document.getElementById('profileName');
+      const profileEmail = document.getElementById('profileEmail');
+      const profileButton = document.getElementById('profileButton');
+
+      if (!profileText || !profileIcon || !profileButton) return;
+
+      if (user) {
+        profileButton.classList.add('logged-in');
+        profileIcon.style.display = '';
+        profileText.style.display = '';
+        
+        try {
+          const userDoc = await window.getDoc(window.doc(window.firebaseDb, "customers", user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User';
+            const email = userData.email || user.email || '';
+            if (profileName) profileName.textContent = fullName;
+            if (profileEmail) profileEmail.textContent = email;
+          } else {
+            if (profileName) profileName.textContent = user.displayName || 'User';
+            if (profileEmail) profileEmail.textContent = user.email || '';
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          if (profileName) profileName.textContent = user.displayName || 'User';
+          if (profileEmail) profileEmail.textContent = user.email || '';
+        }
+      } else {
+        profileButton.classList.remove('logged-in');
+        profileIcon.style.display = '';
+        profileText.style.display = '';
+        if (profileText) profileText.textContent = 'Sign In';
+        if (profileName) profileName.textContent = 'Your Account';
+        if (profileEmail) profileEmail.textContent = 'user@example.com';
+      }
+    }
+
+    // Profile dropdown logic
+    (function initProfileDropdown(){
+      const btn = document.getElementById('profileButton');
+      const dropdown = document.getElementById('profileDropdown');
+      if (!btn || !dropdown) return;
+
+      // Hide "Orders" entry when we're already on the Orders page
+      try {
+        if (document.body.classList.contains('orders-page')) {
+          const ordersLink = dropdown.querySelector('a[href="orders.html"]');
+          if (ordersLink) {
+            ordersLink.style.display = 'none';
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to apply dropdown context on orders page:', e);
+      }
+
+      function toggleDropdown(e){
+        e.stopPropagation();
+        const user = window.firebaseAuth?.currentUser;
+        if (!user) {
+          window.location.href = 'login.html';
+          return;
+        }
+        dropdown.classList.toggle('show');
+      }
+
+      function handleOutside(e){
+        if (!dropdown.classList.contains('show')) return;
+        if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+          dropdown.classList.remove('show');
+        }
+      }
+
+      btn.addEventListener('click', toggleDropdown);
+      document.addEventListener('click', handleOutside);
+      document.addEventListener('keydown', (e)=>{
+        if (e.key === 'Escape') dropdown.classList.remove('show');
+      });
+
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async function(){
+          try {
+            await window.signOut(window.firebaseAuth);
+            dropdown.classList.remove('show');
+            localStorage.removeItem('ppp_user');
+            await updateProfileUI(null);
+            window.location.href = 'login.html';
+          } catch (error) {
+            console.error('Error signing out:', error);
+            alert('Error signing out. Please try again.');
+          }
+        });
+      }
+
+      function initAuthListener() {
+        if (!window.firebaseAuth) {
+          setTimeout(initAuthListener, 100);
+          return;
+        }
+        window.onAuthStateChanged(window.firebaseAuth, async (user) => {
+          await updateProfileUI(user);
+        });
+      }
+
+      initAuthListener();
+    })();
+
+    let orders = [];
+    let currentFilter = 'all';
+
+    function formatOrderDate(raw) {
+      if (!raw) return '';
+      try {
+        const d = new Date(raw);
+        if (!Number.isNaN(d.getTime())) {
+          return d.toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+        }
+      } catch (e) {}
+      return String(raw);
+    }
+
+    function renderOrders() {
+      const container = document.getElementById('ordersList');
+      if (!container) return;
+
+      const filtered = orders
+        .filter(o => o.status !== 'cancelled')
+        .filter(o => currentFilter === 'all' || o.status === currentFilter);
+
+      if (!filtered.length) {
+        container.innerHTML = `
+          <div class="address-empty-state" style="text-align:center;padding:32px;color:#999;">
+            No orders yet.
+          </div>
+        `;
+        if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+        return;
+      }
+
+      container.innerHTML = filtered.map(order => {
+        const totalDisplay = (typeof order.total === 'number' ? order.total : Number(order.total) || 0).toFixed(2);
+        const itemsHtml = order.items
+          .map(i => `<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`)
+          .join('');
+        const reorderButton = order.status === 'completed'
+          ? `<button class="filter-btn" onclick="reorder('${order.id}')"><span>Reorder</span></button>`
+          : '';
+
+        return `
+        <div class="review-item" data-status="${order.status}">
+          <div class="review-header">
+            <div class="reviewer-info">
+              <div class="reviewer-avatar"><i class="fas fa-receipt"></i></div>
+              <div class="reviewer-details">
+                <div class="reviewer-name">Order ${order.displayId}</div>
+                <div class="review-date">${order.date} • ${order.items.length} item(s)</div>
+              </div>
+            </div>
+            <span class="popular-tag" style="text-transform:capitalize;">${order.status}</span>
+          </div>
+          <div class="review-text" style="font-style:normal;">
+            ${itemsHtml} 
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div class="card-price">₱${totalDisplay}</div>
+            <div style="display:flex; gap:8px;">
+              <button class="filter-btn" onclick="viewDetails('${order.id}')"><span>View details</span></button>
+              ${reorderButton}
+            </div>
+          </div>
+        </div>
+        `;
+      }).join('');
+
+    }
+
+    async function loadOrdersForUser(user) {
+      if (!user || !window.firebaseDb || !window.collection || !window.query || !window.where || !window.getDocs) {
+        orders = [];
+        renderOrders();
+        return;
+      }
+
+      try {
+        const ordersCol = window.collection(window.firebaseDb, 'orders');
+        const q = window.query(
+          ordersCol,
+          window.where('userId', '==', user.uid)
+        );
+        const snap = await window.getDocs(q);
+
+        const loaded = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          const rawTimestamp = data.timestamp || data.createdAt || null;
+          const dateDisplay = formatOrderDate(rawTimestamp);
+          const itemsArr = Array.isArray(data.items) ? data.items : [];
+          const itemLabels = itemsArr.map((it) => {
+            const name = it.name || 'Item';
+            const qty =
+              typeof it.quantity === 'number'
+                ? it.quantity
+                : Number(it.quantity) || 1;
+            return `${name} x ${qty}`;
+          });
+
+          let total = 0;
+          if (typeof data.total === 'number') {
+            total = data.total;
+          } else {
+            const parsed = Number(data.total);
+            total = Number.isFinite(parsed) ? parsed : 0;
+          }
+
+          const rawStatus = data.status || 'pending';
+          const status = rawStatus === 'pending' ? 'ongoing' : rawStatus;
+
+          loaded.push({
+            id: docSnap.id,
+            displayId: docSnap.id,
+            date: dateDisplay,
+            total,
+            status,
+            items: itemLabels,
+            raw: data
+          });
+        });
+
+        // Sort newest first by timestamp (if present)
+        loaded.sort((a, b) => {
+          const ta = a.raw.timestamp || a.raw.createdAt || '';
+          const tb = b.raw.timestamp || b.raw.createdAt || '';
+          if (!ta && !tb) return 0;
+          if (!ta) return 1;
+          if (!tb) return -1;
+          return ta < tb ? 1 : -1;
+        });
+
+        orders = loaded;
+        visible = 3;
+        renderOrders();
+      } catch (error) {
+        console.error('Error loading orders from Firestore:', error);
+        orders = [];
+        renderOrders();
+      }
+    }
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', function(){
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        currentFilter = this.dataset.status || 'all';
+        renderOrders();
+      });
+    });
+
+    function viewDetails(id){
+      const order = orders.find(o => o.id === id);
+      if (order) {
+        try {
+          localStorage.setItem('selectedOrder', JSON.stringify(order.raw || order));
+          localStorage.setItem('selectedOrderId', id);
+        } catch (e) {}
+        // Also pass orderId via query string so we can reload from Firestore
+        window.location.href = `order_details.html?orderId=${encodeURIComponent(id)}`;
+      } else {
+        alert('Order not found');
+      }
+    }
+
+    function reorder(id){
+      const order = orders.find(o => o.id === id);
+      if (!order) {
+        alert('Order not found');
+        return;
+      }
+      alert('Reorder feature coming soon.');
+    }
+
+    // Hook into auth to load the current user's orders
+    (function initOrdersForUser(){
+      function waitForAuth() {
+        if (!window.firebaseAuth || !window.onAuthStateChanged) {
+          setTimeout(waitForAuth, 100);
+          return;
+        }
+
+        window.onAuthStateChanged(window.firebaseAuth, (user) => {
+          loadOrdersForUser(user);
+        });
+      }
+
+      waitForAuth();
+    })();
+  </script>
+
+  <script>
+    // Keep cart badge in sync on this page with shared localStorage value
+    (function() {
+      'use strict';
+      const CART_COUNT_KEY = 'ppp_cart_count';
+
+      function safeNumber(value, fallback = 0) {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return fallback;
+        return parsed;
+      }
+
+      function getStoredCartCount() {
+        try {
+          const raw = window.localStorage?.getItem(CART_COUNT_KEY);
+          return safeNumber(raw, 0);
+        } catch (e) {
+          console.warn('Cart count read failed on orders page:', e);
+          return 0;
+        }
+      }
+
+      function updateCartBadges(count) {
+        const badges = document.querySelectorAll('.cart-badge');
+        badges.forEach((badge) => {
+          badge.textContent = String(Math.max(0, safeNumber(count, 0)));
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        updateCartBadges(getStoredCartCount());
+      });
+
+      document.addEventListener('cart:count-changed', (e) => {
+        const count = typeof e.detail?.count === 'number'
+          ? e.detail.count
+          : getStoredCartCount();
+        updateCartBadges(count);
+      });
+    })();
+  </script>
+</body>
+<!-- Keep inline styles minimal; main theme comes from style.css colors/components -->
+</html>
+

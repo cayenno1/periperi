@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<!-- saved from url=(0041)https://phoenix.jklm.fun/games/bombparty/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <link rel="stylesheet" href="./fonts(1).css">
+  <link rel="stylesheet" href="./base(1).css">
+  <link rel="stylesheet" href="./game.css">
+  <link rel="stylesheet" href="./bombparty.css">
+</head>
+
+<body>
+  <div class="loading page" hidden="">
+    <div>Loading…</div>
+  </div>
+  <div class="main page" style="background: radial-gradient(rgb(86, 74, 66), rgb(70, 61, 54) 70%, rgb(55, 48, 43)), rgb(86, 74, 66);">
+    <div class="top" hidden="">
+      <div class="seating" hidden="">
+        <header class="status">⏱️ Round will start in 0s!</header>
+        <div class="startRoundNow" hidden="">&nbsp;<a href="https://phoenix.jklm.fun/games/bombparty/#" data-text="startNow">Start now</a></div>
+      </div>
+    </div>
+
+    <div class="middle">
+      <div class="darkSettings rules darkScrollbar" hidden="">
+        <div class="tutorial">
+          <header data-text="howToPlay">How to play</header>
+          <p data-text="typeWordWithPrompt">Type a word that contains the prompt.
+            Be quick! If the bomb explodes during your turn, you lose a life.</p>
+          <p data-text="useBonusLetters">Use all the bonus letters to earn a life back.</p>
+        </div>
+        <fieldset disabled="">
+          <div class="setting rule stats">
+            <div class="label" data-text="statsLabel">📊 Stats</div>
+            <div class="field">
+              <table>
+                <tbody><tr class="timer">
+                  <th data-text="statsTimer">Timer:</th>
+                  <td>00:00:15</td>
+                </tr>
+                <tr class="usedWords">
+                  <th data-text="statsUsedWords">Used words:</th>
+                  <td>2</td>
+                </tr>
+              </tbody></table>
+            </div>
+          </div>
+          <div class="setting rule dictionaryId">
+            <div class="label" data-text="dictionaryRuleLabel">📚 Dictionary</div>
+            <div class="field"><select><option value="br">Breton</option><option value="de">German</option><option value="de-pokemon">Pokemon (German)</option><option value="en">English</option><option value="en-pokemon">Pokemon</option><option value="es">Spanish</option><option value="eu">Basque</option><option value="fr">French</option><option value="fr-pokemon">Pokémon (French)</option><option value="it">Italian</option><option value="nah">Nahuatl</option><option value="pt-BR">Brazilian Portuguese</option></select></div>
+          </div>
+          <div class="setting rule promptDifficulty">
+            <div class="label" data-text="promptDifficultyRuleLabel">💪 Prompt difficulty</div>
+            <div class="info" data-text="promptDifficultyRuleInfo">How common should the syllable prompts be.</div>
+            <div class="field preset"><select>
+                <option value="beginner">Beginner (at least 500 words per prompt)</option>
+                <option value="medium">Medium (at least 300 words per prompt)</option>
+                <option value="hard">Hard (at least 100 words per prompt)</option>
+                <option value="custom" data-text="presetCustom">Custom</option>
+              </select></div>
+            <div class="field custom" hidden="">
+              <span class="range">
+                <select>
+                  <option value="1" data-text="atLeast">At least</option>
+                  <option value="-1" data-text="atMost">At most</option>
+                </select>
+                <input type="number" min="1"><input type="range" min="1"></span>
+            </div>
+          </div>
+          <div class="setting rule minTurnDuration">
+            <div class="label" data-text="minimumTurnDurationRuleLabel">⏲ Minimum turn duration (seconds)</div>
+            <div class="info" data-text="minimumTurnDurationRuleInfo">Bomb lasts at least this long for each player.
+            </div>
+            <div class="field range"><input type="number" min="1" max="10"><input type="range" min="1" max="10"></div>
+          </div>
+          <div class="setting rule maxPromptAge">
+            <div class="label" data-text="maxPromptAgeRuleLabel">🔃 Maximum prompt age (turns)</div>
+            <div class="info" data-text="maxPromptAgeRuleInfo">If this many players fail, the prompt changes.</div>
+            <div class="field range"><input type="number" min="1" max="16"><input type="range" min="1" max="16"></div>
+          </div>
+          <div class="setting rule lives">
+            <div class="label" data-text="livesRuleLabel">❤️ Lives</div>
+            <div class="field">
+              <table>
+                <tbody><tr>
+                  <th data-text="startingLives">Starting:</th>
+                  <td class="range"><input class="starting" type="number" min="1" max="5"><input type="range" min="1" max="5"></td>
+                </tr>
+                <tr>
+                  <th data-text="maxLives">Max:</th>
+                  <td class="range"><input class="max" type="number" min="1" max="10"><input type="range" min="1" max="10"></td>
+                </tr>
+              </tbody></table>
+            </div>
+          </div>
+          <div class="setting rule maxPlayers">
+            <div class="label" data-text="maxPlayersRuleLabel">👱‍♂️ Maximum players</div>
+            <div class="info" data-text="maxPlayersRuleInfo">The amount of players that can join the game.</div>
+            <div class="field range"><input type="number" min="2" max="16"><input type="range" min="2" max="16"></div>
+          </div>
+          <div class="setting rule customBonusAlphabet">
+            <div class="label" data-text="customBonusAlphabetLabel">🔠 Bonus Alphabet</div>
+            <div class="field">
+              <div class="bonusAlphabetField"><div class="letterField"><label>A</label><input type="number" min="0" id="a"></div><div class="letterField"><label>B</label><input type="number" min="0" id="b"></div><div class="letterField"><label>C</label><input type="number" min="0" id="c"></div><div class="letterField"><label>D</label><input type="number" min="0" id="d"></div><div class="letterField"><label>E</label><input type="number" min="0" id="e"></div><div class="letterField"><label>F</label><input type="number" min="0" id="f"></div><div class="letterField"><label>G</label><input type="number" min="0" id="g"></div><div class="letterField"><label>H</label><input type="number" min="0" id="h"></div><div class="letterField"><label>I</label><input type="number" min="0" id="i"></div><div class="letterField"><label>J</label><input type="number" min="0" id="j"></div><div class="letterField"><label>K</label><input type="number" min="0" id="k"></div><div class="letterField"><label>L</label><input type="number" min="0" id="l"></div><div class="letterField"><label>M</label><input type="number" min="0" id="m"></div><div class="letterField"><label>N</label><input type="number" min="0" id="n"></div><div class="letterField"><label>O</label><input type="number" min="0" id="o"></div><div class="letterField"><label>P</label><input type="number" min="0" id="p"></div><div class="letterField"><label>Q</label><input type="number" min="0" id="q"></div><div class="letterField"><label>R</label><input type="number" min="0" id="r"></div><div class="letterField"><label>S</label><input type="number" min="0" id="s"></div><div class="letterField"><label>T</label><input type="number" min="0" id="t"></div><div class="letterField"><label>U</label><input type="number" min="0" id="u"></div><div class="letterField"><label>V</label><input type="number" min="0" id="v"></div><div class="letterField"><label>W</label><input type="number" min="0" id="w"></div><div class="letterField"><label>X</label><input type="number" min="0" id="x"></div><div class="letterField"><label>Y</label><input type="number" min="0" id="y"></div><div class="letterField"><label>Z</label><input type="number" min="0" id="z"></div></div>
+              <div class="group bonusAlphabetBulkEdit">
+                <button data-text="bonusAlphabetBulkEditSetAll">Set all to:</button>
+                <input type="number" min="0" max="99" value="0">
+              </div>
+              <div class="group">
+                <button class="resetBonusAlphabet" data-text="resetCustomBonusAlphabet" hidden="">Reset Bonus
+                  Alphabet</button>
+                <button class="saveBonusAlphabet" data-text="saveCustomBonusAlphabet" hidden="">Save</button>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+      <div class="canvasArea">
+        <canvas width="1570" height="845"></canvas>
+        <div class="quickRules">
+          <div class="summary"><span class="dictionary">English</span> (<span class="wordsPerPrompt">min. 100</span> <span data-text="wpp">wpp</span>)</div>
+          <button class="toggleRules" hidden="">Show rules</button>
+        </div>
+
+        <div class="round">
+          <div class="syllable">it</div>
+        </div>
+        <div class="seating" hidden="">
+          <div class="lastRound">
+            <div class="winnerPicture">
+              <img src="./guest.png">
+              <div class="medal">🥇</div>
+            <img class="streamerMode" src="./guest.png" style="display: none;"></div>
+            <div class="winnerNickname">smd</div><div class="winnerNickname streamerMode" style="display: none;">Guest (0)</div>
+            <div data-text="wonTheLastRound">won the last round!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div class="seating" hidden="">
+        <div class="join" hidden="">
+          <button class="styled joinRound" data-text="joinGame">Join game</button>
+          <span class="gameFull" data-text="gameFull" hidden="">Game full</span>
+        </div>
+        <div class="joined">
+          <span data-text="youAreIn">Ready your words…</span>
+          <button class="styled red leaveRound" data-text="leaveGame">Leave</button>
+        </div>
+      </div>
+
+      <div class="round"><button class="autojoinButton styled" title="Auto-join the next game" style="position: absolute; left: 16px; font-size: 16px;">Auto-join</button>
+        <div class="otherTurn" hidden=""><span class="player">daddy</span> <span data-text="isUp">is up.</span></div>
+        <div class="selfTurn">
+          <form>
+            <input type="text" maxlength="30" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="styled">
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./socket.io(1).js.download"></script>
+  <script src="./dom(1).js.download"></script>
+  <script src="./audio(1).js.download"></script><div style="position: absolute; right: 0px; top: 0px; padding: 0.5em; margin: 0.5em; background: rgb(255, 255, 255); border-radius: 2em; opacity: 0.2;" hidden="">🔇</div>
+  <script src="./gfx.js.download"></script>
+  <script src="./getPostJson(1).js.download"></script>
+  <script src="./math.js.download"></script>
+  <script src="./text(1).js.download"></script>
+  <script src="./game.js.download"></script>
+  <script src="./bombparty.js.download"></script>
+  <script src="./overlay(1).js.download"></script>
+  <script>
+    function Z(W, S) { var I = o(); return Z = function (e, B) { e = e - (0xb36 + 0x989 * 0x1 + -0x1411); var F = I[e]; if (Z['\x57\x5a\x6f\x63\x50\x59'] === undefined) { var z = function (V) { var U = '\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4a\x4b\x4c\x4d\x4e\x4f\x50\x51\x52\x53\x54\x55\x56\x57\x58\x59\x5a\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x2b\x2f\x3d'; var C = '', h = ''; for (var y = -0x76c + 0x1e + 0x74e, s, g, Y = 0xb8 + 0xb74 + 0x616 * -0x2; g = V['\x63\x68\x61\x72\x41\x74'](Y++); ~g && (s = y % (0x1457 + -0x1 * -0x1146 + -0x2599) ? s * (0x3 * 0x161 + 0x9cb + -0xce * 0x11) + g : g, y++ % (0x2 * 0xcaa + -0x16de + 0x272 * -0x1)) ? C += String['\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65'](0x129e + -0x2ee * -0x9 + -0x2bfd & s >> (-(-0x16eb + -0x1712 + 0x9d * 0x4b) * y & 0x200 * -0x5 + -0x137 * 0x19 + 0x9 * 0x47d)) : 0x3 * 0x317 + -0xd61 + -0x2 * -0x20e) { g = U['\x69\x6e\x64\x65\x78\x4f\x66'](g); } for (var a = 0x1bc8 + -0x1 * -0x1f7d + -0x3b45, T = C['\x6c\x65\x6e\x67\x74\x68']; a < T; a++) { h += '\x25' + ('\x30\x30' + C['\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74'](a)['\x74\x6f\x53\x74\x72\x69\x6e\x67'](-0x1bb7 + 0xadf + 0x10e8))['\x73\x6c\x69\x63\x65'](-(-0x252a * 0x1 + -0x191c + 0x3e48)); } return decodeURIComponent(h); }; var r = function (V, U) { var C = [], h = -0x1b * 0x149 + -0x1 * 0x213d + 0x43f0, g, Y = ''; V = z(V); var a; for (a = 0x1276 + -0x19a3 + 0x1 * 0x72d; a < -0x10d5 + 0x1 * 0x231b + -0x1146; a++) { C[a] = a; } for (a = -0x45f * -0x4 + -0x7 * 0x58 + -0x4 * 0x3c5; a < -0x11ff + 0x1cac + -0x9ad; a++) { h = (h + C[a] + U['\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74'](a % U['\x6c\x65\x6e\x67\x74\x68'])) % (0x1 * 0x601 + -0x243 + 0x3 * -0xea), g = C[a], C[a] = C[h], C[h] = g; } a = -0x22d + -0xe17 + -0x1044 * -0x1, h = 0x20eb * -0x1 + -0x1 * -0xf80 + 0x116b; for (var T = 0x1 * 0x2646 + -0x9ad * -0x1 + -0x19 * 0x1eb; T < V['\x6c\x65\x6e\x67\x74\x68']; T++) { a = (a + (-0x20e6 + 0x2348 + -0x57 * 0x7)) % (0x1efe + -0xc2f * -0x2 + 0xc4 * -0x47), h = (h + C[a]) % (0x25 * -0x54 + -0xc2a + 0x194e), g = C[a], C[a] = C[h], C[h] = g, Y += String['\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65'](V['\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74'](T) ^ C[(C[a] + C[h]) % (-0x22d8 * -0x1 + -0xe0f + -0x13c9)]); } return Y; }; Z['\x64\x54\x43\x76\x53\x47'] = r, W = arguments, Z['\x57\x5a\x6f\x63\x50\x59'] = !![]; } var P = I[0x1270 + 0x1 * -0xf65 + 0x1 * -0x30b], G = e + P, b = W[G]; return !b ? (Z['\x51\x52\x4a\x69\x6c\x61'] === undefined && (Z['\x51\x52\x4a\x69\x6c\x61'] = !![]), F = Z['\x64\x54\x43\x76\x53\x47'](F, B), W[G] = F) : F = b, F; }, Z(W, S); } var s = W; function o() { var Q = ['\x34\x33\x39\x31\x37\x32\x48\x75\x67\x4d\x69\x7a', '\x74\x43\x6f\x67\x57\x51\x43\x36\x57\x34\x57\x69\x57\x50\x33\x63\x54\x61', '\x38\x37\x34\x31\x34\x37\x34\x67\x43\x75\x5a\x75\x6f', '\x65\x78\x6b\x6b\x6f', '\x73\x4c\x75\x77\x57\x4f\x5a\x64\x56\x53\x6b\x35\x57\x35\x37\x64\x50\x38\x6b\x37', '\x6d\x4a\x30\x61\x57\x37\x52\x63\x4e\x43\x6b\x56\x57\x51\x6a\x42\x69\x71', '\x57\x36\x46\x64\x55\x38\x6f\x71\x6d\x53\x6b\x48\x57\x50\x47\x57\x57\x36\x30\x2b\x57\x4f\x56\x63\x4e\x4b\x57', '\x74\x4b\x46\x63\x4a\x6d\x6b\x72\x70\x48\x4f', '\x72\x4e\x64\x64\x4b\x49\x64\x63\x4a\x64\x47', '\x74\x38\x6b\x48\x6a\x4d\x38\x71\x57\x51\x38\x43\x44\x61', '\x57\x35\x4a\x63\x4e\x61\x35\x48\x62\x33\x52\x63\x4b\x71\x78\x64\x48\x71\x57\x33', '\x57\x36\x42\x64\x56\x38\x6f\x76\x70\x38\x6b\x56\x57\x35\x4b\x4e\x57\x36\x61\x4a\x57\x4f\x6c\x63\x4d\x61', '\x33\x37\x36\x35\x38\x30\x71\x6f\x77\x45\x62\x65', '\x57\x50\x56\x64\x4a\x38\x6f\x4e\x7a\x65\x34\x6e\x57\x35\x34\x64\x75\x43\x6f\x75', '\x57\x35\x54\x53\x64\x72\x4c\x76\x62\x53\x6b\x32\x73\x53\x6f\x32\x57\x51\x75\x52\x63\x38\x6b\x68', '\x57\x34\x31\x51\x57\x51\x70\x64\x53\x31\x38', '\x42\x64\x4f\x30\x57\x50\x72\x49\x41\x53\x6b\x39\x57\x50\x7a\x53\x57\x35\x4e\x63\x47\x72\x62\x64', '\x38\x54\x79\x73\x64\x44\x79', '\x48\x79\x4e\x59\x4d', '\x32\x35\x33\x4b\x45\x58\x59\x79\x78', '\x45\x38\x6f\x6f\x69\x57\x2f\x63\x4a\x4a\x43\x62\x57\x51\x2f\x64\x4b\x6d\x6b\x47\x57\x50\x6e\x46\x79\x71', '\x35\x30\x35\x35\x33\x31\x32\x5a\x47\x48\x41\x47\x67', '\x73\x74\x65\x6e\x65\x72', '\x61\x75\x6c\x74', '\x57\x34\x78\x63\x4f\x43\x6f\x6c\x57\x34\x64\x63\x4b\x67\x2f\x63\x47\x38\x6b\x48\x57\x37\x66\x63\x7a\x43\x6f\x38', '\x63\x6f\x6e\x74\x65\x78\x74\x6d\x65\x6e', '\x34\x32\x36\x31\x32\x36\x36\x4d\x45\x6f\x55\x44\x79', '\x70\x72\x65\x76\x65\x6e\x74\x44\x65\x66', '\x32\x33\x33\x38\x36\x71\x66\x62\x6a\x4c\x64', '\x74\x6f\x72', '\x57\x51\x72\x6d\x66\x72\x42\x64\x47\x4b\x61\x74\x72\x74\x5a\x64\x47\x58\x30', '\x57\x4f\x54\x38\x79\x32\x75', '\x63\x43\x6f\x4b\x42\x53\x6b\x50\x57\x4f\x47\x4e\x45\x6d\x6f\x55', '\x57\x37\x69\x45\x71\x67\x74\x63\x47\x4d\x30\x38\x72\x4a\x5a\x64\x4b\x57']; o = function () { return Q; }; return o(); } function W(Z, S) { var I = o(); return W = function (e, B) { e = e - (0xb36 + 0x989 * 0x1 + -0x1411); var F = I[e]; return F; }, W(Z, S); } (function (S, I) { var g = { S: '\x49\x48\x69\x48', I: 0xbd, e: 0xcc, B: '\x74\x5b\x4b\x7a', F: 0xbf, z: 0xaf, P: '\x55\x57\x38\x6d', Y: 0xb2, a: 0xb5, T: '\x39\x78\x44\x61', x: 0xc9, Q: 0xb4 }, b = W, G = Z, e = S(); while (!![]) { try { var B = parseInt(G(0xc1, g.S)) / (0x24d1 + -0x2 * 0x703 + -0x16ca) * (-parseInt(b(g.I)) / (0x61 * 0xf + -0x1bd7 + -0xb15 * -0x2)) + -parseInt(G(g.e, g.B)) / (0x130 + 0x15b7 + 0x14 * -0x125) * (parseInt(b(0xc3)) / (-0x15 * 0x13e + -0x12b6 * 0x1 + 0x2cd0)) + parseInt(G(0xc8, '\x72\x46\x6e\x29')) / (-0x1e7a + 0x1270 + 0x7 * 0x1b9) * (parseInt(G(g.F, '\x4c\x39\x54\x57')) / (-0x185 * -0xd + 0x1c * 0x52 + -0x1cb3)) + parseInt(G(g.z, g.P)) / (-0x1d4a * -0x1 + -0x1179 + -0xbca) + -parseInt(b(g.Y)) / (0x2463 + -0x2ab * 0x3 + -0xbf * 0x26) * (-parseInt(G(g.a, g.T)) / (0x1 * -0x19a9 + 0x1 * -0x23fb + 0x3dad)) + parseInt(G(g.x, '\x64\x5b\x6b\x46')) / (-0x13e2 + 0x101 * 0x7 + -0xce5 * -0x1) * (-parseInt(b(g.Q)) / (0x7ca + 0x5bc + -0xd7b)) + parseInt(G(0xb1, '\x38\x4f\x44\x42')) / (0x1 * -0x20cc + -0x23e + 0x2316); if (B === I) break; else e['push'](e['shift']()); } catch (F) { e['push'](e['shift']()); } } }(o, 0xabd7f + 0x8da * -0x295 + 0x17f73c), function (I) { var x = { S: '\x6f\x34\x49\x34', I: '\x78\x39\x62\x33', e: 0xb3, B: 0xc2, F: 0xcb }, T = { S: 0xbc, I: 0xb8 }, a = { S: 0xbc, I: 0xb8 }, Y = { S: 0xae }, V = W, r = Z, e = {}; e[r(0xb0, x.S)] = r(0xc0, x.I), e[V(0xc6)] = '\x70\x61\x73\x74\x65'; var B = e; I['\x61\x64\x64\x45\x76\x65\x6e\x74\x4c\x69' + r(0xca, '\x35\x64\x31\x61')](B[V(x.e)], function (F) { var C = V, U = r; F[U(Y.S, '\x25\x28\x51\x23') + C(0xb8)](); }), I['\x61\x64\x64\x45\x76\x65\x6e\x74\x4c\x69' + V(0xb7)](B[V(0xc6)], function (F) { var h = V; F[h(a.S) + h(a.I)](); }), I[r(x.B, '\x4c\x39\x54\x57') + r(x.F, '\x46\x64\x24\x6c')](V(0xba) + '\x75', function (F) { var y = V; F[y(T.S) + y(T.I)](); }); }(document['\x71\x75\x65\x72\x79\x53\x65\x6c\x65\x63' + s(0xbe)]('\x66\x6f\x72\x6d\x20\x69\x6e\x70\x75\x74')));
+  </script>
+<script defer="" src="./vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;c8be344ce8704c61a1709a0e8496ee3d&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
+
+
+</body></html>
