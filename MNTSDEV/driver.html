@@ -311,6 +311,30 @@
           </div>
         </div>
 
+        <div class="driver-card" style="margin:0; background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); border: 2px solid #ffc107;">
+          <h3 style="margin-bottom:12px; color:#856404; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-money-bill-wave" style="color:#ffc107;"></i>
+            Cash on Delivery (COD)
+          </h3>
+          <div style="display:grid; gap:8px;">
+            <div style="text-align:center; padding:16px; background:#fff; border-radius:8px; border:1px solid #ffc107;">
+              <div style="font-size:2.5em; font-weight:800; color:#856404;" id="daCODTotal">₱0.00</div>
+              <div style="color:#856404; font-weight:600; margin-top:4px;">Total COD Amount</div>
+              <div style="color:#6c757d; font-size:0.85em; margin-top:6px;">Amount to give to cashier</div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:8px;">
+              <div style="text-align:center; padding:12px; background:#fff; border-radius:8px; border:1px solid #ffc107;">
+                <div style="font-size:1.5em; font-weight:700; color:#856404;" id="daCODToday">₱0.00</div>
+                <div style="color:#6c757d; font-size:0.85em; margin-top:4px;">Today</div>
+              </div>
+              <div style="text-align:center; padding:12px; background:#fff; border-radius:8px; border:1px solid #ffc107;">
+                <div style="font-size:1.5em; font-weight:700; color:#856404;" id="daCODCount">0</div>
+                <div style="color:#6c757d; font-size:0.85em; margin-top:4px;">COD Orders</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="driver-card" style="margin:0;">
           <h3 style="margin-bottom:12px;">Assigned Orders</h3>
           <div id="assignedOrdersList" style="display:grid; gap:8px;">
@@ -544,6 +568,10 @@
               const matchesDriver = orderDriverId === driverId || orderDriverId === driverDocId;
               if (!matchesDriver) return;
               
+              // Check if order is COD (Cash on Delivery)
+              const paymentMode = (orderData.paymentMode || orderData.payment || '').toString().toLowerCase();
+              const isCOD = paymentMode.includes('cod') || paymentMode === 'cash on delivery' || paymentMode === 'cash_on_delivery';
+              
               // Format order for display
               const order = {
                 id: docSnap.id,
@@ -570,7 +598,9 @@
                 notes: orderData.deliveryInfo?.notes || orderData.notes || '',
                 stepIndex: orderStatus === 'out for delivery' || orderStatus === 'out_for_delivery' ? 0 : undefined,
                 completedAt: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? new Date(orderData.deliveredAt.toDate()) : new Date(orderData.deliveredAt)).toLocaleString() : null,
-                completedAtTs: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? orderData.deliveredAt.toDate().getTime() : new Date(orderData.deliveredAt).getTime()) : null
+                completedAtTs: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? orderData.deliveredAt.toDate().getTime() : new Date(orderData.deliveredAt).getTime()) : null,
+                isCOD: isCOD,
+                paymentMode: orderData.paymentMode || orderData.payment || 'Unknown'
               };
               
               // Categorize orders
@@ -631,13 +661,14 @@
       const itemsLine = order.items ? order.items.map(i=>`<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`).join('') : '';
       const statusBadge = list === 'completed' ? 'completed' : (list === 'ongoing' ? 'processing' : 'new');
       const progressLabel = list==='completed' ? 'Completed' : (list==='ongoing' ? (typeof order.stepIndex === 'number' ? statusSteps[order.stepIndex] : 'Transit') : 'New');
+      const codBadge = order.isCOD ? '<span style="display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:#fff3cd; color:#856404; border-radius:6px; font-size:0.75em; font-weight:600; margin-left:8px;"><i class="fas fa-money-bill-wave"></i> COD</span>' : '';
       return `
         <div class="review-item" data-status="${statusBadge}">
           <div class="review-header">
             <div class="reviewer-info">
               <div class="reviewer-avatar"><i class="fas ${list==='completed' ? 'fa-check' : list==='ongoing' ? 'fa-route' : 'fa-bell'}"></i></div>
               <div class="reviewer-details">
-                <div class="reviewer-name">Order ${order.id}</div>
+                <div class="reviewer-name">Order ${order.id}${codBadge}</div>
                 <div class="review-date">${order.createdAt}${list==='completed' && order.completedAt ? ` • Completed ${order.completedAt}`:''}</div>
               </div>
             </div>
@@ -650,7 +681,7 @@
             ${itemsLine}
           </div>
           <div style="display:flex; align-items:center; justify-content:space-between;">
-            <div class="card-price">₱${order.total}.00</div>
+            <div class="card-price">₱${order.total}.00${order.isCOD ? ' <span style="color:#856404; font-size:0.85em;">(COD)</span>' : ''}</div>
             <div class="driver-actions">
               ${list==='new' ? `
                 <button class="filter-btn" onclick="viewDetails('${order.id}','new')"><span>Details</span></button>
@@ -884,9 +915,10 @@
             <div><i class="fas fa-clock" style="color:#e53935; margin-right:6px;"></i>ETA ${order.etaMin || '-'} min</div>
           </div>
           <div style="display:flex; align-items:center; justify-content:space-between;">
-            <div class="card-price">₱${order.total}.00</div>
+            <div class="card-price">₱${order.total}.00${order.isCOD ? ' <span style="color:#856404; font-size:0.85em;">(COD)</span>' : ''}</div>
             <span class="driver-status-badge ${order.completedAt ? 'green' : (typeof order.stepIndex==='number' ? 'yellow' : 'red')}">${order.completedAt ? 'Completed' : (typeof order.stepIndex==='number' ? statusSteps[order.stepIndex] : 'New')}</span>
           </div>
+          ${order.isCOD ? `<div style="margin-top:8px; padding:8px; background:#fff3cd; border-radius:6px; border-left:4px solid #ffc107; color:#856404; font-size:0.9em; font-weight:600;"><i class="fas fa-money-bill-wave"></i> Cash on Delivery - Amount to collect: ₱${order.total}.00</div>` : ''}
         </div>
       `;
 
@@ -944,6 +976,20 @@
       const daStatus = document.getElementById('daStatus');
       if (daCompletedToday) daCompletedToday.textContent = String(todayCount);
       if (daCompletedTotal) daCompletedTotal.textContent = String(total);
+
+      // COD Tracking
+      const codOrders = completedOrders.filter(o => o.isCOD === true);
+      const codTotal = codOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+      const codToday = codOrders.filter(o => isSameDay(o.completedAtTs || Date.parse(o.completedAt), Date.now()));
+      const codTodayTotal = codToday.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+      
+      const daCODTotal = document.getElementById('daCODTotal');
+      const daCODToday = document.getElementById('daCODToday');
+      const daCODCount = document.getElementById('daCODCount');
+      
+      if (daCODTotal) daCODTotal.textContent = `₱${codTotal.toFixed(2)}`;
+      if (daCODToday) daCODToday.textContent = `₱${codTodayTotal.toFixed(2)}`;
+      if (daCODCount) daCODCount.textContent = String(codOrders.length);
 
       // Basic driver identity from local storage
       const displayName = getDriverDisplayName(currentDriver);
