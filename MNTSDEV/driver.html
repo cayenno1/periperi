@@ -4,10 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Driver Dashboard - PABLO'S PERI PERI</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
+    /* Body background - white */
+    body {
+      background: #ffffff !important;
+    }
+    
     /* Page-level layout for a cleaner, balanced dashboard */
     .main-container {
       max-width: 1200px;
@@ -27,13 +33,9 @@
     .driver-grid {
       display: grid;
       gap: 20px;
-      grid-template-columns: 1fr;
-      margin-top: 16px;
-    }
-    @media (min-width: 900px) {
-      .driver-grid {
-        grid-template-columns: 1fr 1fr 1fr;
-      }
+      grid-template-columns: repeat(auto-fit, minmax(280px, 360px));
+      justify-content: center;
+      margin: 24px auto 0;
     }
 
     .driver-card {
@@ -45,6 +47,8 @@
       display:flex;
       flex-direction:column;
       gap:12px;
+      width: 100%;
+      max-width: 360px;
     }
 
     .driver-card h3 {
@@ -150,14 +154,49 @@
     .modal-overlay .modal-content {
       border-radius: 16px;
       padding: 18px 18px 20px;
+      max-height: 90vh;
+      max-width: 500px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     .modal-content .modal-header {
       margin-bottom: 12px;
+      flex-shrink: 0;
     }
 
     .modal-content .modal-body {
       font-size: 0.95rem;
+      overflow-y: auto;
+      overflow-x: hidden;
+      flex: 1;
+      min-height: 0;
+      padding-right: 4px;
+    }
+
+    .modal-content .modal-body::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .modal-content .modal-body::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+
+    .modal-content .modal-body::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 10px;
+    }
+
+    .modal-content .modal-body::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+
+    #orderModalActions {
+      flex-shrink: 0;
+      margin-top: 12px;
     }
 
     /* Tabs spacing */
@@ -165,6 +204,10 @@
       max-width: 1200px;
       margin: 8px auto 0;
       padding: 0 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
     }
 
     .driver-tabs .tab-btn {
@@ -174,30 +217,48 @@
   </style>
   <meta name="theme-color" content="#ffe3a3">
   <meta name="description" content="Driver dashboard to manage new, ongoing, and completed orders.">
+  <script type="module" src="firebase-init.js"></script>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
-  <header class="header">
-    <div class="logo-container">
-      <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
-      <div class="brand-name">PABLO'S<br>PERI PERI</div>
-    </div>
-    <div class="nav-icons">
-      <div class="nav-icon profile-icon" title="Profile" id="profileButton">
-        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
-        <span class="profile-text" id="profileText">Sign In</span>
-        <div class="profile-dropdown" id="profileDropdown">
-          <div class="profile-dropdown-header">
-            <div class="profile-meta">
-              <span class="profile-name" id="profileName">Driver Account</span>
-              <span class="profile-email" id="profileEmail">driver@example.com</span>
+  <header class="header navbar navbar-expand-lg">
+    <div class="container-fluid px-3">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="index.html">
+        <div class="logo-container">
+          <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+          <div class="brand-name">PABLO'S<br>PERI PERI</div>
+        </div>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#primaryNav" aria-controls="primaryNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="primaryNav">
+        <div class="nav-icons d-flex align-items-center gap-2 ms-lg-3">
+          <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+            <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+            <span class="profile-text" id="profileText">Sign In</span>
+            <div class="profile-dropdown" id="profileDropdown">
+              <div class="profile-dropdown-header">
+                <div class="profile-meta">
+                  <span class="profile-name" id="profileName">Driver Account</span>
+                  <span class="profile-email" id="profileEmail">driver@example.com</span>
+                </div>
+              </div>
+              <button class="profile-item" id="driverAccountBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;"><span>Account info</span></button>
+              <div class="profile-divider"></div>
+              <button class="profile-item" id="shiftToggleBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+                <i class="fas fa-clock"></i><span id="shiftToggleText">Start Shift</span>
+              </button>
+              <div id="shiftInfo" style="padding: 8px 16px; font-size: 0.85em; color: #666; display: none;">
+                <div id="shiftStartTime" style="margin-bottom: 4px;"></div>
+                <div id="shiftEndTime"></div>
+              </div>
+              <div class="profile-divider"></div>
+              <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+                <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+              </button>
             </div>
           </div>
-          <button class="profile-item" id="driverAccountBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;"><span>Account info</span></button>
-          <div class="profile-divider"></div>
-          <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
-            <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
-          </button>
         </div>
       </div>
     </div>
@@ -311,47 +372,11 @@
           </div>
         </div>
 
-        <div class="driver-card" style="margin:0; background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); border: 2px solid #ffc107;">
-          <h3 style="margin-bottom:12px; color:#856404; display:flex; align-items:center; gap:8px;">
-            <i class="fas fa-money-bill-wave" style="color:#ffc107;"></i>
-            Cash on Delivery (COD)
-          </h3>
-          <div style="display:grid; gap:8px;">
-            <div style="text-align:center; padding:16px; background:#fff; border-radius:8px; border:1px solid #ffc107;">
-              <div style="font-size:2.5em; font-weight:800; color:#856404;" id="daCODTotal">₱0.00</div>
-              <div style="color:#856404; font-weight:600; margin-top:4px;">Total COD Amount</div>
-              <div style="color:#6c757d; font-size:0.85em; margin-top:6px;">Amount to give to cashier</div>
-            </div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:8px;">
-              <div style="text-align:center; padding:12px; background:#fff; border-radius:8px; border:1px solid #ffc107;">
-                <div style="font-size:1.5em; font-weight:700; color:#856404;" id="daCODToday">₱0.00</div>
-                <div style="color:#6c757d; font-size:0.85em; margin-top:4px;">Today</div>
-              </div>
-              <div style="text-align:center; padding:12px; background:#fff; border-radius:8px; border:1px solid #ffc107;">
-                <div style="font-size:1.5em; font-weight:700; color:#856404;" id="daCODCount">0</div>
-                <div style="color:#6c757d; font-size:0.85em; margin-top:4px;">COD Orders</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div class="driver-card" style="margin:0;">
           <h3 style="margin-bottom:12px;">Assigned Orders</h3>
           <div id="assignedOrdersList" style="display:grid; gap:8px;">
             <div style="color:#666; font-size:0.9em;">Loading orders...</div>
           </div>
-        </div>
-
-        <div class="driver-card" style="margin:0;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-            <div style="font-weight:700;">Availability</div>
-            <select class="size-select" id="availabilitySelect" aria-label="Driver availability">
-              <option value="available">Available</option>
-              <option value="busy">Busy</option>
-              <option value="off">Off</option>
-            </select>
-          </div>
-          <div style="margin-top:8px; color:#666; font-size:0.95em;">Update your status after completing or accepting an order.</div>
         </div>
       </div>
     </div>
@@ -483,6 +508,386 @@
       }
     })();
 
+    // Shift management
+    let shiftState = {
+      isActive: false,
+      startTime: null,
+      endTime: null,
+      currentShiftId: null
+    };
+
+    // Load current shift status
+    async function loadShiftStatus() {
+      if (!currentDriver || !currentDriver.id) return;
+      
+      try {
+        const db = window.firebaseDb;
+        const collectionFn = window.collection;
+        const queryFn = window.query;
+        const whereFn = window.where;
+        const orderByFn = window.orderBy;
+        const getDocsFn = window.getDocs;
+        const docFn = window.doc;
+        const getDocFn = window.getDoc;
+        
+        if (!db || !collectionFn || !queryFn || !whereFn) return;
+        
+        const driverId = currentDriver.staffId || currentDriver.id;
+        
+        // Check for active shift (no endTime)
+        const logsRef = collectionFn(db, 'logsStaff');
+        
+        // Get all shifts for this driver (without orderBy to avoid index requirement)
+        const allShiftsQuery = queryFn(
+          logsRef,
+          whereFn('driverId', '==', driverId)
+        );
+        
+        const snapshot = await getDocsFn(allShiftsQuery);
+        
+        if (!snapshot.empty) {
+          // Sort shifts by startTime in JavaScript to find the most recent
+          const shifts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            data: doc.data()
+          }));
+          
+          // Sort by startTime descending (most recent first)
+          shifts.sort((a, b) => {
+            const aTime = a.data.startTime;
+            const bTime = b.data.startTime;
+            
+            // Handle Firestore Timestamp objects
+            let aDate, bDate;
+            if (aTime && typeof aTime.toDate === 'function') {
+              aDate = aTime.toDate();
+            } else if (aTime && (aTime.seconds || aTime._seconds)) {
+              aDate = new Date((aTime.seconds || aTime._seconds) * 1000);
+            } else if (aTime instanceof Date) {
+              aDate = aTime;
+            } else if (typeof aTime === 'number') {
+              aDate = new Date(aTime);
+            } else {
+              aDate = new Date(0); // Fallback to epoch
+            }
+            
+            if (bTime && typeof bTime.toDate === 'function') {
+              bDate = bTime.toDate();
+            } else if (bTime && (bTime.seconds || bTime._seconds)) {
+              bDate = new Date((bTime.seconds || bTime._seconds) * 1000);
+            } else if (bTime instanceof Date) {
+              bDate = bTime;
+            } else if (typeof bTime === 'number') {
+              bDate = new Date(bTime);
+            } else {
+              bDate = new Date(0); // Fallback to epoch
+            }
+            
+            return bDate.getTime() - aDate.getTime(); // Descending order
+          });
+          
+          // Find the most recent shift
+          const mostRecentShift = shifts[0];
+          const shiftData = mostRecentShift.data;
+          
+          // Check if it's an active shift (no endTime or endTime is null)
+          const hasEndTime = shiftData.endTime !== null && shiftData.endTime !== undefined;
+          
+          if (!hasEndTime) {
+            // Active shift found
+            shiftState.isActive = true;
+            shiftState.currentShiftId = mostRecentShift.id;
+            shiftState.startTime = shiftData.startTime;
+            shiftState.endTime = null;
+          } else {
+            // Most recent shift is completed, show it for reference
+            shiftState.isActive = false;
+            shiftState.currentShiftId = null;
+            shiftState.startTime = shiftData.startTime;
+            shiftState.endTime = shiftData.endTime;
+          }
+        } else {
+          // No shifts found
+          shiftState.isActive = false;
+          shiftState.currentShiftId = null;
+          shiftState.startTime = null;
+          shiftState.endTime = null;
+        }
+        
+        updateShiftUI();
+      } catch (error) {
+        console.error('Error loading shift status:', error);
+      }
+    }
+
+    // Update shift UI
+    function updateShiftUI() {
+      const shiftToggleBtn = document.getElementById('shiftToggleBtn');
+      const shiftToggleText = document.getElementById('shiftToggleText');
+      const shiftInfo = document.getElementById('shiftInfo');
+      const shiftStartTime = document.getElementById('shiftStartTime');
+      const shiftEndTime = document.getElementById('shiftEndTime');
+      
+      if (!shiftToggleBtn || !shiftToggleText) return;
+      
+      if (shiftState.isActive) {
+        shiftToggleText.textContent = 'End Shift';
+        shiftToggleBtn.style.color = '#e53935';
+        
+        if (shiftInfo) shiftInfo.style.display = 'block';
+        if (shiftStartTime && shiftState.startTime) {
+          try {
+            let startDate;
+            // Handle Firestore Timestamp object
+            if (shiftState.startTime && typeof shiftState.startTime.toDate === 'function') {
+              startDate = shiftState.startTime.toDate();
+            } 
+            // Handle Firestore Timestamp-like object with seconds/nanoseconds
+            else if (shiftState.startTime && (shiftState.startTime.seconds || shiftState.startTime._seconds)) {
+              const seconds = shiftState.startTime.seconds || shiftState.startTime._seconds || 0;
+              const nanoseconds = shiftState.startTime.nanoseconds || shiftState.startTime._nanoseconds || 0;
+              startDate = new Date(seconds * 1000 + nanoseconds / 1000000);
+            }
+            // Handle Date object or timestamp number
+            else if (shiftState.startTime instanceof Date) {
+              startDate = shiftState.startTime;
+            }
+            // Handle number (milliseconds since epoch)
+            else if (typeof shiftState.startTime === 'number') {
+              startDate = new Date(shiftState.startTime);
+            }
+            // Handle string
+            else if (typeof shiftState.startTime === 'string') {
+              startDate = new Date(shiftState.startTime);
+            }
+            // Fallback
+            else {
+              startDate = new Date(shiftState.startTime);
+            }
+            
+            // Validate date
+            if (isNaN(startDate.getTime())) {
+              shiftStartTime.textContent = 'Started: Loading...';
+            } else {
+              shiftStartTime.textContent = `Started: ${startDate.toLocaleString()}`;
+            }
+          } catch (e) {
+            console.error('Error formatting start time:', e, shiftState.startTime);
+            shiftStartTime.textContent = 'Started: Loading...';
+          }
+        }
+        if (shiftEndTime) {
+          shiftEndTime.textContent = 'Ended: —';
+        }
+      } else {
+        shiftToggleText.textContent = 'Start Shift';
+        shiftToggleBtn.style.color = '';
+        
+        if (shiftInfo && shiftState.startTime) {
+          shiftInfo.style.display = 'block';
+          if (shiftStartTime) {
+            try {
+              let startDate;
+              if (shiftState.startTime && typeof shiftState.startTime.toDate === 'function') {
+                startDate = shiftState.startTime.toDate();
+              } else if (shiftState.startTime && (shiftState.startTime.seconds || shiftState.startTime._seconds)) {
+                const seconds = shiftState.startTime.seconds || shiftState.startTime._seconds || 0;
+                const nanoseconds = shiftState.startTime.nanoseconds || shiftState.startTime._nanoseconds || 0;
+                startDate = new Date(seconds * 1000 + nanoseconds / 1000000);
+              } else if (shiftState.startTime instanceof Date) {
+                startDate = shiftState.startTime;
+              } else if (typeof shiftState.startTime === 'number') {
+                startDate = new Date(shiftState.startTime);
+              } else if (typeof shiftState.startTime === 'string') {
+                startDate = new Date(shiftState.startTime);
+              } else {
+                startDate = new Date(shiftState.startTime);
+              }
+              
+              if (isNaN(startDate.getTime())) {
+                shiftStartTime.textContent = 'Started: —';
+              } else {
+                shiftStartTime.textContent = `Started: ${startDate.toLocaleString()}`;
+              }
+            } catch (e) {
+              console.error('Error formatting start time:', e, shiftState.startTime);
+              shiftStartTime.textContent = 'Started: —';
+            }
+          }
+          if (shiftEndTime && shiftState.endTime) {
+            try {
+              let endDate;
+              if (shiftState.endTime && typeof shiftState.endTime.toDate === 'function') {
+                endDate = shiftState.endTime.toDate();
+              } else if (shiftState.endTime && (shiftState.endTime.seconds || shiftState.endTime._seconds)) {
+                const seconds = shiftState.endTime.seconds || shiftState.endTime._seconds || 0;
+                const nanoseconds = shiftState.endTime.nanoseconds || shiftState.endTime._nanoseconds || 0;
+                endDate = new Date(seconds * 1000 + nanoseconds / 1000000);
+              } else if (shiftState.endTime instanceof Date) {
+                endDate = shiftState.endTime;
+              } else if (typeof shiftState.endTime === 'number') {
+                endDate = new Date(shiftState.endTime);
+              } else if (typeof shiftState.endTime === 'string') {
+                endDate = new Date(shiftState.endTime);
+              } else {
+                endDate = new Date(shiftState.endTime);
+              }
+              
+              if (isNaN(endDate.getTime())) {
+                shiftEndTime.textContent = 'Ended: —';
+              } else {
+                shiftEndTime.textContent = `Ended: ${endDate.toLocaleString()}`;
+              }
+            } catch (e) {
+              console.error('Error formatting end time:', e, shiftState.endTime);
+              shiftEndTime.textContent = 'Ended: —';
+            }
+          } else if (shiftEndTime) {
+            shiftEndTime.textContent = 'Ended: —';
+          }
+        } else if (shiftInfo) {
+          shiftInfo.style.display = 'none';
+        }
+      }
+    }
+
+    // Start shift
+    async function startShift() {
+      if (!currentDriver || !currentDriver.id) {
+        notify('Driver information not available', 'error');
+        return;
+      }
+      
+      try {
+        const db = window.firebaseDb;
+        const collectionFn = window.collection;
+        const addDocFn = window.addDoc;
+        const serverTimestampFn = window.serverTimestamp;
+        
+        if (!db || !collectionFn || !addDocFn || !serverTimestampFn) {
+          notify('Firebase not ready', 'error');
+          return;
+        }
+        
+        const driverId = currentDriver.staffId || currentDriver.id;
+        const driverName = getDriverDisplayName(currentDriver);
+        
+        console.log('Starting shift with driver info:', {
+          staffId: currentDriver.staffId,
+          id: currentDriver.id,
+          driverId: driverId,
+          email: currentDriver.email
+        });
+        
+        const logsRef = collectionFn(db, 'logsStaff');
+        const shiftData = {
+          driverId: driverId,
+          driverName: driverName,
+          startTime: serverTimestampFn(),
+          endTime: null,
+          createdAt: serverTimestampFn()
+        };
+        
+        const docRef = await addDocFn(logsRef, shiftData);
+        console.log('Shift created in logsStaff with ID:', docRef.id, 'driverId:', driverId);
+        
+        // Use current date for immediate display (server timestamp will be set by Firestore)
+        const currentTime = new Date();
+        
+        shiftState.isActive = true;
+        shiftState.currentShiftId = docRef.id;
+        shiftState.startTime = currentTime; // Use current time for immediate display
+        shiftState.endTime = null;
+        
+        updateShiftUI();
+        notify('Shift started successfully', 'success');
+        
+        // Reload shift status after a short delay to get the actual server timestamp
+        setTimeout(() => {
+          loadShiftStatus();
+        }, 1000);
+        
+        // Close dropdown
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) dropdown.classList.remove('show');
+      } catch (error) {
+        console.error('Error starting shift:', error);
+        notify('Error starting shift. Please try again.', 'error');
+      }
+    }
+
+    // End shift
+    async function endShift() {
+      if (!shiftState.isActive || !shiftState.currentShiftId) {
+        notify('No active shift to end', 'error');
+        return;
+      }
+      
+      try {
+        const db = window.firebaseDb;
+        const docFn = window.doc;
+        const updateDocFn = window.updateDoc;
+        const serverTimestampFn = window.serverTimestamp;
+        
+        if (!db || !docFn || !updateDocFn || !serverTimestampFn) {
+          notify('Firebase not ready', 'error');
+          return;
+        }
+        
+        const shiftRef = docFn(db, 'logsStaff', shiftState.currentShiftId);
+        await updateDocFn(shiftRef, {
+          endTime: serverTimestampFn(),
+          updatedAt: serverTimestampFn()
+        });
+        
+        // Get the updated document to get the actual endTime
+        const getDocFn = window.getDoc;
+        if (getDocFn) {
+          const shiftDoc = await getDocFn(shiftRef);
+          const shiftData = shiftDoc.data();
+          shiftState.endTime = shiftData.endTime;
+        }
+        
+        shiftState.isActive = false;
+        shiftState.currentShiftId = null;
+        
+        updateShiftUI();
+        notify('Shift ended successfully', 'success');
+        
+        // Close dropdown
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) dropdown.classList.remove('show');
+      } catch (error) {
+        console.error('Error ending shift:', error);
+        notify('Error ending shift. Please try again.', 'error');
+      }
+    }
+
+    // Toggle shift
+    function toggleShift() {
+      if (shiftState.isActive) {
+        endShift();
+      } else {
+        startShift();
+      }
+    }
+
+    // Initialize shift button
+    (function initShiftButton() {
+      const shiftToggleBtn = document.getElementById('shiftToggleBtn');
+      if (shiftToggleBtn) {
+        shiftToggleBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          toggleShift();
+        });
+      }
+      
+      // Load shift status on page load
+      setTimeout(() => {
+        loadShiftStatus();
+      }, 1000);
+    })();
+
     // Tabs - filter view
     let currentView = 'all';
     document.addEventListener('DOMContentLoaded', function(){
@@ -568,10 +973,6 @@
               const matchesDriver = orderDriverId === driverId || orderDriverId === driverDocId;
               if (!matchesDriver) return;
               
-              // Check if order is COD (Cash on Delivery)
-              const paymentMode = (orderData.paymentMode || orderData.payment || '').toString().toLowerCase();
-              const isCOD = paymentMode.includes('cod') || paymentMode === 'cash on delivery' || paymentMode === 'cash_on_delivery';
-              
               // Format order for display
               const order = {
                 id: docSnap.id,
@@ -586,8 +987,13 @@
                   address: orderData.address || orderData.deliveryInfo?.address || 'Address not provided'
                 },
                 customer: {
-                  name: orderData.deliveryInfo?.customerName || orderData.customerName || 'Customer',
-                  phone: orderData.deliveryInfo?.phone || orderData.phone || '—'
+                  name: orderData.customerInfo?.name || orderData.deliveryInfo?.customerName || orderData.customerName || 'Customer',
+                  phone: orderData.customerInfo?.phone || orderData.deliveryInfo?.phone || orderData.phone || '—'
+                },
+                payment: {
+                  method: orderData.payment?.method || 'Cash',
+                  gcashRefNo: orderData.payment?.gcashRefNo || null,
+                  gcashProofUrl: orderData.payment?.gcashProofUrl || null
                 },
                 items: Array.isArray(orderData.items) ? orderData.items.map(item => {
                   const name = item.name || item.itemName || 'Item';
@@ -598,9 +1004,7 @@
                 notes: orderData.deliveryInfo?.notes || orderData.notes || '',
                 stepIndex: orderStatus === 'out for delivery' || orderStatus === 'out_for_delivery' ? 0 : undefined,
                 completedAt: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? new Date(orderData.deliveredAt.toDate()) : new Date(orderData.deliveredAt)).toLocaleString() : null,
-                completedAtTs: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? orderData.deliveredAt.toDate().getTime() : new Date(orderData.deliveredAt).getTime()) : null,
-                isCOD: isCOD,
-                paymentMode: orderData.paymentMode || orderData.payment || 'Unknown'
+                completedAtTs: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? orderData.deliveredAt.toDate().getTime() : new Date(orderData.deliveredAt).getTime()) : null
               };
               
               // Categorize orders
@@ -661,14 +1065,13 @@
       const itemsLine = order.items ? order.items.map(i=>`<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`).join('') : '';
       const statusBadge = list === 'completed' ? 'completed' : (list === 'ongoing' ? 'processing' : 'new');
       const progressLabel = list==='completed' ? 'Completed' : (list==='ongoing' ? (typeof order.stepIndex === 'number' ? statusSteps[order.stepIndex] : 'Transit') : 'New');
-      const codBadge = order.isCOD ? '<span style="display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:#fff3cd; color:#856404; border-radius:6px; font-size:0.75em; font-weight:600; margin-left:8px;"><i class="fas fa-money-bill-wave"></i> COD</span>' : '';
       return `
         <div class="review-item" data-status="${statusBadge}">
           <div class="review-header">
             <div class="reviewer-info">
               <div class="reviewer-avatar"><i class="fas ${list==='completed' ? 'fa-check' : list==='ongoing' ? 'fa-route' : 'fa-bell'}"></i></div>
               <div class="reviewer-details">
-                <div class="reviewer-name">Order ${order.id}${codBadge}</div>
+                <div class="reviewer-name">Order ${order.id}</div>
                 <div class="review-date">${order.createdAt}${list==='completed' && order.completedAt ? ` • Completed ${order.completedAt}`:''}</div>
               </div>
             </div>
@@ -681,7 +1084,7 @@
             ${itemsLine}
           </div>
           <div style="display:flex; align-items:center; justify-content:space-between;">
-            <div class="card-price">₱${order.total}.00${order.isCOD ? ' <span style="color:#856404; font-size:0.85em;">(COD)</span>' : ''}</div>
+            <div class="card-price">₱${order.total}.00</div>
             <div class="driver-actions">
               ${list==='new' ? `
                 <button class="filter-btn" onclick="viewDetails('${order.id}','new')"><span>Details</span></button>
@@ -752,8 +1155,8 @@
       acceptedOrder.stepIndex = 0;
       ongoingOrders.unshift(acceptedOrder);
       showCenterNotification('Accepted');
-      driverAvailability = 'unavailable';
-      syncAvailabilitySelect();
+      driverAvailability = 'busy';
+      updateStatusDisplay(); // Update status display if modal is open
       renderAll();
     }
 
@@ -848,7 +1251,7 @@
       notify('Delivery completed for ' + (order.trackingId || order.id), 'success');
       if (ongoingOrders.length === 0) { 
         driverAvailability = 'available'; 
-        syncAvailabilitySelect();
+        updateStatusDisplay(); // Update status display if modal is open
         
         // Update availability in Firestore
         try {
@@ -889,36 +1292,93 @@
       const actions = document.getElementById('orderModalActions');
       document.getElementById('orderModalTitle').textContent = 'Order ' + order.id;
       body.innerHTML = `
-        <div style="display:grid; gap:6px;">
-          <div><strong>Created:</strong> ${order.createdAt}${order.completedAt ? ` • <strong>Completed:</strong> ${order.completedAt}`:''}</div>
-          <div style="display:grid; gap:6px;">
-            <div>
-              <div><strong>Pickup</strong>: ${order.pickup.name}</div>
-              <div style="color:#555;">${order.pickup.address}</div>
+        <div style="display:grid; gap:16px;">
+          <!-- Order Status & Info -->
+          <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; border-bottom:1px solid #e5e7eb;">
+            <div style="display:grid; gap:4px;">
+              <div style="font-weight:600; color:#111827;">Order ${order.trackingId || order.id}</div>
+              <div style="color:#6b7280; font-size:0.9em;">Created: ${order.createdAt}</div>
+              ${order.completedAt ? `<div style="color:#6b7280; font-size:0.9em;">Completed: ${order.completedAt}</div>` : ''}
             </div>
-            <div>
-              <div><strong>Dropoff</strong>: ${order.dropoff.name}</div>
-              <div style="color:#555;">${order.dropoff.address}</div>
-            </div>
-          </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <i class="fas fa-user" style="color:#e53935; width:18px; text-align:center;"></i>
-            <div><strong>Customer</strong>: ${order.customer.name} • ${order.customer.phone}</div>
-          </div>
-          ${order.notes ? `<div><strong>Notes</strong>: ${order.notes}</div>` : ''}
-          <div>
-            <div class="od-section-title">Items</div>
-            <div class="od-items-list">${order.items.map(i=>`<div>• ${i}</div>`).join('')}</div>
-          </div>
-          <div style="display:flex; gap:12px; color:#555;">
-            <div><i class="fas fa-road" style="color:#e53935; margin-right:6px;"></i>${order.distanceKm || '-'} km</div>
-            <div><i class="fas fa-clock" style="color:#e53935; margin-right:6px;"></i>ETA ${order.etaMin || '-'} min</div>
-          </div>
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <div class="card-price">₱${order.total}.00${order.isCOD ? ' <span style="color:#856404; font-size:0.85em;">(COD)</span>' : ''}</div>
             <span class="driver-status-badge ${order.completedAt ? 'green' : (typeof order.stepIndex==='number' ? 'yellow' : 'red')}">${order.completedAt ? 'Completed' : (typeof order.stepIndex==='number' ? statusSteps[order.stepIndex] : 'New')}</span>
           </div>
-          ${order.isCOD ? `<div style="margin-top:8px; padding:8px; background:#fff3cd; border-radius:6px; border-left:4px solid #ffc107; color:#856404; font-size:0.9em; font-weight:600;"><i class="fas fa-money-bill-wave"></i> Cash on Delivery - Amount to collect: ₱${order.total}.00</div>` : ''}
+          
+          <!-- Customer Information - Most Important for Contact -->
+          <div style="padding:14px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb;">
+            <div style="font-weight:700; margin-bottom:12px; color:#111827; font-size:1.05em;">Customer Information</div>
+            <div style="display:grid; gap:8px;">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <i class="fas fa-user" style="color:#6b7280; width:18px; text-align:center;"></i>
+                <div><strong>Name:</strong> ${order.customer.name}</div>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <i class="fas fa-phone" style="color:#6b7280; width:18px; text-align:center;"></i>
+                <div><strong>Phone:</strong> ${order.customer.phone}</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Delivery Route - Core Task -->
+          <div style="padding:14px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb;">
+            <div style="font-weight:700; margin-bottom:12px; color:#111827; font-size:1.05em;">Delivery Route</div>
+            <div style="display:grid; gap:12px;">
+              <div>
+                <div style="font-weight:600; margin-bottom:6px; color:#111827; display:flex; align-items:center; gap:6px;">
+                  <i class="fas fa-store" style="color:#6b7280; font-size:0.9em;"></i>
+                  <span>Pickup</span>
+                </div>
+                <div style="color:#555; margin-bottom:4px; font-weight:500;">${order.pickup.name}</div>
+                <div style="color:#6b7280; font-size:0.9em;">${order.pickup.address}</div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; color:#9ca3af; padding:4px 0;">
+                <i class="fas fa-arrow-down" style="font-size:1.2em;"></i>
+              </div>
+              <div>
+                <div style="font-weight:600; margin-bottom:6px; color:#111827; display:flex; align-items:center; gap:6px;">
+                  <i class="fas fa-map-marker-alt" style="color:#6b7280; font-size:0.9em;"></i>
+                  <span>Delivery</span>
+                </div>
+                <div style="color:#555; margin-bottom:4px; font-weight:500;">${order.dropoff.name}</div>
+                <div style="color:#6b7280; font-size:0.9em;">${order.dropoff.address}</div>
+              </div>
+              ${order.distanceKm ? `<div style="margin-top:4px; padding-top:8px; border-top:1px solid #e5e7eb; color:#6b7280; font-size:0.9em;"><i class="fas fa-road" style="margin-right:6px;"></i>Distance: ${order.distanceKm}</div>` : ''}
+            </div>
+          </div>
+          
+          <!-- Order Items - What to Deliver -->
+          <div>
+            <div style="font-weight:700; margin-bottom:8px; color:#111827;">Order Items</div>
+            <div style="display:grid; gap:6px; padding:12px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb;">
+              ${order.items.map(i=>`<div style="color:#374151;">• ${i}</div>`).join('')}
+            </div>
+          </div>
+          
+          <!-- Additional Notes - Special Instructions -->
+          ${order.notes ? `
+          <div style="padding:14px; background:#fff7ed; border-radius:8px; border:1px solid #fed7aa;">
+            <div style="font-weight:700; margin-bottom:8px; color:#111827; display:flex; align-items:center; gap:6px;">
+              <i class="fas fa-sticky-note" style="color:#f59e0b;"></i>
+              <span>Special Instructions</span>
+            </div>
+            <div style="color:#374151; line-height:1.5;">${order.notes}</div>
+          </div>
+          ` : ''}
+          
+          <!-- Payment Information -->
+          <div style="padding:14px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb;">
+            <div style="font-weight:700; margin-bottom:12px; color:#111827; font-size:1.05em;">Payment Information</div>
+            <div style="display:grid; gap:8px;">
+              <div><strong>Payment Method:</strong> ${(order.payment?.method || 'Cash').toUpperCase()}</div>
+              ${order.payment?.gcashRefNo ? `<div><strong>GCash Reference No:</strong> ${order.payment.gcashRefNo}</div>` : ''}
+              ${order.payment?.gcashProofUrl ? `<div style="margin-top:4px;"><a href="${order.payment.gcashProofUrl}" target="_blank" style="color:#e53935; text-decoration:underline; font-weight:500;">View Payment Proof</a></div>` : ''}
+            </div>
+          </div>
+          
+          <!-- Total Amount -->
+          <div style="display:flex; align-items:center; justify-content:space-between; padding-top:12px; border-top:2px solid #e5e7eb;">
+            <div style="font-weight:600; color:#6b7280;">Total Amount:</div>
+            <div class="card-price" style="font-size:1.3em; font-weight:700;">₱${order.total}.00</div>
+          </div>
         </div>
       `;
 
@@ -977,20 +1437,6 @@
       if (daCompletedToday) daCompletedToday.textContent = String(todayCount);
       if (daCompletedTotal) daCompletedTotal.textContent = String(total);
 
-      // COD Tracking
-      const codOrders = completedOrders.filter(o => o.isCOD === true);
-      const codTotal = codOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-      const codToday = codOrders.filter(o => isSameDay(o.completedAtTs || Date.parse(o.completedAt), Date.now()));
-      const codTodayTotal = codToday.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-      
-      const daCODTotal = document.getElementById('daCODTotal');
-      const daCODToday = document.getElementById('daCODToday');
-      const daCODCount = document.getElementById('daCODCount');
-      
-      if (daCODTotal) daCODTotal.textContent = `₱${codTotal.toFixed(2)}`;
-      if (daCODToday) daCODToday.textContent = `₱${codTodayTotal.toFixed(2)}`;
-      if (daCODCount) daCODCount.textContent = String(codOrders.length);
-
       // Basic driver identity from local storage
       const displayName = getDriverDisplayName(currentDriver);
       if (daName) daName.textContent = displayName;
@@ -998,10 +1444,7 @@
         const idToShow = currentDriver && (currentDriver.staffId || currentDriver.id);
         daId.textContent = idToShow || '—';
       }
-      if (daStatus) {
-        daStatus.textContent = driverAvailability === 'available' ? 'Available' : 
-                              driverAvailability === 'busy' ? 'Busy' : 'Off';
-      }
+      // Status will be updated after loading availability from database
 
       // Show assigned orders
       const assignedOrdersList = document.getElementById('assignedOrdersList');
@@ -1023,42 +1466,11 @@
         }
       }
 
-      // Availability select
-      const select = document.getElementById('availabilitySelect');
-      if (select){
-        select.value = driverAvailability;
-        select.onchange = async function(){ 
-          driverAvailability = this.value;
-          
-          // Update availability in Firestore
-          if (currentDriver && currentDriver.id) {
-            try {
-              const db = window.firebaseDb;
-              const updateDocFn = window.updateDoc;
-              const docFn = window.doc;
-              const serverTimestampFn = window.serverTimestamp;
-              
-              if (db && updateDocFn && docFn && serverTimestampFn) {
-                try {
-                  const driverRef = docFn(db, 'drivers', currentDriver.id);
-                  await updateDocFn(driverRef, {
-                    availability: driverAvailability,
-                    updatedAt: serverTimestampFn()
-                  });
-                } catch (driverError) {
-                  const staffRef = docFn(db, 'staff', currentDriver.id);
-                  await updateDocFn(staffRef, {
-                    availability: driverAvailability,
-                    updatedAt: serverTimestampFn()
-                  });
-                }
-              }
-            } catch (e) {
-              console.error('Error updating availability:', e);
-            }
-          }
-        };
-      }
+      // Load availability from database and update status
+      loadDriverAvailability().then(() => {
+        updateStatusDisplay();
+      });
+      
       const modal = document.getElementById('driverAccountModal');
       if (modal) modal.style.display = 'flex';
     }
@@ -1068,9 +1480,76 @@
       if (modal) modal.style.display = 'none';
     }
 
-    function syncAvailabilitySelect(){
-      const select = document.getElementById('availabilitySelect');
-      if (select) select.value = driverAvailability;
+    // Load driver availability from database
+    async function loadDriverAvailability() {
+      if (!currentDriver || !currentDriver.id) return;
+      
+      try {
+        const db = window.firebaseDb;
+        const docFn = window.doc;
+        const getDocFn = window.getDoc;
+        const onSnapshotFn = window.onSnapshot;
+        
+        if (!db || !docFn || !getDocFn) return;
+        
+        // Try to set up real-time listener on drivers collection first, then staff collection
+        try {
+          const driverRef = docFn(db, 'drivers', currentDriver.id);
+          const driverDoc = await getDocFn(driverRef);
+          if (driverDoc.exists()) {
+            const data = driverDoc.data();
+            driverAvailability = data.availability || 'available';
+            updateStatusDisplay();
+            
+            // Set up real-time listener
+            if (onSnapshotFn) {
+              onSnapshotFn(driverRef, (doc) => {
+                if (doc.exists()) {
+                  const data = doc.data();
+                  driverAvailability = data.availability || 'available';
+                  updateStatusDisplay();
+                }
+              });
+            }
+            return;
+          }
+        } catch (driverError) {
+          // Try staff collection
+        }
+        
+        const staffRef = docFn(db, 'staff', currentDriver.id);
+        const staffDoc = await getDocFn(staffRef);
+        if (staffDoc.exists()) {
+          const data = staffDoc.data();
+          driverAvailability = data.availability || 'available';
+          updateStatusDisplay();
+          
+          // Set up real-time listener
+          if (onSnapshotFn) {
+            onSnapshotFn(staffRef, (doc) => {
+              if (doc.exists()) {
+                const data = doc.data();
+                driverAvailability = data.availability || 'available';
+                updateStatusDisplay();
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error loading driver availability:', error);
+        driverAvailability = 'available'; // Default fallback
+        updateStatusDisplay();
+      }
+    }
+
+    // Update status display in driver account modal
+    function updateStatusDisplay() {
+      const daStatus = document.getElementById('daStatus');
+      if (daStatus) {
+        const statusText = driverAvailability === 'available' ? 'Available' : 
+                          driverAvailability === 'busy' ? 'Busy' : 'Off';
+        daStatus.textContent = statusText;
+      }
     }
 
     function isSameDay(aTs, bTs){
@@ -1079,20 +1558,37 @@
       return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
     }
 
-    // Load orders from Firebase on page load
     // Wait for Firebase to be ready
-    function initDriverDashboard() {
-      if (window.firebaseDb && currentDriver && currentDriver.id) {
+    function waitForFirebase(maxAttempts = 20, attempt = 0) {
+      return new Promise((resolve) => {
+        if (window.firebaseDb && window.firebaseReady && 
+            window.collection && window.addDoc && window.getDoc && 
+            window.updateDoc && window.serverTimestamp) {
+          resolve(true);
+        } else if (attempt < maxAttempts) {
+          setTimeout(() => {
+            waitForFirebase(maxAttempts, attempt + 1).then(resolve);
+          }, 100);
+        } else {
+          console.warn('Firebase initialization timeout');
+          resolve(false);
+        }
+      });
+    }
+
+    // Load orders from Firebase on page load
+    async function initDriverDashboard() {
+      // Wait for Firebase to be ready
+      const firebaseReady = await waitForFirebase();
+      
+      if (firebaseReady && currentDriver && currentDriver.id) {
+        loadDriverAvailability(); // Load availability from database
         loadDriverOrders();
       } else {
-        // Wait a bit for Firebase to initialize
-        setTimeout(() => {
-          if (window.firebaseDb && currentDriver && currentDriver.id) {
-            loadDriverOrders();
-          } else {
-            renderAll();
-          }
-        }, 500);
+        if (!firebaseReady) {
+          console.error('Firebase not ready after waiting');
+        }
+        renderAll();
       }
     }
     
@@ -1103,7 +1599,7 @@
       initDriverDashboard();
     }
   </script>
-  <script type="module" src="firebase-init.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 </body>
 </html>
 

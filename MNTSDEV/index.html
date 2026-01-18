@@ -4,521 +4,315 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pablo's Peri Peri - Home</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script type="module" src="firebase-init.js"></script>
+    <script src="profile-loading-init.js"></script>
     <script src="profile-instant.js"></script>
+    <script src="profile-auth.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/cart.js"></script>
+    <script src="js/firestore.js"></script>
+    <script src="js/home.js"></script>
 </head>
-<body>
+<body class="index-page">
     <a href="#main-content" class="skip-link">Skip to content</a>
-    <!-- Header -->
-    <header class="header">
-        <div class="logo-container">
-            <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
-            <div class="brand-name">PABLO'S<br>PERI PERI</div>
-        </div>
-        <div class="nav-icons">
-            <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
-                <i class="fas fa-shopping-bag"></i>
-                <span class="cart-badge">0</span>
-            </div>
-            <div class="nav-icon profile-icon" title="Profile" id="profileButton">
-                <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
-                <span class="profile-text" id="profileText">Sign In</span>
-                <div class="profile-dropdown" id="profileDropdown">
-                    <div class="profile-dropdown-header">
-                        <div class="profile-meta">
-                            <span class="profile-name" id="profileName">Your Account</span>
-                            <span class="profile-email" id="profileEmail">user@example.com</span>
+    
+    <header class="header navbar navbar-expand-lg navbar-light">
+        <div class="container-fluid px-3">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="index.html">
+                <div class="logo-container">
+                    <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+                    <div class="brand-name">PABLO'S<br>PERI PERI</div>
+                </div>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#primaryNav" aria-controls="primaryNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse justify-content-end" id="primaryNav">
+                <div class="nav-icons d-flex align-items-center gap-2 ms-lg-3">
+                    <div class="nav-icon cart-icon" title="Cart" onclick="goToCart()">
+                        <i class="fas fa-shopping-bag"></i>
+                        <span class="cart-badge">0</span>
+                    </div>
+                    <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+                        <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+                        <span class="profile-text" id="profileText">Sign In</span>
+                        <div class="profile-dropdown" id="profileDropdown">
+                            <div class="profile-dropdown-header">
+                                <div class="profile-meta">
+                                    <span class="profile-name" id="profileName">Your Account</span>
+                                    <span class="profile-email" id="profileEmail">user@example.com</span>
+                                </div>
+                            </div>
+                            <a href="account.html" class="profile-item profile-manage-account" data-nav-target="account" data-hide-on-body="account-page">
+                                <span>Manage account</span>
+                            </a>
+                            <a href="orders.html" class="profile-item" data-nav-target="orders" data-hide-on-body="orders-page">
+                                <span>Orders</span>
+                            </a>
+                            <a href="help.html" class="profile-item" data-nav-target="help" data-hide-on-body="help-page">
+                                <span>Help & support</span>
+                            </a>
+                            <div class="profile-divider"></div>
+                            <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+                                <i class="fas fa-arrow-right-from-bracket"></i>
+                                <span>Log out</span>
+                            </button>
                         </div>
                     </div>
-                    <a href="account.html" class="profile-item profile-manage-account" data-nav-target="account" data-hide-on-body="account-page"><span>Manage account</span></a>
-                    <a href="orders.html" class="profile-item" data-nav-target="orders" data-hide-on-body="orders-page"><span>Orders</span></a>
-                    <a href="help.html" class="profile-item" data-nav-target="help" data-hide-on-body="help-page"><span>Help & support</span></a>
-                    <div class="profile-divider"></div>
-                    <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
-                        <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
-                    </button>
                 </div>
             </div>
         </div>
     </header>
 
-    <!-- Banner -->
     <div class="header-banner">
         <nav class="banner-nav" aria-label="Main navigation">
-            <div class="banner-content">
-                <a href="index.html" class="banner-nav-link banner-nav-link-home">Home</a>
-                <a href="menu.html" class="banner-nav-link banner-nav-link-menu">Menu</a>
+            <div class="banner-content container">
+                <ul class="nav justify-content-center gap-2 flex-wrap">
+                    <li class="nav-item">
+                        <a href="index.html" class="banner-nav-link banner-nav-link-home nav-link px-3 py-2">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="menu.html" class="banner-nav-link banner-nav-link-menu nav-link px-3 py-2">Menu</a>
+                    </li>
+                </ul>
             </div>
         </nav>
     </div>
 
-    <!-- Main Banner Section -->
-    <section class="hero-section" id="main-content">
-        <div class="hero-background"></div>
-        <div class="hero-overlay"></div>
-        <div class="hero-content">
-            <div class="hero-branding">
-                <div class="hero-logo">
-                    <div class="hero-chicken-logo">
-                        <div class="hero-chicken-head"></div>
-                        <div class="hero-chicken-wings">
-                            <div class="hero-wing-left"></div>
-                            <div class="hero-wing-right"></div>
-                        </div>
-                        <div class="hero-chicken-body"></div>
-                    </div>
+    <section class="hero-section" id="main-content" aria-label="Featured dishes">
+        <div class="container-fluid px-0">
+            <div class="hero-slider position-relative">
+                <div class="hero-slide is-active">
+                    <img src="ribs.jpg" alt="Grilled ribs from Pablo's Peri Peri" class="img-fluid w-100">
                 </div>
-                <div class="hero-text">
-                    <h1 class="hero-title">PABLO'S</h1>
-                    <h2 class="hero-subtitle">PERI PERI</h2>
-                    <p class="hero-description">Experience the authentic taste of Peri Peri chicken</p>
+                <div class="hero-slide">
+                    <img src="peri.jpg" alt="Peri Peri chicken from Pablo's Peri Peri" class="img-fluid w-100">
                 </div>
-            </div>
-            
-            <div class="hero-buttons">
-                <button class="hero-btn menu-btn" onclick="goToMenu()">
-                    <i class="fas fa-utensils"></i>
-                    <span>Explore Menu</span>
+
+                <button class="hero-slider-control hero-slider-control-prev btn btn-light rounded-circle" type="button" aria-label="Previous image">
+                    &#10094;
                 </button>
-            </div>
+                <button class="hero-slider-control hero-slider-control-next btn btn-light rounded-circle" type="button" aria-label="Next image">
+                    &#10095;
+                </button>
 
-            <div class="hero-features">
-                <div class="feature-item">
-                    <i class="fas fa-fire"></i>
-                    <span>Flame Grilled</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-leaf"></i>
-                    <span>Fresh Ingredients</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-clock"></i>
-                    <span>Quick Service</span>
+                <div class="hero-slider-dots d-flex justify-content-center gap-2" aria-hidden="true">
+                    <button class="hero-slider-dot is-active" type="button" data-slide="0"></button>
+                    <button class="hero-slider-dot" type="button" data-slide="1"></button>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- How It Works -->
-    <section class="how-it-works" aria-label="How it works">
+    <section class="featured-section py-5">
         <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">How it works</h2>
-                <p class="section-subtitle">Peri peri goodness in three easy steps</p>
-            </div>
-            <div class="steps-grid">
-                <div class="step-card">
-                    <div class="step-icon"><i class="fas fa-list"></i></div>
-                    <h3>1. Explore</h3>
-                    <p>Browse our favorites and limited offers</p>
-                </div>
-                <div class="step-card">
-                    <div class="step-icon"><i class="fas fa-fire"></i></div>
-                    <h3>2. Grill</h3>
-                    <p>We flame-grill to perfection with our spice blend</p>
-                </div>
-                <div class="step-card">
-                    <div class="step-icon"><i class="fas fa-face-smile"></i></div>
-                    <h3>3. Enjoy</h3>
-                    <p>Served hot—dine in or take it to-go</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Our Story -->
-    <section class="our-story" aria-label="Our story">
-        <div class="container story-grid">
-            <div class="story-media">
-                <img src="new.jpg" alt="Grilled peri peri chicken" />
-            </div>
-            <div class="story-content">
-                <h2>Our story</h2>
-                <p>Born from a love of Peri-Peri style flavors, Pablo's blends to bring a unique spice that keeps you coming back.</p>
-                <ul class="story-list">
-                    <li><i class="fas fa-check"></i> Fresh</li>
-                    <li><i class="fas fa-check"></i> Own Recipe</li>
-                    <li><i class="fas fa-check"></i> Home-made Sauces</li>
-                </ul>
-                <div class="story-cta">
-                    <a href="menu.html" class="hero-btn menu-btn"><i class="fas fa-utensils"></i><span>See the menu</span></a>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Featured Dishes Section -->
-    <section class="featured-section">
-        <div class="container">
-            <div class="bestsellers-header">
+            <div class="bestsellers-header d-flex flex-wrap align-items-center justify-content-between gap-3">
                 <div class="header-content">
-                    <h2 class="bestsellers-title">Customer Favorites</h2>
+                    <h2 class="bestsellers-title mb-0">Customer Favorites</h2>
                 </div>
-                <a href="menu.html" class="view-all-link">
+                <a href="menu.html" class="view-all-link d-inline-flex align-items-center gap-2">
                     <span>View All</span>
                     <i class="fas fa-arrow-right"></i>
                 </a>
             </div>
-            
-            <div class="bestsellers-carousel">
-                <button class="carousel-arrow carousel-prev" onclick="scrollCarousel('prev')">
+            <div class="bestsellers-carousel d-flex align-items-center gap-3 mt-4">
+                <button class="carousel-arrow carousel-prev btn btn-outline-secondary rounded-circle" onclick="scrollCarousel('prev')">
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                
-                <div class="bestsellers-container">
-                    <div class="bestseller-card">
-                        <div class="bestseller-image">
-                            <img src="food_img.png" alt="Peri Peri Chicken" class="food-image">
-                            <div class="card-overlay">
-                                <div class="popular-badge">
-                                    <i class="fas fa-fire"></i>
-                                    <span>Most Popular</span>
+                <div class="bestsellers-container row flex-nowrap gx-3 overflow-hidden">
+                    <div class="col-9 col-md-6 col-lg-3">
+                        <div class="bestseller-card h-100">
+                            <div class="bestseller-image">
+                                <img src="food_img.png" alt="Peri Peri Chicken" class="food-image img-fluid">
+                                <div class="card-overlay">
+                                    <div class="popular-badge">
+                                        <i class="fas fa-fire"></i>
+                                        <span>Most Popular</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="bestseller-content">
-                            <h3 class="bestseller-title">Peri Peri Chicken</h3>
-                            <p class="bestseller-description">Flame-grilled chicken with our signature peri peri sauce</p>
-                            <div class="price-section">
-                                <p class="bestseller-price">₱299.00</p>
-                                <button class="add-to-cart-btn" onclick="addToCart('peri-peri-chicken')">
-                                    <i class="fas fa-plus"></i>
-                                </button>
+                            <div class="bestseller-content">
+                                <h3 class="bestseller-title">Peri Peri Chicken</h3>
+                                <p class="bestseller-description">Flame-grilled chicken with our signature peri peri sauce</p>
+                                <div class="price-section d-flex align-items-center justify-content-between">
+                                    <p class="bestseller-price mb-0">₱299.00</p>
+                                    <button class="add-to-cart-btn" onclick="addToCart('peri-peri-chicken')">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="bestseller-card">
-                        <div class="bestseller-image">
-                            <img src="new_dish.png" alt="Special Combo Meal" class="food-image">
-                            <div class="card-overlay">
-                                <div class="new-badge">
-                                    <i class="fas fa-sparkles"></i>
-                                    <span>New</span>
+                    <div class="col-9 col-md-6 col-lg-3">
+                        <div class="bestseller-card h-100">
+                            <div class="bestseller-image">
+                                <img src="new_dish.png" alt="Special Combo Meal" class="food-image img-fluid">
+                                <div class="card-overlay">
+                                    <div class="new-badge">
+                                        <i class="fas fa-sparkles"></i>
+                                        <span>New</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="bestseller-content">
-                            <h3 class="bestseller-title">Special Combo Meal</h3>
-                            <p class="bestseller-description">Complete meal with chicken, sides, and refreshing drink</p>
-                            <div class="price-section">
-                                <p class="bestseller-price">₱399.00</p>
-                                <button class="add-to-cart-btn" onclick="addToCart('special-combo')">
-                                    <i class="fas fa-plus"></i>
-                                </button>
+                            <div class="bestseller-content">
+                                <h3 class="bestseller-title">Special Combo Meal</h3>
+                                <p class="bestseller-description">Complete meal with chicken, sides, and refreshing drink</p>
+                                <div class="price-section d-flex align-items-center justify-content-between">
+                                    <p class="bestseller-price mb-0">₱399.00</p>
+                                    <button class="add-to-cart-btn" onclick="addToCart('special-combo')">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="bestseller-card">
-                        <div class="bestseller-image">
-                            <img src="coke.png" alt="Refreshing Drinks" class="food-image">
-                            <div class="card-overlay">
-                                <div class="refreshing-badge">
-                                    <i class="fas fa-snowflake"></i>
-                                    <span>Refreshing</span>
+                    <div class="col-9 col-md-6 col-lg-3">
+                        <div class="bestseller-card h-100">
+                            <div class="bestseller-image">
+                                <img src="coke.png" alt="Refreshing Drinks" class="food-image img-fluid">
+                                <div class="card-overlay">
+                                    <div class="refreshing-badge">
+                                        <i class="fas fa-snowflake"></i>
+                                        <span>Refreshing</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="bestseller-content">
-                            <h3 class="bestseller-title">Refreshing Drinks</h3>
-                            <p class="bestseller-description">Perfect complement to your spicy peri peri meal</p>
-                            <div class="price-section">
-                                <p class="bestseller-price">₱89.00</p>
-                                <button class="add-to-cart-btn" onclick="addToCart('drinks')">
-                                    <i class="fas fa-plus"></i>
-                                </button>
+                            <div class="bestseller-content">
+                                <h3 class="bestseller-title">Refreshing Drinks</h3>
+                                <p class="bestseller-description">Perfect complement to your spicy peri peri meal</p>
+                                <div class="price-section d-flex align-items-center justify-content-between">
+                                    <p class="bestseller-price mb-0">₱89.00</p>
+                                    <button class="add-to-cart-btn" onclick="addToCart('drinks')">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="bestseller-card featured">
-                        <div class="bestseller-image">
-                            <img src="tea.png" alt="Hot Tea Selection" class="food-image">
-                            <div class="card-overlay">
-                                <div class="featured-badge">
-                                    <i class="fas fa-crown"></i>
-                                    <span>Featured</span>
+                    <div class="col-9 col-md-6 col-lg-3">
+                        <div class="bestseller-card h-100 featured">
+                            <div class="bestseller-image">
+                                <img src="tea.png" alt="Hot Tea Selection" class="food-image img-fluid">
+                                <div class="card-overlay">
+                                    <div class="featured-badge">
+                                        <i class="fas fa-crown"></i>
+                                        <span>Featured</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="bestseller-content">
-                            <h3 class="bestseller-title">Hot Tea Selection</h3>
-                            <p class="bestseller-description">Premium tea varieties to soothe your palate</p>
-                            <div class="price-section">
-                                <p class="bestseller-price">₱75.00</p>
-                                <button class="add-to-cart-btn" onclick="addToCart('hot-tea')">
-                                    <i class="fas fa-plus"></i>
-                                </button>
+                            <div class="bestseller-content">
+                                <h3 class="bestseller-title">Hot Tea Selection</h3>
+                                <p class="bestseller-description">Premium tea varieties to soothe your palate</p>
+                                <div class="price-section d-flex align-items-center justify-content-between">
+                                    <p class="bestseller-price mb-0">₱75.00</p>
+                                    <button class="add-to-cart-btn" onclick="addToCart('hot-tea')">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <button class="carousel-arrow carousel-next" onclick="scrollCarousel('next')">
+                <button class="carousel-arrow carousel-next btn btn-outline-secondary rounded-circle" onclick="scrollCarousel('next')">
                     <i class="fas fa-chevron-right"></i>
                 </button>
             </div>
         </div>
     </section>
 
-    
-
-    <!-- Visit us strip -->
-    <section class="visit-strip" aria-label="Visit us">
-        <div class="container visit-grid">
-            <div class="section-header" style="grid-column: 1 / -1; text-align: left; margin-bottom: 12px;">
-                <h2 class="section-title">Visit us</h2>
-            </div>
-            <div class="visit-item">
-                <i class="fas fa-location-dot"></i>
-                <div>
-                    <strong>Find us</strong>
-                    <p>Zabarte Road, Brgy. Kaligayahan, Quezon City</p>
+    <section class="our-story py-5" aria-label="Our story">
+        <div class="container">
+            <div class="row align-items-center g-4">
+                <div class="col-12 col-lg-6">
+                    <div class="story-media">
+                        <img src="new.jpg" alt="Grilled peri peri chicken" class="img-fluid rounded-4 shadow-sm" />
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="story-content">
+                        <h2>Our story</h2>
+                        <p>Born from a love of Peri-Peri style flavors, Pablo's blends to bring a unique spice that keeps you coming back.</p>
+                        <ul class="story-list list-unstyled">
+                            <li><i class="fas fa-check"></i> Fresh</li>
+                            <li><i class="fas fa-check"></i> Own Recipe</li>
+                            <li><i class="fas fa-check"></i> Home-made Sauces</li>
+                        </ul>
+                        <div class="story-cta mt-3">
+                            <a href="menu.html" class="hero-btn menu-btn btn btn-danger d-inline-flex align-items-center gap-2">
+                                <i class="fas fa-utensils"></i>
+                                <span>See the menu</span>
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="visit-item">
-                <i class="fas fa-clock"></i>
-                <div>
-                    <strong>Open daily</strong>
-                    <p>10:00 AM – 10:00 PM</p>
-                </div>
-            </div>
-   
         </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="main-footer">
+    <section class="visit-strip py-5" aria-label="Visit us">
         <div class="container">
-            <div class="footer-content">
-                <div class="footer-brand">
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="section-header text-start mb-3">
+                        <h2 class="section-title mb-0">Visit us</h2>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="visit-item d-flex align-items-start gap-3">
+                        <i class="fas fa-location-dot fs-4"></i>
+                        <div>
+                            <strong>Find us</strong>
+                            <p class="mb-0">Zabarte Road, Brgy. Kaligayahan, Quezon City</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="visit-item d-flex align-items-start gap-3">
+                        <i class="fas fa-clock fs-4"></i>
+                        <div>
+                            <strong>Open daily</strong>
+                            <p class="mb-0">10:00 AM – 10:00 PM</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="main-footer py-4">
+        <div class="container">
+            <div class="footer-content d-flex flex-column flex-md-row align-items-center justify-content-between gap-3">
+                <div class="footer-brand d-flex align-items-center gap-2">
                     <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="footer-logo">
                     <div class="footer-brand-name">PABLO'S PERI PERI</div>
                 </div>
-                <div class="footer-social">
-                    <p>Follow us on social media</p>
-                    <div class="social-links">
+                <div class="footer-social text-center text-md-end">
+                    <p class="mb-2">Follow us on social media</p>
+                    <div class="social-links d-inline-flex gap-2">
                         <a href="#" class="social-link facebook">
                             <i class="fab fa-facebook"></i>
                         </a>
-                    
                     </div>
                 </div>
             </div>
         </div>
     </footer>
 
-    <!-- Back to top button -->
-    <button class="back-to-top" aria-label="Back to top" title="Back to top">
+    <button class="back-to-top btn btn-danger rounded-circle" aria-label="Back to top" title="Back to top">
         <i class="fas fa-arrow-up"></i>
     </button>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script type="module" src="firebase-init.js"></script>
+    <script src="profile-instant.js"></script>
     <script src="profile-auth.js"></script>
-
-    <script>
-        (function() {
-            'use strict';
-
-            const CART_COUNT_KEY = 'ppp_cart_count';
-            const ROUTES = {
-                home: 'index.html',
-                menu: 'menu.html',
-                cart: 'cart_review.html',
-                help: 'help.html'
-            };
-
-            function safeNumber(value, fallback = 0) {
-                const parsed = Number(value);
-                if (Number.isNaN(parsed) || !Number.isFinite(parsed)) {
-                    return fallback;
-                }
-                return parsed;
-            }
-
-            function getStoredCartCount() {
-                try {
-                    const raw = window.localStorage?.getItem(CART_COUNT_KEY);
-                    return safeNumber(raw, 0);
-                } catch (error) {
-                    console.warn('Cart count read failed:', error);
-                    return 0;
-                }
-            }
-
-            function storeCartCount(count) {
-                try {
-                    window.localStorage?.setItem(CART_COUNT_KEY, String(count));
-                } catch (error) {
-                    console.warn('Cart count save failed:', error);
-                }
-            }
-
-            function updateCartBadges(count = getStoredCartCount()) {
-                const badges = document.querySelectorAll('.cart-badge');
-                badges.forEach((badge) => {
-                    badge.textContent = Math.max(0, safeNumber(count, 0));
-                });
-            }
-
-            function broadcastCartCount(count) {
-                document.dispatchEvent(new CustomEvent('cart:count-changed', {
-                    detail: { count }
-                }));
-            }
-
-            function navigateTo(key) {
-                const target = ROUTES[key];
-                if (target) {
-                    window.location.href = target;
-                }
-            }
-
-            window.goHome = () => navigateTo('home');
-            window.goToMenu = () => navigateTo('menu');
-            window.goToHelp = () => navigateTo('help');
-            window.goToCart = () => navigateTo('cart');
-
-            window.getCartCount = getStoredCartCount;
-
-            window.setCartCount = function setCartCount(count) {
-                const next = Math.max(0, safeNumber(count, 0));
-                storeCartCount(next);
-                updateCartBadges(next);
-                broadcastCartCount(next);
-                return next;
-            };
-
-            window.incrementCartCount = function incrementCartCount(delta = 1) {
-                const current = getStoredCartCount();
-                return window.setCartCount(current + safeNumber(delta, 0));
-            };
-
-            window.resetCartCount = function resetCartCount() {
-                return window.setCartCount(0);
-            };
-
-            document.addEventListener('DOMContentLoaded', () => {
-                updateCartBadges();
-            });
-            document.addEventListener('cart:sync', () => updateCartBadges());
-        })();
-
-        // Highlight current page in banner nav (Home / Menu)
-        document.addEventListener('DOMContentLoaded', function() {
-            const path = window.location.pathname.split('/').pop() || 'index.html';
-            const homeLink = document.querySelector('.banner-nav-link-home');
-            const menuLink = document.querySelector('.banner-nav-link-menu');
-
-            if (path === 'menu.html' && menuLink) {
-                menuLink.classList.add('is-active');
-            } else if ((path === '' || path === 'index.html') && homeLink) {
-                homeLink.classList.add('is-active');
-            }
-        });
-
-        // Carousel
-        function scrollCarousel(direction) {
-            const container = document.querySelector('.bestsellers-container');
-            const scrollAmount = 320;
-            
-            if (direction === 'next') {
-                container.scrollBy({
-                    left: scrollAmount,
-                    behavior: 'smooth'
-                });
-            } else {
-                container.scrollBy({
-                    left: -scrollAmount,
-                    behavior: 'smooth'
-                });
-            }
-        }
-
-        // Add to cart
-        function addToCart(itemId) {
-            window.incrementCartCount(1);
-
-            const button = event.target.closest('.add-to-cart-btn');
-            const originalText = button.innerHTML;
-            button.innerHTML = '<i class="fas fa-check"></i>';
-            button.style.background = '#28a745';
-            
-            setTimeout(() => {
-                button.innerHTML = originalText;
-                button.style.background = '#e53935';
-            }, 1000);
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            // Back to top
-            const backToTop = document.querySelector('.back-to-top');
-            const toggleBackToTop = () => {
-                if (window.scrollY > 400) backToTop.classList.add('show');
-                else backToTop.classList.remove('show');
-            };
-            window.addEventListener('scroll', toggleBackToTop, { passive: true });
-            backToTop.addEventListener('click', () => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-
-            // Search input
-            const searchInput = document.getElementById('homeSearch');
-            const searchClear = document.getElementById('homeSearchClear');
-            if (searchInput) {
-                const updateClear = () => {
-                    if (searchInput.value.trim().length) {
-                        searchClear.style.display = 'flex';
-                    } else {
-                        searchClear.style.display = 'none';
-                    }
-                };
-                searchInput.addEventListener('input', updateClear);
-                searchInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && searchInput.value.trim()) {
-                        goToSearch(searchInput.value.trim());
-                    }
-                });
-                searchClear.addEventListener('click', () => {
-                    searchInput.value = '';
-                    updateClear();
-                    searchInput.focus();
-                });
-                updateClear();
-            }
-
-            window.subscribeNewsletter = function(e) {
-                e.preventDefault();
-                const email = document.getElementById('newsletterEmail').value.trim();
-                if (!email) return;
-                e.target.reset();
-            };
-            
-            // Scroll reveal animation
-            const observerOptions = {
-                threshold: 0.1,
-                rootMargin: '0px 0px -50px 0px'
-            };
-
-            const observer = new IntersectionObserver(function(entries) {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.style.opacity = '1';
-                        entry.target.style.transform = 'translateY(0)';
-                    }
-                });
-            }, observerOptions);
-
-            document.querySelectorAll('.bestseller-card, .info-card').forEach(el => {
-                el.style.opacity = '0';
-                el.style.transform = 'translateY(30px)';
-                el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                observer.observe(el);
-            });
-        });
-    </script>
+    <script src="js/utils.js"></script>
+    <script src="js/cart.js"></script>
+    <script src="js/firestore.js"></script>
+    <script src="js/home.js"></script>
 </body>
-</html> 
+</html>

@@ -21,6 +21,10 @@ async function updateProfileUI(user) {
 
   const isAccountPage = document.body.classList.contains('account-page');
 
+  // Remove loading state and mark as checked
+  profileButton.classList.remove('checking-auth');
+  profileButton.classList.add('auth-checked');
+
   if (user) {
     profileButton.classList.add('logged-in');
     profileIcon.style.display = '';
@@ -50,6 +54,70 @@ async function updateProfileUI(user) {
     if (profileEmail) profileEmail.textContent = 'user@example.com';
   }
 }
+
+// Set loading state while checking auth
+function setProfileLoadingState() {
+  const profileText = document.getElementById('profileText');
+  const profileIcon = document.getElementById('profileIcon');
+  const profileButton = document.getElementById('profileButton');
+
+  if (!profileText || !profileIcon || !profileButton) {
+    return;
+  }
+
+  // Add loading state
+  profileButton.classList.add('checking-auth');
+  
+  // Show loading text
+  if (profileText) {
+    profileText.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    profileText.style.display = 'block';
+  }
+  if (profileIcon) {
+    profileIcon.style.display = 'none';
+  }
+}
+
+// Set loading state immediately - runs synchronously before page render
+(function() {
+  'use strict';
+  // This runs immediately when script loads, before DOM is ready
+  if (typeof document !== 'undefined') {
+    // Use a MutationObserver to catch the element as soon as it's added
+    const observer = new MutationObserver(function(mutations) {
+      const profileButton = document.getElementById('profileButton');
+      const profileText = document.getElementById('profileText');
+      
+      if (profileButton && profileText && !profileButton.classList.contains('checking-auth') && !profileButton.classList.contains('logged-in')) {
+        setProfileLoadingState();
+        observer.disconnect();
+      }
+    });
+    
+    // Start observing
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    } else {
+      // If body doesn't exist yet, wait for it
+      document.addEventListener('DOMContentLoaded', function() {
+        const profileButton = document.getElementById('profileButton');
+        if (profileButton && !profileButton.classList.contains('checking-auth') && !profileButton.classList.contains('logged-in')) {
+          setProfileLoadingState();
+        }
+        observer.disconnect();
+      });
+    }
+    
+    // Also try immediately in case elements already exist
+    setTimeout(function() {
+      const profileButton = document.getElementById('profileButton');
+      const profileText = document.getElementById('profileText');
+      if (profileButton && profileText && !profileButton.classList.contains('checking-auth') && !profileButton.classList.contains('logged-in')) {
+        setProfileLoadingState();
+      }
+    }, 0);
+  }
+})();
 
 // Fetch user data
 async function fetchUserData(userId) {
@@ -168,6 +236,12 @@ function initProfileAuth() {
 
   // Setup auth listener
   function initAuthListener() {
+    // Ensure loading state is set (profile-loading-init.js should have done this, but ensure it)
+    const profileButton = document.getElementById('profileButton');
+    if (profileButton && !profileButton.classList.contains('checking-auth') && !profileButton.classList.contains('logged-in')) {
+      setProfileLoadingState();
+    }
+    
     if (!window.firebaseAuth || !window.firebaseReady) {
       setTimeout(initAuthListener, RETRY_DELAY_MS);
       return;
@@ -176,6 +250,9 @@ function initProfileAuth() {
     const currentUser = window.firebaseAuth.currentUser;
     if (currentUser) {
       updateProfileUI(currentUser);
+    } else {
+      // No user found, update UI to show Sign In
+      updateProfileUI(null);
     }
 
     window.onAuthStateChanged(window.firebaseAuth, async (user) => {

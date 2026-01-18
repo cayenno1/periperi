@@ -1,12 +1,13 @@
 // Firebase setup
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   getFirestore,
   doc,
   getDoc,
   setDoc,
   deleteDoc,
+  addDoc,
   onSnapshot,
   arrayUnion,
   arrayRemove,
@@ -16,13 +17,16 @@ import {
   query,
   where,
   orderBy,
-  runTransaction
+  runTransaction,
+  serverTimestamp,
+  increment
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import {
   getStorage,
   ref,
   uploadBytes,
-  getDownloadURL
+  getDownloadURL,
+  listAll
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 const firebaseConfig = {
@@ -47,11 +51,15 @@ window.firebaseStorage = storage;
 
 window.signOut = signOut;
 window.onAuthStateChanged = onAuthStateChanged;
+window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+window.sendEmailVerification = sendEmailVerification;
 
 window.getDoc = getDoc;
 window.doc = doc;
 window.setDoc = setDoc;
 window.deleteDoc = deleteDoc;
+window.addDoc = addDoc;
 window.onSnapshot = onSnapshot;
 window.arrayUnion = arrayUnion;
 window.arrayRemove = arrayRemove;
@@ -69,11 +77,14 @@ window.query = query;
 window.where = where;
 window.orderBy = orderBy;
 window.runTransaction = runTransaction;
+window.serverTimestamp = serverTimestamp;
+window.increment = increment;
 
 // Storage helpers
 window.storageRef = ref;
 window.uploadBytes = uploadBytes;
 window.getDownloadURL = getDownloadURL;
+window.listAll = listAll;
 
 window.firebaseReady = true;
 

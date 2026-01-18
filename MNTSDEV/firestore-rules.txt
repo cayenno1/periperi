@@ -1,0 +1,303 @@
+rules_version = '2';
+
+service cloud.firestore {
+
+  match /databases/{database}/documents {
+
+    // ----- Shared validation helpers -----
+
+    function isValidRole(role) {
+      return role in ['Staff', 'Admin', 'Manager', 'Owner', 'System_Admin'];
+    }
+    
+    function isValidStatus(status) {
+      return status in ['active', 'suspended', 'inactive', 'deleted'];
+    }
+
+    function isValidUnitType(unitType) {
+      return unitType in ['weight', 'count'];
+    }
+
+    function isValidBaseUnit(unitType, baseUnit) {
+      return (unitType == 'count' && baseUnit == 'pcs') ||
+             (unitType == 'weight' && baseUnit in ['g', 'kg']);
+    }
+
+    function isNonNegativeNumber(value) {
+      return value is number && value >= 0;
+    }
+
+    function hasValidTimestamps(data) {
+      return (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidStockDocument(data) {
+      return data.keys().hasAll(['name', 'unitType', 'baseUnit', 'quantity', 'reorderLevel']) &&
+             data.name is string && data.name.size() > 0 &&
+             isValidUnitType(data.unitType) &&
+             isValidBaseUnit(data.unitType, data.baseUnit) &&
+             isNonNegativeNumber(data.quantity) &&
+             isNonNegativeNumber(data.reorderLevel) &&
+             hasValidTimestamps(data);
+    }
+
+    function isValidStockUpdate(newData, existingData) {
+      return isValidStockDocument(newData) &&
+             newData.name == existingData.name &&
+             newData.unitType == existingData.unitType &&
+             newData.baseUnit == existingData.baseUnit &&
+             newData.quantity >= 0;
+    }
+
+    // ----- Counter Collection (for sequential order numbering) -----
+    match /order_counter/{counterId} {
+      // Allow read and write for order counter generation
+      // This is needed for the sequential order ID system
+      allow read, write: if true;
+    }
+
+    // ----- Customers -----
+
+    match /customers/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow read: if true;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /customers/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ----- Staff -----
+
+    match /staff/{staffId} {
+      allow create: if true;
+      allow read: if true;
+      allow update: if (
+        request.resource.data.staffId == resource.data.staffId &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['password']) ||
+         request.resource.data.password == resource.data.password) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['firstName']) || 
+         (request.resource.data.firstName is string && request.resource.data.firstName.size() > 0)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastName']) || 
+         (request.resource.data.lastName is string && request.resource.data.lastName.size() > 0)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']) || 
+         (request.resource.data.email is string && request.resource.data.email.matches('.*@.*\\..*'))) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) || 
+         (request.resource.data.role is string && isValidRole(request.resource.data.role))) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) || 
+         (request.resource.data.status is string && isValidStatus(request.resource.data.status)))
+      );
+      allow delete: if false;
+    }
+
+		// ----- Staff Logs (Shift Tracking) -----
+    match /logsStaff/{logId} {
+      // Helper function to validate shift log document
+      function isValidShiftLog(data) {
+        return data.keys().hasAll(['driverId', 'driverName', 'startTime']) &&
+               data.driverId is string &&
+               data.driverId.size() > 0 &&
+               data.driverName is string &&
+               data.driverName.size() > 0 &&
+               data.startTime is timestamp &&
+               (!('endTime' in data) || data.endTime is timestamp || data.endTime == null) &&
+               (!('createdAt' in data) || data.createdAt is timestamp) &&
+               (!('updatedAt' in data) || data.updatedAt is timestamp);
+      }
+
+      // Allow drivers to create their own shift logs
+      // Note: Since the system uses custom session-based auth, we allow creation with validation
+      allow create: if isValidShiftLog(request.resource.data);
+
+      // Allow reading shift logs (drivers can read their own, admins can read all)
+      // Open read for now since custom auth is used
+      allow read: if true;
+
+      // Allow updating shift logs to add endTime (only if endTime is being added/updated)
+      allow update: if (
+        // Prevent changing driverId
+        request.resource.data.driverId == resource.data.driverId &&
+        // Prevent changing driverName
+        request.resource.data.driverName == resource.data.driverName &&
+        // Prevent changing startTime
+        request.resource.data.startTime == resource.data.startTime &&
+        // Only allow updating endTime, createdAt, or updatedAt
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'updatedAt']) ||
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'createdAt', 'updatedAt']))) &&
+        // Validate endTime is timestamp or null
+        (!('endTime' in request.resource.data) || 
+         request.resource.data.endTime is timestamp || 
+         request.resource.data.endTime == null) &&
+        // Validate updatedAt is timestamp
+        (!('updatedAt' in request.resource.data) || 
+         request.resource.data.updatedAt is timestamp)
+      );
+
+      // Prevent deletion of shift logs (for audit trail)
+      allow delete: if false;
+    }
+
+    // ----- Stocks (Inventory) -----
+
+    match /stocks/{stockId} {
+      allow read: if true;
+      allow create: if isValidStockDocument(request.resource.data);
+      allow update: if isValidStockUpdate(request.resource.data, resource.data);
+      allow delete: if false;
+    }
+
+    // ----- Menu (Dishes) -----
+    function isValidMenuItem(data) {
+      return data.keys().hasAll(['name', 'category', 'price']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.category is string && data.category.size() > 0 &&
+             isNonNegativeNumber(data.price) &&
+             (!('description' in data) || data.description is string) &&
+             (!('imageDataUrl' in data) || data.imageDataUrl is string || data.imageDataUrl == null) &&
+             (!('ingredients' in data) || data.ingredients is list) &&
+             (!('menuId' in data) || data.menuId is string) &&
+             (!('slug' in data) || data.slug is string) &&
+             hasValidTimestamps(data);
+    }
+
+    function isValidMenuItemUpdate(newData, existingData) {
+      return isValidMenuItem(newData);
+    }
+    
+    
+
+    // ----- Menu Archives -----
+    match /menuArchives/{menuId} {
+      allow read: if true;
+      allow create: if true; // Allow archiving when menu status becomes inactive or deleted
+      allow update: if true; // Allow updates to archived items (for restoring, etc.)
+      allow delete: if true; // Allow deletion for cleanup of expired items (30+ days old) - only documents, not collection
+    }
+    
+    	    match /menu/{menuId} {
+      allow read: if true;
+      allow create: if isValidMenuItem(request.resource.data);
+      allow update: if isValidMenuItemUpdate(request.resource.data, resource.data);
+      allow delete: if true;
+    }
+
+    // NEW: Review validation helper
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['userId', 'rating']) &&
+             data.userId is string &&
+             data.userId.size() > 0 &&
+             data.rating is number &&
+             data.rating >= 1 &&
+             data.rating <= 5 &&
+             (!('text' in data) || data.text is string) &&
+             (!('anonymous' in data) || data.anonymous is bool) &&
+             (!('displayName' in data) || data.displayName is string || data.displayName == null) &&
+             (!('itemId' in data) || data.itemId is string) &&
+             (!('itemName' in data) || data.itemName is string || data.itemName == null) &&
+             hasValidTimestamps(data);
+    }
+
+    
+
+    // NEW: Per-menu-item reviews
+
+    match /menu/{menuId}/reviews/{reviewId} {
+      allow read: if true;
+
+      function isReviewOwner() {
+        return request.auth != null && resource.data.userId == request.auth.uid;
+      }
+
+      function isReviewOwnerOnCreate() {
+        return request.auth != null && request.resource.data.userId == request.auth.uid;
+      }
+
+      allow create: if isReviewOwnerOnCreate() && isValidReview(request.resource.data);
+
+      allow update: if isReviewOwner() &&
+                    isValidReview(request.resource.data) &&
+                    request.resource.data.userId == resource.data.userId &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if isReviewOwner();
+    }
+
+    // ----- For Delivery -----
+
+    match /for_delivery/{deliveryId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+		    // ----- Drivers -----
+    match /drivers/{driverId} {
+      // Allow reading driver status/availability for admin dashboard
+      allow read: if true;
+      // Allow creating driver records
+      allow create: if true;
+      // Allow drivers to update their own status/availability when logging in/out
+      allow update: if true;
+      // Prevent deletion of driver records
+      allow delete: if false;
+    }
+
+    // ----- Orders -----
+
+    match /orders/{orderId} {
+
+      function isValidOrderStatus(status) {
+        return status in ['pending', 'new', 'accepted', 'being-cooked', 'cooking', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'completed', 'canceled'];
+      }
+
+      function isValidOrderUpdate() {
+        let statusUpdate = !('status' in request.resource.data.diff(resource.data).affectedKeys()) ||
+                           (request.resource.data.status is string && 
+                            isValidOrderStatus(request.resource.data.status));
+        
+        let driverUpdate = !('driverId' in request.resource.data.diff(resource.data).affectedKeys()) ||
+                           (request.resource.data.driverId is string || 
+                            request.resource.data.driverId == null);
+        
+        let timestampUpdate = (!('acceptedAt' in request.resource.data.diff(resource.data).affectedKeys()) ||
+                               request.resource.data.acceptedAt is timestamp) &&
+                              (!('updatedAt' in request.resource.data.diff(resource.data).affectedKeys()) ||
+                               request.resource.data.updatedAt is timestamp) &&
+                              (!('cookingStartedAt' in request.resource.data.diff(resource.data).affectedKeys()) ||
+                               request.resource.data.cookingStartedAt is timestamp) &&
+                              (!('assignedAt' in request.resource.data.diff(resource.data).affectedKeys()) ||
+                               request.resource.data.assignedAt is timestamp);
+        
+        let criticalFieldsUnchanged = 
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.total == resource.data.total &&
+          request.resource.data.items == resource.data.items;
+        
+        return statusUpdate && driverUpdate && timestampUpdate && criticalFieldsUnchanged;
+      }
+
+      function isAuthedOrder() {
+        return request.auth != null && request.resource.data.userId == request.auth.uid;
+      }
+
+      function isGuestOrder() {
+        return request.auth == null &&
+               (!('userId' in request.resource.data) || request.resource.data.userId == null) &&
+               request.resource.data.isGuest == true;
+      }
+
+      allow create: if isAuthedOrder() || isGuestOrder();
+      allow read: if true;
+      allow update: if isValidOrderUpdate();
+      allow delete: if false;
+    }
+
+  }
+
+}
+

@@ -28,6 +28,8 @@
       return;
     }
 
+    // Remove loading state if present
+    button.classList.remove('checking-auth');
     button.classList.add('logged-in');
     icon.style.display = '';
     text.style.display = '';
