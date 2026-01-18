@@ -10145,10 +10145,17 @@ function renderCustomersList() {
         
         const isSelected = selectedCustomerId === customer.id ? 'selected' : '';
         
+        const displayName = customer.displayName || 'Customer';
+        const email = customer.email || '';
+        const phoneNumber = customer.phoneNumber || '';
+        
         return `
             <div class="customer-item ${isSelected}" onclick="selectCustomer('${customer.id}')" data-customer-id="${customer.id}">
                 <div class="customer-avatar">${initials}</div>
-                <span>${escapeHtml(customer.displayName)}</span>
+                <div class="customer-info">
+                    <div class="customer-name">${escapeHtml(displayName)}</div>
+                    <div class="customer-email">${email ? escapeHtml(email) : (phoneNumber ? escapeHtml(phoneNumber) : 'No contact info')}</div>
+                </div>
             </div>
         `;
     }).join('');
@@ -10207,7 +10214,10 @@ async function showCustomerDetails(customerId) {
     updateRewardsTab(customer, stats);
     
     // Update reviews tab
-    updateReviewsTab(customer, customerOrders);
+    await updateReviewsTab(customer, customerOrders);
+    
+    // Update ID verification tab
+    updateIdVerificationTab(customerId);
 }
 
 async function loadCustomerOrders(customerId, forceReload = false) {
@@ -10374,45 +10384,162 @@ function updateRewardsTab(customer, stats) {
     }
 }
 
-function updateReviewsTab(customer, orders) {
+async function updateReviewsTab(customer, orders) {
     const reviewsTab = document.getElementById('reviewsTab');
     if (!reviewsTab) return;
     
-    // Filter orders with reviews/ratings
-    const reviewedOrders = orders.filter(order => 
-        order.rating || order.review || order.feedback
-    ).slice(0, 20); // Show last 20 reviews
-    
     const reviewsList = reviewsTab.querySelector('.reviews-list');
-    if (reviewsList) {
-        if (reviewedOrders.length === 0) {
-            reviewsList.innerHTML = '<div class="empty-state">No reviews yet</div>';
-            return;
+    if (!reviewsList) return;
+    
+    // Show loading state
+    reviewsList.innerHTML = '<div class="empty-state">Loading reviews...</div>';
+    
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
         }
         
-        reviewsList.innerHTML = reviewedOrders.map(order => {
+        const fns = window.firestoreFunctions;
+        if (!fns || !window.db) {
+            throw new Error('Firestore not ready');
+        }
+        
+        const customerId = customer.id || customer.userId;
+        console.log('updateReviewsTab called for customer:', customer, 'customerId:', customerId);
+        const allReviews = [];
+        
+        // 1. Get reviews from orders
+        const reviewedOrders = orders.filter(order => 
+            order.rating || order.review || order.feedback
+        );
+        
+        reviewedOrders.forEach(order => {
             const orderDate = order.createdAt 
                 ? (order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt))
                 : new Date();
-            const daysAgo = Math.floor((Date.now() - orderDate.getTime()) / (1000 * 60 * 60 * 24));
-            const dateText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
             
             const rating = order.rating || 0;
-            const stars = '★'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
             const reviewText = order.review || order.feedback || 'No review text';
-            
             const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
             const itemImage = firstItem?.image || firstItem?.imageUrl || '';
             const itemName = firstItem?.name || firstItem?.itemName || 'Order Items';
             
-            const imageHtml = itemImage 
-                ? `<img src="${escapeHtml(itemImage)}" alt="${escapeHtml(itemName)}" onerror="this.style.display='none'">`
+            allReviews.push({
+                type: 'order',
+                orderId: order.trackingId || order.id,
+                itemName: itemName,
+                itemImage: itemImage,
+                rating: rating,
+                text: reviewText,
+                date: orderDate,
+                createdAt: order.createdAt
+            });
+        });
+        
+        // 2. Fetch reviews from customer's reviews subcollection
+        if (customerId) {
+            try {
+                console.log(`Fetching reviews for customer ID: ${customerId}`);
+                
+                // Ensure menu state is loaded for item details
+                if (!menuState || !menuState.length) {
+                    await refreshMenuState();
+                }
+                
+                // Fetch reviews from customers/{customerId}/reviews subcollection
+                const reviewsRef = fns.collection(window.db, 'customers', customerId, 'reviews');
+                const reviewsSnapshot = await fns.getDocs(reviewsRef);
+                
+                console.log(`Found ${reviewsSnapshot.docs.length} reviews in subcollection for customer ${customerId}`);
+                
+                reviewsSnapshot.docs.forEach(doc => {
+                    const reviewData = doc.data();
+                    console.log('Review data:', reviewData);
+                    
+                    const reviewDate = reviewData.createdAt 
+                        ? (reviewData.createdAt.toDate ? reviewData.createdAt.toDate() : new Date(reviewData.createdAt))
+                        : new Date();
+                    
+                    // Get item details from menu state if itemId/itemName is available
+                    const itemId = reviewData.itemId || reviewData.menuItemId || '';
+                    const itemName = reviewData.itemName || '';
+                    let menuItem = null;
+                    let itemImage = '';
+                    
+                    if (itemId && menuState) {
+                        menuItem = menuState.find(m => 
+                            m.id === itemId || 
+                            m.menuId === itemId ||
+                            (itemName && m.name && m.name.toLowerCase() === itemName.toLowerCase()) ||
+                            (itemName && m.displayName && m.displayName.toLowerCase() === itemName.toLowerCase())
+                        );
+                        if (menuItem) {
+                            itemImage = menuItem.imageDataUrl || '';
+                        }
+                    }
+                    
+                    allReviews.push({
+                        type: 'customer',
+                        reviewId: doc.id,
+                        itemId: itemId,
+                        itemName: itemName || menuItem?.name || menuItem?.displayName || 'Menu Item',
+                        itemImage: itemImage || reviewData.itemImage || '',
+                        rating: reviewData.rating || 0,
+                        text: reviewData.text || reviewData.review || 'No review text',
+                        date: reviewDate,
+                        createdAt: reviewData.createdAt,
+                        anonymous: reviewData.anonymous || false,
+                        displayName: reviewData.displayName || customer.displayName,
+                        orderId: reviewData.orderId || null
+                    });
+                });
+                
+                console.log(`Total reviews after fetching: ${allReviews.length}`);
+            } catch (error) {
+                console.error(`Error fetching reviews from customer subcollection:`, error);
+                // Continue even if reviews subcollection doesn't exist or fails
+            }
+        } else {
+            console.warn('No customerId provided for fetching reviews');
+        }
+        
+        // Sort reviews by date (newest first)
+        allReviews.sort((a, b) => {
+            const dateA = a.date instanceof Date ? a.date.getTime() : new Date(a.date).getTime();
+            const dateB = b.date instanceof Date ? b.date.getTime() : new Date(b.date).getTime();
+            return dateB - dateA;
+        });
+        
+        // Show last 50 reviews
+        const displayReviews = allReviews.slice(0, 50);
+        
+        console.log(`Total reviews found: ${allReviews.length}, displaying: ${displayReviews.length}`);
+        
+        if (displayReviews.length === 0) {
+            reviewsList.innerHTML = '<div class="empty-state">No reviews yet</div>';
+            console.log('No reviews to display');
+            return;
+        }
+        
+        reviewsList.innerHTML = displayReviews.map(review => {
+            const reviewDate = review.date instanceof Date ? review.date : new Date(review.date);
+            const daysAgo = Math.floor((Date.now() - reviewDate.getTime()) / (1000 * 60 * 60 * 24));
+            const dateText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
+            
+            const stars = '★'.repeat(Math.floor(review.rating)) + '☆'.repeat(5 - Math.floor(review.rating));
+            
+            const imageHtml = review.itemImage 
+                ? `<img src="${escapeHtml(review.itemImage)}" alt="${escapeHtml(review.itemName)}" onerror="this.style.display='none'">`
                 : '<div class="food-image-placeholder">🍽️</div>';
+            
+            const orderIdText = review.orderId 
+                ? `Order #${review.orderId}` 
+                : (review.type === 'order' ? `Order #${review.orderId || 'N/A'}` : review.itemName);
             
             return `
                 <div class="review-item">
                     <div class="review-header">
-                        <span class="order-id">Order #${order.trackingId || order.id}</span>
+                        <span class="order-id">${escapeHtml(orderIdText)}</span>
                         <span class="restaurant">Pablo's Peri Peri</span>
                     </div>
                     <div class="review-content">
@@ -10420,13 +10547,13 @@ function updateReviewsTab(customer, orders) {
                             ${imageHtml}
                         </div>
                         <div class="review-details">
-                            <h5>${escapeHtml(itemName)}</h5>
-                            <p>${escapeHtml(reviewText)}</p>
+                            <h5>${escapeHtml(review.itemName)}</h5>
+                            <p>${escapeHtml(review.text)}</p>
                             <div class="review-meta">
                                 <span class="date">${dateText}</span>
                                 <div class="rating">
                                     <span class="stars">${stars}</span>
-                                    <span class="rating-text">${rating.toFixed(1)}</span>
+                                    <span class="rating-text">${review.rating.toFixed(1)}</span>
                                 </div>
                             </div>
                         </div>
@@ -10434,8 +10561,572 @@ function updateReviewsTab(customer, orders) {
                 </div>
             `;
         }).join('');
+        
+    } catch (error) {
+        console.error('Error loading customer reviews:', error);
+        reviewsList.innerHTML = `
+            <div class="empty-state" style="color: #dc3545;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                <p>Error loading reviews: ${escapeHtml(error.message)}</p>
+            </div>
+        `;
     }
 }
+
+// ID Verification functions
+let currentDeclineCustomerId = null;
+let currentDeclineImageUrl = null;
+
+async function updateIdVerificationTab(customerId) {
+    const idVerificationContent = document.getElementById('idVerificationContent');
+    if (!idVerificationContent) return;
+    
+    const customer = customersState.find(c => c.id === customerId);
+    if (!customer) {
+        idVerificationContent.innerHTML = '<div class="empty-state">Customer not found</div>';
+        return;
+    }
+    
+    if (!isFirestoreReady()) {
+        await waitForFirebaseReady();
+    }
+    
+    try {
+        const fns = window.firestoreFunctions;
+        if (!fns || !window.db) {
+            throw new Error('Firestore not ready');
+        }
+        
+        // Fetch latest customer data from Firestore
+        const customerDocRef = fns.doc(window.db, 'customers', customerId);
+        const customerSnapshot = await fns.getDoc(customerDocRef);
+        
+        if (!customerSnapshot.exists()) {
+            idVerificationContent.innerHTML = '<div class="empty-state">Customer data not found</div>';
+            return;
+        }
+        
+        const customerData = customerSnapshot.data();
+        
+        // Check discountInfo object for ID image (proofUrl or proofPath) and selfie (selfieUrl)
+        let foundImageUrl = '';
+        let foundImagePath = '';
+        let foundSelfieUrl = '';
+        let foundSelfiePath = '';
+        let discountInfo = customerData.discountInfo || {};
+        
+        if (discountInfo && typeof discountInfo === 'object') {
+            // Check for proofUrl first (full URL) - ID picture
+            foundImageUrl = discountInfo.proofUrl || discountInfo.proofURL || '';
+            // Also get the path for deletion purposes
+            foundImagePath = discountInfo.proofPath || discountInfo.proofPATH || '';
+            
+            // Check for selfieUrl - selfie picture
+            foundSelfieUrl = discountInfo.selfieUrl || discountInfo.selfieURL || discountInfo.selfie || '';
+            foundSelfiePath = discountInfo.selfiePath || discountInfo.selfiePATH || '';
+        }
+        
+        // Fallback: Check other possible field names for ID image
+        if (!foundImageUrl) {
+            foundImageUrl = customerData.idImage || 
+                          customerData.idImageUrl || 
+                          customerData.verificationIdImage ||
+                          customerData.idPhoto ||
+                          customerData.idPhotoUrl ||
+                          customerData.photoId ||
+                          customerData.photoIdUrl ||
+                          customerData.verificationPhoto ||
+                          customerData.verificationPhotoUrl ||
+                          customerData.identityImage ||
+                          customerData.identityImageUrl ||
+                          customerData.documentImage ||
+                          customerData.documentImageUrl ||
+                          '';
+        }
+        
+        // Fallback: Check other possible field names for selfie
+        if (!foundSelfieUrl) {
+            foundSelfieUrl = customerData.selfie || 
+                           customerData.selfieImage || 
+                           customerData.selfieImageUrl ||
+                           customerData.selfiePhoto ||
+                           customerData.selfiePhotoUrl ||
+                           '';
+        }
+        
+        // Get verification status from discountInfo or fallback fields
+        let verificationStatus = 'pending';
+        if (discountInfo && typeof discountInfo === 'object') {
+            // Check discountInfo.IDverification (boolean)
+            if (discountInfo.IDverification === true) {
+                verificationStatus = 'verified';
+            } else if (discountInfo.IDverification === false) {
+                verificationStatus = 'pending';
+            }
+            // Also check for string values
+            if (discountInfo.IDverificationStatus) {
+                verificationStatus = discountInfo.IDverificationStatus;
+            }
+        }
+        
+        // Fallback to other verification status fields
+        if (verificationStatus === 'pending') {
+            verificationStatus = customerData.idVerificationStatus || 
+                               customerData.verificationStatus || 
+                               'pending';
+        }
+        
+        const verificationReason = discountInfo?.idVerificationReason || 
+                                 customerData.idVerificationReason || 
+                                 '';
+        const verifiedAt = discountInfo?.idVerifiedAt || 
+                         customerData.idVerifiedAt || 
+                         customerData.verificationDate || 
+                         null;
+        const verifiedBy = discountInfo?.idVerifiedBy || 
+                         customerData.idVerifiedBy || 
+                         customerData.verifiedBy || '';
+        
+        if (!foundImageUrl && !foundSelfieUrl) {
+            idVerificationContent.innerHTML = `
+                <div class="empty-state" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-id-card" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
+                    <p>No ID verification images uploaded</p>
+                    <p style="font-size: 12px; color: #999; margin-top: 10px;">This customer has not uploaded ID verification images yet.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Format verification date
+        let verifiedDateText = '';
+        if (verifiedAt) {
+            const date = verifiedAt.toDate ? verifiedAt.toDate() : new Date(verifiedAt);
+            verifiedDateText = date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // Status badge - handle both boolean and string values
+        let statusBadge = '';
+        let statusClass = '';
+        
+        // Check discountInfo.IDverification if verificationStatus is still pending
+        if (verificationStatus === 'pending' && discountInfo && typeof discountInfo === 'object') {
+            // If there's a decline reason, it's declined, not pending
+            if (discountInfo.idVerificationReason || verificationReason) {
+                verificationStatus = 'declined';
+            } else if (discountInfo.IDverification === true) {
+                verificationStatus = 'verified';
+            } else if (discountInfo.IDverification === false) {
+                verificationStatus = 'pending';
+            }
+        }
+        
+        if (verificationStatus === 'verified' || verificationStatus === true) {
+            statusBadge = '<span class="badge badge-success">✓ Verified</span>';
+            statusClass = 'verified';
+        } else if (verificationStatus === 'confirmed') {
+            statusBadge = '<span class="badge badge-success">✓ Confirmed</span>';
+            statusClass = 'confirmed';
+        } else if (verificationStatus === 'declined' || (verificationReason && verificationStatus !== 'verified')) {
+            statusBadge = '<span class="badge badge-danger">✗ Declined</span>';
+            statusClass = 'declined';
+        } else {
+            statusBadge = '<span class="badge badge-warning">⏳ Pending</span>';
+            statusClass = 'pending';
+        }
+        
+        idVerificationContent.innerHTML = `
+            <div class="id-verification-container" style="max-width: 1000px; margin: 0 auto; padding: 24px; width: 100%; box-sizing: border-box;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 24px; margin-bottom: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4 style="margin: 0 0 8px 0; color: #fff; font-weight: 600; font-size: 20px;">ID Verification</h4>
+                            ${verifiedDateText ? `
+                                <p style="margin: 0; color: rgba(255,255,255,0.9); font-size: 14px;">
+                                    ${verificationStatus === 'declined' ? 'Declined' : verificationStatus === 'verified' ? 'Verified' : 'Pending'} on ${verifiedDateText}
+                                    ${verifiedBy ? ` by ${escapeHtml(verifiedBy)}` : ''}
+                                </p>
+                            ` : '<p style="margin: 0; color: rgba(255,255,255,0.9); font-size: 14px;">Verification pending review</p>'}
+                        </div>
+                        <div style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px;">
+                            ${statusBadge}
+                        </div>
+                    </div>
+                </div>
+                
+                ${verificationStatus === 'declined' && verificationReason ? `
+                    <div class="alert alert-warning" style="margin-bottom: 24px; padding: 16px 20px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <div style="display: flex; align-items: start; gap: 12px;">
+                            <i class="fas fa-exclamation-triangle" style="color: #ffc107; font-size: 20px; margin-top: 2px;"></i>
+                            <div>
+                                <strong style="color: #856404; display: block; margin-bottom: 4px;">Decline Reason</strong>
+                                <p style="margin: 0; color: #856404; line-height: 1.5;">${escapeHtml(verificationReason)}</p>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div class="id-image-container" style="margin-bottom: 32px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+                        ${foundImageUrl ? `
+                            <div style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
+                                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-id-card" style="color: #fff; font-size: 18px;"></i>
+                                    </div>
+                                    <h6 style="margin: 0; color: #333; font-weight: 600; font-size: 16px;">ID Picture</h6>
+                                </div>
+                                <div style="border-radius: 8px; overflow: hidden; background: #f8f9fa; padding: 12px;">
+                                    <img src="${escapeHtml(foundImageUrl)}" 
+                                         alt="Customer ID" 
+                                         style="width: 100%; max-height: 500px; object-fit: contain; border-radius: 6px; display: block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
+                                         onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'400\\' height=\\'300\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'400\\' height=\\'300\\'/%3E%3Ctext fill=\\'%23999\\' font-family=\\'sans-serif\\' font-size=\\'18\\' x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\'%3EImage not available%3C/text%3E%3C/svg%3E';">
+                                </div>
+                            </div>
+                        ` : ''}
+                        ${foundSelfieUrl ? `
+                            <div style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
+                                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-user-circle" style="color: #fff; font-size: 18px;"></i>
+                                    </div>
+                                    <h6 style="margin: 0; color: #333; font-weight: 600; font-size: 16px;">Selfie</h6>
+                                </div>
+                                <div style="border-radius: 8px; overflow: hidden; background: #f8f9fa; padding: 12px;">
+                                    <img src="${escapeHtml(foundSelfieUrl)}" 
+                                         alt="Customer Selfie" 
+                                         style="width: 100%; max-height: 500px; object-fit: contain; border-radius: 6px; display: block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
+                                         onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'400\\' height=\\'300\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'400\\' height=\\'300\\'/%3E%3Ctext fill=\\'%23999\\' font-family=\\'sans-serif\\' font-size=\\'18\\' x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\'%3EImage not available%3C/text%3E%3C/svg%3E';">
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                ${verificationStatus !== 'verified' && verificationStatus !== 'confirmed' && verificationStatus !== 'declined' ? `
+                    <div class="id-verification-actions" style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; padding-top: 24px; border-top: 1px solid #e9ecef; position: relative; z-index: 10; pointer-events: auto;">
+                        <button class="btn btn-success" onclick="verifyId('${customerId}', '${escapeHtml(foundImageUrl)}')" style="min-width: 140px; padding: 12px 24px; font-size: 15px; font-weight: 600; border-radius: 8px; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); cursor: pointer; position: relative; z-index: 11; pointer-events: auto;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
+                            <i class="fas fa-check" style="margin-right: 8px;"></i> Verify ID
+                        </button>
+                        <button class="btn btn-danger" onclick="declineId('${customerId}', '${escapeHtml(foundImageUrl)}')" style="min-width: 140px; padding: 12px 24px; font-size: 15px; font-weight: 600; border-radius: 8px; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); cursor: pointer; position: relative; z-index: 11; pointer-events: auto;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
+                            <i class="fas fa-times" style="margin-right: 8px;"></i> Decline
+                        </button>
+                    </div>
+                ` : verificationStatus === 'declined' ? `
+                    <div class="id-verification-actions" style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; padding-top: 24px; border-top: 1px solid #e9ecef; position: relative; z-index: 10; pointer-events: auto;">
+                        <button class="btn btn-success" onclick="verifyId('${customerId}', '${escapeHtml(foundImageUrl)}')" style="min-width: 140px; padding: 12px 24px; font-size: 15px; font-weight: 600; border-radius: 8px; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); cursor: pointer; position: relative; z-index: 11; pointer-events: auto;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
+                            <i class="fas fa-check" style="margin-right: 8px;"></i> Verify ID
+                        </button>
+                    </div>
+                ` : `
+                    <div class="id-verification-actions" style="text-align: center; padding: 32px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display: inline-flex; align-items: center; gap: 12px; color: #155724;">
+                            <i class="fas fa-check-circle" style="font-size: 32px;"></i>
+                            <div style="text-align: left;">
+                                <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">ID Verification Complete</div>
+                                <div style="font-size: 14px; opacity: 0.8;">This ID has been ${verificationStatus === 'verified' ? 'verified' : verificationStatus}</div>
+                            </div>
+                        </div>
+                    </div>
+                `}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading ID verification:', error);
+        idVerificationContent.innerHTML = `
+            <div class="empty-state" style="color: #dc3545;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                <p>Error loading ID verification: ${escapeHtml(error.message)}</p>
+            </div>
+        `;
+    }
+}
+
+async function verifyId(customerId, imageUrl) {
+    if (!confirm('Are you sure you want to verify this ID?')) {
+        return;
+    }
+    
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        if (!fns || !window.db) {
+            throw new Error('Firestore not ready');
+        }
+        
+        // Get current user info for verifiedBy
+        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+        let verifiedBy = 'Admin';
+        if (session) {
+            try {
+                const staffSession = JSON.parse(session);
+                if (staffSession.firstName && staffSession.lastName) {
+                    verifiedBy = `${staffSession.firstName} ${staffSession.lastName}`;
+                } else if (staffSession.email) {
+                    verifiedBy = staffSession.email;
+                }
+            } catch (e) {
+                console.warn('Could not parse staff session:', e);
+            }
+        }
+        
+        const customerDocRef = fns.doc(window.db, 'customers', customerId);
+        
+        // Get current customer data to update discountInfo
+        const customerSnapshot = await fns.getDoc(customerDocRef);
+        const customerData = customerSnapshot.exists() ? customerSnapshot.data() : {};
+        const currentDiscountInfo = customerData.discountInfo || {};
+        
+        // Update discountInfo with verification status
+        await fns.updateDoc(customerDocRef, {
+            'discountInfo.IDverification': true,
+            'discountInfo.idVerifiedAt': fns.serverTimestamp(),
+            'discountInfo.idVerifiedBy': verifiedBy,
+            // Also update top-level fields for compatibility
+            idVerificationStatus: 'verified',
+            idVerifiedAt: fns.serverTimestamp(),
+            idVerifiedBy: verifiedBy
+        });
+        
+        showNotification('ID verified successfully', 'success');
+        
+        // Refresh the customer data and update the tab
+        await loadCustomers();
+        await updateIdVerificationTab(customerId);
+    } catch (error) {
+        console.error('Error verifying ID:', error);
+        showNotification('Failed to verify ID: ' + error.message, 'error');
+    }
+}
+
+async function confirmId(customerId, imageUrl) {
+    if (!confirm('Are you sure you want to confirm this ID?')) {
+        return;
+    }
+    
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        if (!fns || !window.db) {
+            throw new Error('Firestore not ready');
+        }
+        
+        // Get current user info for verifiedBy
+        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+        let verifiedBy = 'Admin';
+        if (session) {
+            try {
+                const staffSession = JSON.parse(session);
+                if (staffSession.firstName && staffSession.lastName) {
+                    verifiedBy = `${staffSession.firstName} ${staffSession.lastName}`;
+                } else if (staffSession.email) {
+                    verifiedBy = staffSession.email;
+                }
+            } catch (e) {
+                console.warn('Could not parse staff session:', e);
+            }
+        }
+        
+        const customerDocRef = fns.doc(window.db, 'customers', customerId);
+        
+        // Get current customer data to update discountInfo
+        const customerSnapshot = await fns.getDoc(customerDocRef);
+        const customerData = customerSnapshot.exists() ? customerSnapshot.data() : {};
+        const currentDiscountInfo = customerData.discountInfo || {};
+        
+        // Update discountInfo with confirmation status
+        await fns.updateDoc(customerDocRef, {
+            'discountInfo.IDverification': true,
+            'discountInfo.idVerifiedAt': fns.serverTimestamp(),
+            'discountInfo.idVerifiedBy': verifiedBy,
+            // Also update top-level fields for compatibility
+            idVerificationStatus: 'confirmed',
+            idVerifiedAt: fns.serverTimestamp(),
+            idVerifiedBy: verifiedBy
+        });
+        
+        showNotification('ID confirmed successfully', 'success');
+        
+        // Refresh the customer data and update the tab
+        await loadCustomers();
+        await updateIdVerificationTab(customerId);
+    } catch (error) {
+        console.error('Error confirming ID:', error);
+        showNotification('Failed to confirm ID: ' + error.message, 'error');
+    }
+}
+
+function declineId(customerId, imageUrl) {
+    currentDeclineCustomerId = customerId;
+    currentDeclineImageUrl = imageUrl;
+    
+    const modal = document.getElementById('idDeclineModal');
+    if (modal) {
+        modal.style.display = 'block';
+        document.getElementById('declineReasonSelect').value = '';
+        document.getElementById('declineReasonText').value = '';
+        document.getElementById('declineReasonText').style.display = 'none';
+        
+        // Show textarea if "Other" is selected
+        const reasonSelect = document.getElementById('declineReasonSelect');
+        const reasonText = document.getElementById('declineReasonText');
+        
+        // Remove existing listeners and add new one
+        const newSelect = reasonSelect.cloneNode(true);
+        reasonSelect.parentNode.replaceChild(newSelect, reasonSelect);
+        document.getElementById('declineReasonSelect').addEventListener('change', function() {
+            if (this.value === 'other') {
+                document.getElementById('declineReasonText').style.display = 'block';
+            } else {
+                document.getElementById('declineReasonText').style.display = 'none';
+            }
+        });
+        
+        // Close modal when clicking outside
+        modal.onclick = function(event) {
+            if (event.target === modal) {
+                closeIdDeclineModal();
+            }
+        };
+    }
+}
+
+function closeIdDeclineModal() {
+    const modal = document.getElementById('idDeclineModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.onclick = null; // Remove click handler
+        currentDeclineCustomerId = null;
+        currentDeclineImageUrl = null;
+    }
+}
+
+async function confirmIdDecline() {
+    const reasonSelect = document.getElementById('declineReasonSelect');
+    const reasonText = document.getElementById('declineReasonText');
+    
+    if (!reasonSelect || !reasonSelect.value) {
+        showNotification('Please select a reason for declining', 'error');
+        return;
+    }
+    
+    let declineReason = reasonSelect.options[reasonSelect.selectedIndex].text;
+    if (reasonSelect.value === 'other' && reasonText && reasonText.value.trim()) {
+        declineReason = reasonText.value.trim();
+    }
+    
+    if (!currentDeclineCustomerId) {
+        showNotification('Error: Customer ID not found', 'error');
+        return;
+    }
+    
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        const storageFns = window.storageFunctions;
+        if (!fns || !window.db || !storageFns || !window.storage) {
+            throw new Error('Firebase not ready');
+        }
+        
+        // Get current user info for verifiedBy
+        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+        let verifiedBy = 'Admin';
+        if (session) {
+            try {
+                const staffSession = JSON.parse(session);
+                if (staffSession.firstName && staffSession.lastName) {
+                    verifiedBy = `${staffSession.firstName} ${staffSession.lastName}`;
+                } else if (staffSession.email) {
+                    verifiedBy = staffSession.email;
+                }
+            } catch (e) {
+                console.warn('Could not parse staff session:', e);
+            }
+        }
+        
+        // Get current customer data to access discountInfo
+        const customerDocRef = fns.doc(window.db, 'customers', currentDeclineCustomerId);
+        const customerSnapshot = await fns.getDoc(customerDocRef);
+        const customerData = customerSnapshot.exists() ? customerSnapshot.data() : {};
+        const discountInfo = customerData.discountInfo || {};
+        
+        // Delete the image from Firebase Storage
+        // Try to get path from discountInfo first, then from URL
+        let imagePathToDelete = discountInfo.proofPath || discountInfo.proofPATH || '';
+        
+        if (!imagePathToDelete && currentDeclineImageUrl) {
+            // Extract the path from the URL
+            // Firebase Storage URLs typically look like: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{path}?alt=media
+            const urlMatch = currentDeclineImageUrl.match(/\/o\/([^?]+)/);
+            if (urlMatch) {
+                imagePathToDelete = decodeURIComponent(urlMatch[1]);
+            }
+        }
+        
+        if (imagePathToDelete) {
+            try {
+                const imageRef = storageFns.ref(window.storage, imagePathToDelete);
+                await storageFns.deleteObject(imageRef);
+                console.log('ID image deleted from Storage:', imagePathToDelete);
+            } catch (storageError) {
+                console.warn('Could not delete image from Storage (may not exist):', storageError);
+                // Continue with the decline even if image deletion fails
+            }
+        }
+        
+        // Update customer document - update discountInfo and remove image references
+        const updateData = {
+            'discountInfo.IDverification': false,
+            'discountInfo.idVerificationReason': declineReason,
+            'discountInfo.idVerifiedAt': fns.serverTimestamp(),
+            'discountInfo.idVerifiedBy': verifiedBy,
+            'discountInfo.proofUrl': fns.deleteField(),
+            'discountInfo.proofPath': fns.deleteField(),
+            // Also update top-level fields for compatibility
+            idVerificationStatus: 'declined',
+            idVerificationReason: declineReason,
+            idVerifiedAt: fns.serverTimestamp(),
+            idVerifiedBy: verifiedBy
+        };
+        
+        await fns.updateDoc(customerDocRef, updateData);
+        
+        showNotification('ID declined and image deleted', 'success');
+        closeIdDeclineModal();
+        
+        // Refresh the customer data and update the tab
+        await loadCustomers();
+        await updateIdVerificationTab(currentDeclineCustomerId);
+        
+        currentDeclineCustomerId = null;
+        currentDeclineImageUrl = null;
+    } catch (error) {
+        console.error('Error declining ID:', error);
+        showNotification('Failed to decline ID: ' + error.message, 'error');
+    }
+}
+
+// Make functions globally available
+window.verifyId = verifyId;
+window.confirmId = confirmId;
+window.declineId = declineId;
+window.closeIdDeclineModal = closeIdDeclineModal;
+window.confirmIdDecline = confirmIdDecline;
 
 function setupCustomerSearch() {
     const searchInputs = document.querySelectorAll('.customer-profile-panel .search-box input, .search-filter-bar .search-box input');
@@ -10459,13 +11150,24 @@ function switchTab(tabName) {
     // Show/hide tab content
     const reviewsTab = document.getElementById('reviewsTab');
     const rewardsTab = document.getElementById('rewardsTab');
+    const idVerificationTab = document.getElementById('idVerificationTab');
     
     if (tabName === 'reviews') {
         if (reviewsTab) reviewsTab.style.display = 'block';
         if (rewardsTab) rewardsTab.style.display = 'none';
+        if (idVerificationTab) idVerificationTab.style.display = 'none';
     } else if (tabName === 'rewards') {
         if (reviewsTab) reviewsTab.style.display = 'none';
         if (rewardsTab) rewardsTab.style.display = 'block';
+        if (idVerificationTab) idVerificationTab.style.display = 'none';
+    } else if (tabName === 'idVerification') {
+        if (reviewsTab) reviewsTab.style.display = 'none';
+        if (rewardsTab) rewardsTab.style.display = 'none';
+        if (idVerificationTab) idVerificationTab.style.display = 'block';
+        // Update ID verification tab when switching to it
+        if (selectedCustomerId) {
+            updateIdVerificationTab(selectedCustomerId);
+        }
     }
 }
 

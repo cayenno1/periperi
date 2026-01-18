@@ -208,7 +208,7 @@
                     </div>
                     <div class="search-box">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="customerSearchInput" placeholder="Search customers...">
+                        <input type="text" id="customerSearchInput" placeholder="Search customers by name, email, or phone...">
                     </div>
                     <div class="customer-list" id="customerList">
                         <div class="empty-state">Loading customers...</div>
@@ -218,8 +218,18 @@
                 <!-- Right Panel - Customer Details -->
                 <div class="customer-details-panel">
                     <div class="tab-navigation">
-                        <button class="tab-btn" onclick="switchTab('reviews')">Review & Rating</button>
-                        <button class="tab-btn active" onclick="switchTab('rewards')">Reward Point and Most Ordered</button>
+                        <button class="tab-btn" onclick="switchTab('reviews')">
+                            <i class="fas fa-star"></i>
+                            <span>Review & Rating</span>
+                        </button>
+                        <button class="tab-btn active" onclick="switchTab('rewards')">
+                            <i class="fas fa-gift"></i>
+                            <span>Rewards & Orders</span>
+                        </button>
+                        <button class="tab-btn" onclick="switchTab('idVerification')">
+                            <i class="fas fa-id-card"></i>
+                            <span>ID Verification</span>
+                        </button>
                     </div>
 
                     <div class="tab-content" id="rewardsTab">
@@ -319,6 +329,18 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="tab-content" id="idVerificationTab" style="display: none;">
+                        <div class="section">
+                            <div class="section-header">
+                                <div class="title-bar"></div>
+                                <h4>ID Verification</h4>
+                            </div>
+                            <div id="idVerificationContent">
+                                <div class="empty-state">Select a customer to view ID verification</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -358,6 +380,36 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- ID Decline Modal -->
+    <div id="idDeclineModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Decline ID Verification</h3>
+                <button class="modal-close" onclick="closeIdDeclineModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Please provide a reason for declining this ID verification:</p>
+                <div style="margin: 20px 0;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 500;">Reason:</label>
+                    <select id="declineReasonSelect" class="form-control" style="width: 100%; margin-bottom: 15px;">
+                        <option value="">Select a reason...</option>
+                        <option value="blurry">Blurry Photo</option>
+                        <option value="invalid">Invalid ID</option>
+                        <option value="expired">Expired ID</option>
+                        <option value="unclear">Unclear/Illegible</option>
+                        <option value="wrong_document">Wrong Document Type</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <textarea id="declineReasonText" class="form-control" placeholder="Additional notes (optional)" rows="3" style="width: 100%; display: none;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeIdDeclineModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmIdDecline()">Decline ID</button>
+            </div>
+        </div>
     </div>
 
     <!-- Firebase Initialization -->

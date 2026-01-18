@@ -485,9 +485,21 @@
 
 
 
-    // Load reviews for item
+    // Load reviews for item - synced with Firebase menu subcollection
     async function loadReviewsForItem(itemId) {
+        if (!itemId) {
+            console.warn('No itemId provided for loadReviewsForItem');
+            return;
+        }
+
+        // Ensure Firebase is ready
+        if (!window.firestore?.fetchReviewsForItem || !window.firestore?.fetchReviewSummaryForItem) {
+            console.warn('Firestore not ready for reviews');
+            return;
+        }
+
         try {
+            // Fetch fresh reviews from Firebase menu subcollection: menu/{itemId}/reviews/{reviewId}
             const reviews = await window.firestore.fetchReviewsForItem(itemId);
             const summary = await window.firestore.fetchReviewSummaryForItem(itemId);
 
@@ -557,10 +569,12 @@
             const auth = window.firebaseAuth || null;
             const currentUserId = auth && auth.currentUser ? auth.currentUser.uid : null;
 
+            // Separate reviews by current user's account (strict matching)
             const ownReviews = [];
             const otherReviews = [];
             reviews.forEach((rev) => {
-                if (currentUserId && rev.userId === currentUserId) {
+                // Strict user ID matching to ensure sync with account
+                if (currentUserId && rev.userId && rev.userId === currentUserId) {
                     ownReviews.push(rev);
                 } else {
                     otherReviews.push(rev);
@@ -570,23 +584,30 @@
             const buildCards = (collection, yourReview = false) =>
                 collection.map((rev) => {
                     const stars = '★★★★★';
-                    const isOwn = yourReview || (currentUserId && rev.userId === currentUserId);
+                    // Strict user ID matching for "Your review" badge
+                    const isOwn = yourReview || (currentUserId && rev.userId && rev.userId === currentUserId);
+                    
+                    // Escape HTML for security
+                    const safeName = (rev.name || 'Customer').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const safeText = (rev.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const safeDate = rev.createdAtLabel ? rev.createdAtLabel.replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+                    
                     return `
                         <div class="review-item-card">
                             <div class="review-item-header">
                                 <div class="review-item-main">
                                     <div class="review-item-rating">
-                                        <span class="review-score">${rev.rating.toFixed(1)}</span>
+                                        <span class="review-score">${(rev.rating || 0).toFixed(1)}</span>
                                         <span class="review-stars">${stars}</span>
                                     </div>
                                     <div class="review-item-meta">
-                                        <span class="review-author">${rev.name}</span>
-                                        ${rev.createdAtLabel ? `<span class="review-date">· ${rev.createdAtLabel}</span>` : ''}
+                                        <span class="review-author">${safeName}</span>
+                                        ${safeDate ? `<span class="review-date">· ${safeDate}</span>` : ''}
                                         ${isOwn ? '<span class="review-pill">Your review</span>' : ''}
                                     </div>
                                 </div>
                             </div>
-                            <p class="review-item-text">${rev.text}</p>
+                            <p class="review-item-text">${safeText}</p>
                         </div>
                     `;
                 }).join('');

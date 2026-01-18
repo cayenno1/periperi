@@ -10191,10 +10191,17 @@ body.food-item-page {
   border-radius: 999px;
 }
 
-.account-review-menu-item {
+.account-review-menu-item-wrapper {
   flex: 0 0 auto;
   min-width: 240px;
   max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-review-menu-item {
+  flex: 1;
   border: 1px solid #f0f2f5;
   border-radius: 14px;
   background: linear-gradient(145deg, #fff, #f8fafc);
@@ -10205,6 +10212,10 @@ body.food-item-page {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.account-review-menu-item:hover {
+  border-color: #e53935;
 }
 
 .account-review-menu-item-header {
@@ -10242,6 +10253,89 @@ body.food-item-page {
   color: #4b5563;
   font-size: 0.85rem;
   line-height: 1.35;
+}
+
+.account-review-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.account-review-actions .btn {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+}
+
+.account-review-actions .write-review-toggle {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.account-review-actions .write-review-toggle:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.account-review-display {
+  width: 100%;
+}
+
+.account-review-edit-form {
+  width: 100%;
+  padding: 12px 0;
+}
+
+.account-review-stars {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.account-review-star {
+  cursor: pointer;
+  font-size: 1.5em;
+  transition: transform 0.2s;
+}
+
+.account-review-star:hover {
+  transform: scale(1.1);
+}
+
+.account-review-star i.fas {
+  color: #ffc107;
+}
+
+.account-review-star i.far {
+  color: #ddd;
+}
+
+.account-review-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.review-rating-stars {
+  cursor: pointer;
+}
+
+.review-rating-stars .review-star {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.review-rating-stars .review-star:hover {
+  transform: scale(1.1);
+}
+
+.review-rating-stars .review-star i {
+  transition: color 0.15s ease;
 }
 
 .account-review-empty {

@@ -450,9 +450,9 @@
         const countEl = document.getElementById('accountReviewCount');
         const emptyState = document.getElementById('accountReviewEmpty');
         if (menu) menu.innerHTML = '';
-        if (countEl) countEl.textContent = '';
-        if (section) section.hidden = true;
-        if (emptyState) emptyState.hidden = true;
+        if (countEl) countEl.textContent = '0 reviews';
+        if (section) section.style.display = 'none';
+        if (emptyState) emptyState.style.display = 'block';
     }
 
     function renderAccountReviews(reviews = []) {
@@ -460,22 +460,37 @@
         const menu = document.getElementById('accountReviewMenu');
         const countEl = document.getElementById('accountReviewCount');
         const emptyState = document.getElementById('accountReviewEmpty');
+        
+        console.log('[Account Reviews] renderAccountReviews called with:', reviews.length, 'reviews');
+        console.log('[Account Reviews] Section element:', section);
+        console.log('[Account Reviews] Menu element:', menu);
+        
         if (!section || !menu || !countEl || !emptyState) {
+            console.warn('[Account Reviews] Missing required elements:', {
+                section: !!section,
+                menu: !!menu,
+                countEl: !!countEl,
+                emptyState: !!emptyState
+            });
             return;
         }
 
         const total = Array.isArray(reviews) ? reviews.length : 0;
         countEl.textContent = `${total} ${total === 1 ? 'review' : 'reviews'}`;
 
+        console.log('[Account Reviews] Total reviews:', total);
+
         if (!total) {
-            section.hidden = true;
-            emptyState.hidden = false;
+            console.log('[Account Reviews] No reviews, showing empty state');
+            section.style.display = 'none';
+            emptyState.style.display = 'block';
             menu.innerHTML = '';
             return;
         }
 
-        emptyState.hidden = true;
-        section.hidden = false;
+        console.log('[Account Reviews] Has reviews, showing section');
+        emptyState.style.display = 'none';
+        section.style.display = 'block';
 
         const limited = reviews
             .slice()
@@ -491,19 +506,64 @@
                 const safeName = escapeHtml(review.itemName || 'Menu item');
                 const dateLabel = review.createdAtLabel || '';
                 const itemIdAttr = review.itemId ? `data-item-id="${escapeHtml(review.itemId)}"` : '';
+                const reviewId = escapeHtml(review.id || '');
+                const fullText = escapeHtml(review.text || '');
 
                 return `
-                    <button class="account-review-menu-item" type="button" ${itemIdAttr}>
-                        <div class="account-review-menu-item-header">
-                            <span class="review-pill-rating">
-                                ${rating}
-                                <i class="fas fa-star"></i>
-                            </span>
-                            ${dateLabel ? `<span class="review-pill-date">${dateLabel}</span>` : ''}
+                    <div class="account-review-menu-item-wrapper" data-review-id="${reviewId}" data-item-id="${escapeHtml(review.itemId || '')}" data-rating="${review.rating || 0}" data-text="${escapeHtml(fullText)}">
+                        <div class="account-review-menu-item" ${itemIdAttr} data-review-id="${reviewId}">
+                            <div class="account-review-display" id="review-display-${reviewId}">
+                                <div class="account-review-menu-item-header">
+                                    <span class="review-pill-rating">
+                                        ${rating}
+                                        <i class="fas fa-star"></i>
+                                    </span>
+                                    ${dateLabel ? `<span class="review-pill-date">${dateLabel}</span>` : ''}
+                                </div>
+                                <div class="account-review-item-name">${safeName}</div>
+                                <p class="account-review-item-text">${safeText || 'No written feedback'}</p>
+                                ${review.itemId ? `
+                                <div class="account-review-actions mt-2">
+                                    <button class="write-review-toggle btn btn-sm" type="button" onclick="window.account.editReviewInline('${reviewId}', '${escapeHtml(review.itemId)}')" title="Edit review">
+                                        <i class="fas fa-pen"></i><span>Edit</span>
+                                    </button>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <div class="account-review-edit-form" id="review-edit-${reviewId}" style="display: none;">
+                                <div class="account-review-item-name mb-2">${safeName}</div>
+                                <div class="account-review-stars mb-3" data-review-id="${reviewId}">
+                                    ${[1, 2, 3, 4, 5].map(i => `
+                                        <span class="account-review-star" data-rating="${i}">
+                                            <i class="${i <= review.rating ? 'fas' : 'far'} fa-star" style="color: ${i <= review.rating ? '#ffc107' : '#ddd'}"></i>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                <textarea 
+                                    class="restaurant-form-input mb-3" 
+                                    id="review-text-${reviewId}"
+                                    rows="4" 
+                                    placeholder="Share your experience..."
+                                >${fullText}</textarea>
+                                <div class="account-review-edit-actions d-flex gap-2">
+                                    <button 
+                                        class="restaurant-auth-button btn-sm" 
+                                        type="button" 
+                                        onclick="window.account.updateReviewInline('${reviewId}', '${escapeHtml(review.itemId)}')"
+                                    >
+                                        Update Review
+                                    </button>
+                                    <button 
+                                        class="write-review-toggle btn-sm" 
+                                        type="button" 
+                                        onclick="window.account.cancelEditReview('${reviewId}')"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="account-review-item-name">${safeName}</div>
-                        <p class="account-review-item-text">${safeText || 'No written feedback'}</p>
-                    </button>
+                    </div>
                 `;
             })
             .join('');
@@ -513,6 +573,73 @@
         if (stopCustomerReviewsListener) {
             stopCustomerReviewsListener();
             stopCustomerReviewsListener = null;
+        }
+    }
+
+    // Fetch all user reviews from menu items (fallback method)
+    async function fetchUserReviewsFromMenuItems(user) {
+        if (!user || !user.uid) return [];
+
+        const db = window.firebaseDb;
+        if (!db || !window.collection || !window.getDocs || !window.query || !window.where) {
+            return [];
+        }
+
+        try {
+            const allReviews = [];
+            const menuCol = window.collection(db, 'menu');
+            const menuSnap = await window.getDocs(menuCol);
+
+            for (const menuDoc of menuSnap.docs) {
+                const itemId = menuDoc.id;
+                const itemData = menuDoc.data() || {};
+                const itemName = itemData.displayName || itemData.name || itemData.title || 'Menu item';
+                
+                const reviewsCol = window.collection(menuDoc.ref, 'reviews');
+                const userReviewsQuery = window.query(
+                    reviewsCol,
+                    window.where('userId', '==', user.uid)
+                );
+                
+                const userReviewsSnap = await window.getDocs(userReviewsQuery);
+                
+                userReviewsSnap.forEach((reviewDoc) => {
+                    const data = reviewDoc.data() || {};
+                    const createdLabel = formatReviewDate(data.createdAt || data.updatedAt || null);
+                    let sortValue = null;
+                    if (data.createdAt?.toMillis) {
+                        sortValue = data.createdAt.toMillis();
+                    } else if (data.createdAt) {
+                        const ts = new Date(data.createdAt).getTime();
+                        sortValue = Number.isFinite(ts) ? ts : null;
+                    }
+                    if (!sortValue && data.updatedAt?.toMillis) {
+                        sortValue = data.updatedAt.toMillis();
+                    }
+                    if (!sortValue) {
+                        sortValue = Date.now();
+                    }
+
+                    allReviews.push({
+                        id: reviewDoc.id,
+                        itemId: itemId,
+                        itemName: data.itemName || itemName,
+                        rating: typeof data.rating === 'number' ? data.rating : Number(data.rating) || 0,
+                        text: data.text || '',
+                        createdAtLabel: createdLabel,
+                        sortDate: sortValue
+                    });
+                });
+            }
+
+            // Sort by date (newest first)
+            allReviews.sort((a, b) => (b.sortDate || 0) - (a.sortDate || 0));
+            
+            console.log(`[Account Reviews] Fetched ${allReviews.length} reviews from menu items for user ${user.uid}`);
+            return allReviews;
+        } catch (error) {
+            console.error('Error fetching reviews from menu items:', error);
+            return [];
         }
     }
 
@@ -535,13 +662,22 @@
             const reviewsCol = window.collection(customerRef, 'reviews');
             let queryRef = reviewsCol;
 
-            if (window.orderBy && window.query) {
-                queryRef = window.query(reviewsCol, window.orderBy('createdAt', 'desc'));
+            // Try to set up ordered query, but fallback to basic collection if it fails
+            try {
+                if (window.orderBy && window.query) {
+                    queryRef = window.query(reviewsCol, window.orderBy('createdAt', 'desc'));
+                }
+            } catch (orderByError) {
+                console.warn('Could not set up ordered query, using basic collection:', orderByError);
+                queryRef = reviewsCol;
             }
 
-            const handleSnapshot = (snapshot) => {
+            const handleSnapshot = async (snapshot) => {
                 const reviews = [];
+                let hasData = false;
+                
                 snapshot.forEach((docSnap) => {
+                    hasData = true;
                     const data = docSnap.data() || {};
                     const createdLabel = formatReviewDate(data.createdAt || data.updatedAt || null);
                     let sortValue = null;
@@ -554,10 +690,19 @@
                     if (!sortValue && data.updatedAt?.toMillis) {
                         sortValue = data.updatedAt.toMillis();
                     }
+                    if (!sortValue) {
+                        sortValue = Date.now();
+                    }
+
+                    // Ensure itemId is set - if missing, try to find it from menu items
+                    let itemId = data.itemId || null;
+                    if (!itemId) {
+                        console.warn(`[Account Reviews] Review ${docSnap.id} missing itemId in customer subcollection`);
+                    }
 
                     reviews.push({
                         id: docSnap.id,
-                        itemId: data.itemId || null,
+                        itemId: itemId,
                         itemName: data.itemName || data.displayName || 'Menu item',
                         rating: typeof data.rating === 'number' ? data.rating : Number(data.rating) || 0,
                         text: data.text || '',
@@ -566,6 +711,22 @@
                     });
                 });
 
+                // Sort reviews by date (newest first) if not already sorted
+                reviews.sort((a, b) => (b.sortDate || 0) - (a.sortDate || 0));
+
+                console.log(`[Account Reviews] Loaded ${reviews.length} reviews from customers/${user.uid}/reviews`);
+
+                // If no reviews in customer subcollection, fetch from menu items
+                if (reviews.length === 0) {
+                    console.log('[Account Reviews] No reviews in customer subcollection, fetching from menu items...');
+                    const menuReviews = await fetchUserReviewsFromMenuItems(user);
+                    if (menuReviews.length > 0) {
+                        console.log(`[Account Reviews] Found ${menuReviews.length} reviews in menu items`);
+                        renderAccountReviews(menuReviews);
+                        return;
+                    }
+                }
+
                 renderAccountReviews(reviews);
             };
 
@@ -573,22 +734,62 @@
                 stopCustomerReviewsListener = window.onSnapshot(
                     queryRef,
                     handleSnapshot,
-                    (error) => {
+                    async (error) => {
                         console.error('Error listening to customer reviews:', error);
-                        renderAccountReviews([]);
+                        console.error('Error details:', {
+                            code: error.code,
+                            message: error.message,
+                            stack: error.stack
+                        });
+                        // Try to load once without listener as fallback
+                        if (window.getDocs) {
+                            window.getDocs(reviewsCol)
+                                .then(handleSnapshot)
+                                .catch(async (e) => {
+                                    console.error('Fallback load also failed:', e);
+                                    // Last resort: fetch from menu items
+                                    const menuReviews = await fetchUserReviewsFromMenuItems(user);
+                                    renderAccountReviews(menuReviews);
+                                });
+                        } else {
+                            // Last resort: fetch from menu items
+                            const menuReviews = await fetchUserReviewsFromMenuItems(user);
+                            renderAccountReviews(menuReviews);
+                        }
                     }
                 );
             } else if (window.getDocs) {
                 window.getDocs(queryRef)
                     .then(handleSnapshot)
-                    .catch((error) => {
+                    .catch(async (error) => {
                         console.error('Error loading customer reviews:', error);
-                        renderAccountReviews([]);
+                        // Try basic collection as fallback
+                        window.getDocs(reviewsCol)
+                            .then(handleSnapshot)
+                            .catch(async (e) => {
+                                console.error('Fallback load failed:', e);
+                                // Last resort: fetch from menu items
+                                const menuReviews = await fetchUserReviewsFromMenuItems(user);
+                                renderAccountReviews(menuReviews);
+                            });
                     });
+            } else {
+                console.warn('No Firebase query methods available');
+                // Last resort: fetch from menu items
+                fetchUserReviewsFromMenuItems(user).then(reviews => {
+                    renderAccountReviews(reviews);
+                });
             }
         } catch (error) {
             console.error('Failed to start customer reviews listener:', error);
-            resetAccountReviewsUI();
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack
+            });
+            // Last resort: fetch from menu items
+            fetchUserReviewsFromMenuItems(user).then(reviews => {
+                renderAccountReviews(reviews);
+            });
         }
     }
 
@@ -917,7 +1118,14 @@
 
         try {
             const userDocRef = window.doc(window.firebaseDb, 'customers', user.uid);
+            
+            // Start listener immediately
             startCustomerReviewsListener(user);
+            
+            // Also try to ensure reviews are in customer subcollection (migrate if needed, but don't block)
+            ensureReviewsInCustomerSubcollection(user).catch(err => {
+                console.warn('[Account Reviews] Migration check failed:', err);
+            });
 
             stopUserDataListener = window.onSnapshot(
                 userDocRef,
@@ -1170,6 +1378,8 @@
     let discountUploadForm = null;
     let discountTypeSelect = null;
     let discountProofInput = null;
+    let discountSelfieInput = null;
+    let selfieUploadGroup = null;
     let uploadDiscountBtn = null;
     let uploadDiscountBtnText = null;
     let removeDiscountBtn = null;
@@ -1284,20 +1494,33 @@
         }
     }
 
-    function updateDiscountPreview(file) {
-        if (!file) {
-            const previewEl = document.getElementById('discountPreview');
+    function updateDiscountPreview(idFile, selfieFile) {
+        const previewEl = document.getElementById('discountPreview');
+        const previewName = previewEl?.querySelector('.discount-preview-name');
+        const previewSize = previewEl?.querySelector('.discount-preview-size');
+        const selfiePreviewRow = document.getElementById('selfiePreviewRow');
+        const selfiePreviewName = previewEl?.querySelector('.discount-preview-selfie-name');
+        const selfiePreviewSize = previewEl?.querySelector('.discount-preview-selfie-size');
+
+        if (!idFile && !selfieFile) {
             if (previewEl) previewEl.style.display = 'none';
             return;
         }
 
-        const previewEl = document.getElementById('discountPreview');
-        const previewName = previewEl?.querySelector('.discount-preview-name');
-        const previewSize = previewEl?.querySelector('.discount-preview-size');
-
         if (previewEl) previewEl.style.display = 'block';
-        if (previewName) previewName.textContent = file.name;
-        if (previewSize) previewSize.textContent = formatFileSize(file.size);
+        
+        if (idFile) {
+            if (previewName) previewName.textContent = idFile.name;
+            if (previewSize) previewSize.textContent = formatFileSize(idFile.size);
+        }
+
+        if (selfieFile) {
+            if (selfiePreviewRow) selfiePreviewRow.style.display = 'flex';
+            if (selfiePreviewName) selfiePreviewName.textContent = selfieFile.name;
+            if (selfiePreviewSize) selfiePreviewSize.textContent = formatFileSize(selfieFile.size);
+        } else {
+            if (selfiePreviewRow) selfiePreviewRow.style.display = 'none';
+        }
     }
 
     function renderDiscountStatus(userData) {
@@ -1305,6 +1528,7 @@
         const discountCurrentProofEl = document.getElementById('discountCurrentProof');
         const removeDiscountBtnEl = document.getElementById('removeDiscountBtn');
         const viewCurrentProofEl = document.getElementById('viewCurrentProof');
+        const viewCurrentSelfieEl = document.getElementById('viewCurrentSelfie');
         const currentProofLabel = discountCurrentProofEl?.querySelector('.discount-current-proof-label');
         const currentProofDesc = discountCurrentProofEl?.querySelector('.discount-current-proof-desc');
 
@@ -1332,6 +1556,16 @@
             }
             if (viewCurrentProofEl && discountInfo.proofUrl) {
                 viewCurrentProofEl.href = discountInfo.proofUrl;
+            }
+            
+            // Show selfie link if it exists
+            if (viewCurrentSelfieEl) {
+                if (discountInfo.selfieUrl) {
+                    viewCurrentSelfieEl.href = discountInfo.selfieUrl;
+                    viewCurrentSelfieEl.style.display = 'inline-flex';
+                } else {
+                    viewCurrentSelfieEl.style.display = 'none';
+                }
             }
 
             // Update status display based on verification status
@@ -1416,7 +1650,8 @@
         if (!discountTypeSelect || !discountProofInput) return;
 
         const discountType = discountTypeSelect.value.trim();
-        const file = discountProofInput.files?.[0];
+        const idFile = discountProofInput.files?.[0];
+        const selfieFile = discountSelfieInput?.files?.[0];
 
         // Validation
         let hasError = false;
@@ -1424,20 +1659,34 @@
             showDiscountError('discountType', 'Please select a discount type');
             hasError = true;
         }
-        if (!file) {
-            showDiscountError('discountProof', 'Please select a file to upload');
+        if (!idFile) {
+            showDiscountError('discountProof', 'Please select an ID picture to upload');
             hasError = true;
         } else {
             // Check file size (5MB max)
             const maxSize = 5 * 1024 * 1024; // 5MB
-            if (file.size > maxSize) {
-                showDiscountError('discountProof', 'File size must be less than 5MB');
+            if (idFile.size > maxSize) {
+                showDiscountError('discountProof', 'ID picture size must be less than 5MB');
                 hasError = true;
             }
             // Check file type
             const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-            if (!validTypes.includes(file.type)) {
-                showDiscountError('discountProof', 'Please upload a JPG or PNG file');
+            if (!validTypes.includes(idFile.type)) {
+                showDiscountError('discountProof', 'Please upload a JPG or PNG file for ID picture');
+                hasError = true;
+            }
+        }
+
+        // Validate selfie if PWD type
+        if (discountType === 'pwd' && selfieFile) {
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (selfieFile.size > maxSize) {
+                showDiscountError('discountSelfie', 'Selfie size must be less than 5MB');
+                hasError = true;
+            }
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            if (!validTypes.includes(selfieFile.type)) {
+                showDiscountError('discountSelfie', 'Please upload a JPG or PNG file for selfie');
                 hasError = true;
             }
         }
@@ -1459,25 +1708,48 @@
                 throw new Error('Firebase Storage not available');
             }
 
-            const fileExtension = file.name.split('.').pop();
-            const fileName = `discount-proofs/${user.uid}/${Date.now()}.${fileExtension}`;
-            const storageRef = window.storageRef(storage, fileName);
+            const timestamp = Date.now();
+            
+            // Upload ID picture
+            const idFileExtension = idFile.name.split('.').pop();
+            const idFileName = `discount-proofs/${user.uid}/id-${timestamp}.${idFileExtension}`;
+            const idStorageRef = window.storageRef(storage, idFileName);
 
-            await window.uploadBytes(storageRef, file);
-            const downloadURL = await window.getDownloadURL(storageRef);
+            await window.uploadBytes(idStorageRef, idFile);
+            const idDownloadURL = await window.getDownloadURL(idStorageRef);
+
+            // Upload selfie if provided
+            let selfieDownloadURL = null;
+            let selfiePath = null;
+            if (selfieFile) {
+                const selfieFileExtension = selfieFile.name.split('.').pop();
+                const selfieFileName = `discount-proofs/${user.uid}/selfie-${timestamp}.${selfieFileExtension}`;
+                const selfieStorageRef = window.storageRef(storage, selfieFileName);
+
+                await window.uploadBytes(selfieStorageRef, selfieFile);
+                selfieDownloadURL = await window.getDownloadURL(selfieStorageRef);
+                selfiePath = selfieFileName;
+            }
 
             // Save discount info to user document
             const userDocRef = window.doc(window.firebaseDb, 'customers', user.uid);
+            const discountInfoData = {
+                type: discountType,
+                proofUrl: idDownloadURL,
+                proofPath: idFileName,
+                uploadedAt: new Date().toISOString(),
+                IDverification: false  // Set to false initially, admin will verify
+            };
+
+            if (selfieDownloadURL) {
+                discountInfoData.selfieUrl = selfieDownloadURL;
+                discountInfoData.selfiePath = selfiePath;
+            }
+
             await window.setDoc(
                 userDocRef,
                 {
-                    discountInfo: {
-                        type: discountType,
-                        proofUrl: downloadURL,
-                        proofPath: fileName,
-                        uploadedAt: new Date().toISOString(),
-                        IDverification: false  // Set to false initially, admin will verify
-                    },
+                    discountInfo: discountInfoData,
                     updatedAt: new Date()
                 },
                 { merge: true }
@@ -1485,9 +1757,11 @@
 
             // Reset form
             if (discountUploadForm) discountUploadForm.reset();
-            updateDiscountPreview(null);
+            updateDiscountPreview(null, null);
+            if (selfieUploadGroup) selfieUploadGroup.style.display = 'none';
             clearDiscountError('discountType');
             clearDiscountError('discountProof');
+            clearDiscountError('discountSelfie');
             showDiscountSuccess();
 
             // The real-time listener will update the UI automatically
@@ -1554,6 +1828,394 @@
         } catch (error) {
             console.error('Error removing discount proof:', error);
             showToast('Failed to remove discount proof. Please try again.', 'error');
+        }
+    }
+
+    // Edit and delete review functions
+    let editReviewModal = null;
+    let editReviewForm = null;
+    let closeEditReviewModal = null;
+    let cancelEditReviewBtn = null;
+    let editReviewStars = null;
+    let editReviewText = null;
+    let editReviewItemName = null;
+    let currentEditReviewId = null;
+    let currentEditItemId = null;
+    let currentEditRating = 0;
+    let isUpdatingReview = false;
+
+    // Inline edit review (like orders.html)
+    async function editReviewInline(reviewId, itemId) {
+        const user = window.firebaseAuth?.currentUser;
+        if (!user) {
+            showToast('You must be signed in to edit reviews', 'error');
+            return;
+        }
+
+        if (!reviewId || !itemId) {
+            console.error('[Edit Review] Missing parameters:', { reviewId, itemId });
+            showToast('Invalid review data. Missing review ID or item ID.', 'error');
+            return;
+        }
+
+        try {
+            // Get review data from the wrapper element (already rendered)
+            const wrapperEl = document.querySelector(`.account-review-menu-item-wrapper[data-review-id="${reviewId}"]`);
+            if (!wrapperEl) {
+                // Fallback: try to fetch from Firestore
+                console.log('[Edit Review] Wrapper not found, fetching from Firestore...');
+                if (!window.firestore?.fetchReviewsForItem) {
+                    showToast('Reviews are not available right now. Please try again later.', 'error');
+                    return;
+                }
+                const reviews = await window.firestore.fetchReviewsForItem(itemId);
+                const review = reviews.find(r => r.id === reviewId);
+                
+                if (!review) {
+                    showToast('Review not found', 'error');
+                    return;
+                }
+
+                // Store current rating for this review (initialize before showing edit form)
+                if (!window.accountReviewRatings) {
+                    window.accountReviewRatings = {};
+                }
+                window.accountReviewRatings[reviewId] = review.rating || 0;
+
+                // Hide display, show edit form
+                const displayEl = document.getElementById(`review-display-${reviewId}`);
+                const editFormEl = document.getElementById(`review-edit-${reviewId}`);
+                const textareaEl = document.getElementById(`review-text-${reviewId}`);
+                const starsContainer = editFormEl?.querySelector('.account-review-stars');
+
+                if (displayEl) displayEl.style.display = 'none';
+                if (editFormEl) editFormEl.style.display = 'block';
+                if (textareaEl) textareaEl.value = review.text || '';
+
+                // Update stars display and ensure they're clickable
+                if (starsContainer) {
+                    const stars = starsContainer.querySelectorAll('.account-review-star');
+                    stars.forEach((star, index) => {
+                        const rating = index + 1;
+                        const icon = star.querySelector('i');
+                        if (rating <= review.rating) {
+                            icon.classList.remove('far');
+                            icon.classList.add('fas');
+                            icon.style.color = '#ffc107';
+                        } else {
+                            icon.classList.remove('fas');
+                            icon.classList.add('far');
+                            icon.style.color = '#ddd';
+                        }
+                        // Ensure star is clickable
+                        star.style.cursor = 'pointer';
+                    });
+                }
+                return;
+            }
+
+            // Get data from data attributes
+            const currentRating = parseFloat(wrapperEl.getAttribute('data-rating')) || 0;
+            const currentText = wrapperEl.getAttribute('data-text') || '';
+
+            // Store current rating for this review (initialize before showing edit form)
+            if (!window.accountReviewRatings) {
+                window.accountReviewRatings = {};
+            }
+            window.accountReviewRatings[reviewId] = currentRating;
+
+            // Hide display, show edit form
+            const displayEl = document.getElementById(`review-display-${reviewId}`);
+            const editFormEl = document.getElementById(`review-edit-${reviewId}`);
+            const textareaEl = document.getElementById(`review-text-${reviewId}`);
+            const starsContainer = editFormEl?.querySelector('.account-review-stars');
+
+            if (!displayEl || !editFormEl) {
+                console.error('[Edit Review] Display or edit form elements not found');
+                showToast('Review elements not found', 'error');
+                return;
+            }
+
+            displayEl.style.display = 'none';
+            editFormEl.style.display = 'block';
+            // Textarea already contains the correct text from renderAccountReviews
+            // If it's empty, try to decode from data attribute as fallback
+            if (textareaEl && !textareaEl.value.trim()) {
+                // Decode HTML entities properly (fallback only)
+                const decodedText = currentText
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'")
+                    .replace(/&#x27;/g, "'")
+                    .replace(/&#x2F;/g, '/');
+                textareaEl.value = decodedText;
+            }
+
+            // Update stars display and ensure they're clickable
+            if (starsContainer) {
+                const stars = starsContainer.querySelectorAll('.account-review-star');
+                stars.forEach((star, index) => {
+                    const rating = index + 1;
+                    const icon = star.querySelector('i');
+                    if (rating <= currentRating) {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                        icon.style.color = '#ffc107';
+                    } else {
+                        icon.classList.remove('fas');
+                        icon.classList.add('far');
+                        icon.style.color = '#ddd';
+                    }
+                    // Ensure star is clickable
+                    star.style.cursor = 'pointer';
+                });
+            }
+        } catch (error) {
+            console.error('Error loading review for edit:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                reviewId,
+                itemId
+            });
+            showToast(`Failed to load review: ${error.message || 'Unknown error'}`, 'error');
+        }
+    }
+
+    function cancelEditReview(reviewId) {
+        const displayEl = document.getElementById(`review-display-${reviewId}`);
+        const editFormEl = document.getElementById(`review-edit-${reviewId}`);
+        
+        if (displayEl) displayEl.style.display = 'block';
+        if (editFormEl) editFormEl.style.display = 'none';
+    }
+
+    async function updateReviewInline(reviewId, itemId) {
+        const user = window.firebaseAuth?.currentUser;
+        if (!user) {
+            showToast('You must be signed in to update reviews', 'error');
+            return;
+        }
+
+        if (!reviewId || !itemId) {
+            showToast('Invalid review data', 'error');
+            return;
+        }
+
+        // Check if firestore is available
+        if (!window.firestore?.saveReviewForItem) {
+            showToast('Reviews are not available right now. Please try again later.', 'error');
+            return;
+        }
+
+        // Get rating
+        const rating = window.accountReviewRatings?.[reviewId] || 0;
+        if (rating === 0) {
+            showToast('Please select a rating', 'error');
+            return;
+        }
+
+        // Get text (optional, like in order_details.js)
+        const textarea = document.getElementById(`review-text-${reviewId}`);
+        const text = textarea?.value.trim() || '';
+
+        try {
+            await window.firestore.saveReviewForItem({
+                itemId: itemId,
+                rating: rating,
+                text: text,
+                anonymous: false,
+                reviewId: reviewId
+            });
+
+            // Hide edit form, show display (will be updated by listener)
+            cancelEditReview(reviewId);
+            showToast('Review updated successfully!', 'success');
+        } catch (error) {
+            console.error('Error updating review:', error);
+            showToast(error.message || 'Failed to update review. Please try again.', 'error');
+        }
+    }
+
+    // Legacy modal-based edit (keeping for backwards compatibility, but not used)
+    async function editReview(reviewId, itemId) {
+        // Redirect to inline edit
+        await editReviewInline(reviewId, itemId);
+    }
+
+    function closeEditReviewModalFunc() {
+        if (editReviewModal) editReviewModal.style.display = 'none';
+        if (editReviewForm) editReviewForm.reset();
+        currentEditReviewId = null;
+        currentEditItemId = null;
+        currentEditRating = 0;
+        
+        // Clear errors
+        const ratingError = document.getElementById('editReviewRatingError');
+        const textError = document.getElementById('editReviewTextError');
+        if (ratingError) ratingError.textContent = '';
+        if (textError) textError.textContent = '';
+    }
+
+    async function updateReview() {
+        if (isUpdatingReview) return;
+
+        const user = window.firebaseAuth?.currentUser;
+        if (!user) {
+            showToast('You must be signed in to update reviews', 'error');
+            return;
+        }
+
+        if (!currentEditReviewId || !currentEditItemId) {
+            showToast('Invalid review data', 'error');
+            return;
+        }
+
+        if (currentEditRating === 0) {
+            const ratingError = document.getElementById('editReviewRatingError');
+            if (ratingError) ratingError.textContent = 'Please select a rating';
+            return;
+        }
+
+        const text = editReviewText?.value.trim() || '';
+        if (!text) {
+            const textError = document.getElementById('editReviewTextError');
+            if (textError) textError.textContent = 'Please enter a review';
+            return;
+        }
+
+        isUpdatingReview = true;
+        const updateBtn = document.getElementById('updateReviewBtnText');
+        if (updateBtn) updateBtn.textContent = 'Updating...';
+
+        try {
+            console.log('[Update Review] Updating review:', {
+                itemId: currentEditItemId,
+                reviewId: currentEditReviewId,
+                rating: currentEditRating
+            });
+            
+            await window.firestore.saveReviewForItem({
+                itemId: currentEditItemId,
+                rating: currentEditRating,
+                text: text,
+                anonymous: false,
+                reviewId: currentEditReviewId
+            });
+
+            closeEditReviewModalFunc();
+            showToast('Review updated successfully!', 'success');
+        } catch (error) {
+            console.error('Error updating review:', error);
+            console.error('Error details:', {
+                code: error.code,
+                message: error.message,
+                itemId: currentEditItemId,
+                reviewId: currentEditReviewId
+            });
+            const errorMsg = error.message || `Failed to update review. ${error.code || 'Unknown error'}`;
+            showToast(errorMsg, 'error');
+        } finally {
+            isUpdatingReview = false;
+            if (updateBtn) updateBtn.textContent = 'Update Review';
+        }
+    }
+
+    async function deleteReview(reviewId, itemId) {
+        const user = window.firebaseAuth?.currentUser;
+        if (!user) {
+            showToast('You must be signed in to delete reviews', 'error');
+            return;
+        }
+
+        if (!reviewId || !itemId) {
+            console.error('[Delete Review] Missing parameters:', { reviewId, itemId });
+            showToast('Invalid review data. Missing review ID or item ID.', 'error');
+            return;
+        }
+
+        const confirmed = await showConfirmModal(
+            'Are you sure you want to delete this review? This action cannot be undone.',
+            'Delete Review',
+            'Yes, Delete'
+        );
+
+        if (!confirmed) return;
+
+        try {
+            console.log('[Delete Review] Deleting review:', { reviewId, itemId });
+            
+            // Delete from menu/{itemId}/reviews/{reviewId}
+            await window.firestore.deleteReview(itemId, reviewId);
+            
+            // Also delete from customers/{uid}/reviews/{reviewId}
+            try {
+                const db = window.firebaseDb;
+                if (db && window.doc && window.deleteDoc) {
+                    const customerReviewRef = window.doc(db, 'customers', user.uid, 'reviews', reviewId);
+                    await window.deleteDoc(customerReviewRef);
+                }
+            } catch (e) {
+                console.warn('Failed to delete review from customer subcollection:', e);
+                // Continue even if this fails, as the main deletion succeeded
+            }
+            
+            showToast('Review deleted successfully', 'success');
+        } catch (error) {
+            console.error('Error deleting review:', error);
+            console.error('Error details:', {
+                code: error.code,
+                message: error.message,
+                reviewId,
+                itemId
+            });
+            const errorMsg = error.message || `Failed to delete review. ${error.code || 'Unknown error'}`;
+            showToast(errorMsg, 'error');
+        }
+    }
+
+    // Helper function to ensure reviews are in customer subcollection
+    async function ensureReviewsInCustomerSubcollection(user) {
+        if (!user || !user.uid) return;
+
+        try {
+            const db = window.firebaseDb;
+            if (!db || !window.collection || !window.query || !window.where || !window.getDocs) {
+                return;
+            }
+
+            // Check if customer has any reviews in subcollection
+            const customerRef = window.doc(db, 'customers', user.uid);
+            const customerReviewsCol = window.collection(customerRef, 'reviews');
+            const customerReviewsSnap = await window.getDocs(customerReviewsCol);
+            
+            // If no reviews in customer subcollection, try to find reviews from menu items
+            if (customerReviewsSnap.empty) {
+                console.log('[Account Reviews] No reviews in customer subcollection, checking menu items...');
+                
+                // Query all menu items to find user's reviews
+                const menuCol = window.collection(db, 'menu');
+                const menuSnap = await window.getDocs(menuCol);
+                
+                for (const menuDoc of menuSnap.docs) {
+                    const menuId = menuDoc.id;
+                    const reviewsCol = window.collection(menuDoc.ref, 'reviews');
+                    const userReviewsQuery = window.query(reviewsCol, window.where('userId', '==', user.uid));
+                    const userReviewsSnap = await window.getDocs(userReviewsQuery);
+                    
+                    for (const reviewDoc of userReviewsSnap.docs) {
+                        const reviewData = reviewDoc.data();
+                        // Copy to customer subcollection
+                        const customerReviewRef = window.doc(customerReviewsCol, reviewDoc.id);
+                        await window.setDoc(customerReviewRef, reviewData);
+                        console.log(`[Account Reviews] Migrated review ${reviewDoc.id} to customer subcollection`);
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('[Account Reviews] Error ensuring reviews in customer subcollection:', error);
         }
     }
 
@@ -1645,7 +2307,11 @@
         window.addAddress = openAddAddressModal;
         window.account = {
             openEditAddressModal,
-            deleteAddress
+            deleteAddress,
+            editReview,
+            editReviewInline,
+            updateReviewInline,
+            cancelEditReview
         };
 
         // Profile edit modal
@@ -1688,15 +2354,58 @@
             });
         }
 
-        // Account review navigation
+        // Account review navigation (only navigate if clicking the card, not the buttons)
         const menu = document.getElementById('accountReviewMenu');
         if (menu) {
             menu.addEventListener('click', (event) => {
+                // Don't navigate if clicking action buttons or edit forms
+                if (event.target.closest('.account-review-actions')) return;
+                if (event.target.closest('.account-review-edit-form')) return;
+                if (event.target.closest('button[onclick*="editReview"]')) return;
+                if (event.target.closest('button[onclick*="updateReview"]')) return;
+                if (event.target.closest('button[onclick*="cancelEdit"]')) return;
+                
                 const item = event.target.closest('.account-review-menu-item');
                 if (!item) return;
                 const itemId = item.getAttribute('data-item-id');
                 if (!itemId) return;
                 window.location.href = `food_item.html?id=${encodeURIComponent(itemId)}`;
+            });
+
+            // Handle star rating clicks in edit forms
+            menu.addEventListener('click', (event) => {
+                const star = event.target.closest('.account-review-star');
+                if (!star) return;
+                
+                const rating = parseInt(star.getAttribute('data-rating'), 10);
+                const reviewId = star.closest('.account-review-stars')?.getAttribute('data-review-id');
+                
+                if (!reviewId || isNaN(rating)) return;
+
+                // Store rating
+                if (!window.accountReviewRatings) {
+                    window.accountReviewRatings = {};
+                }
+                window.accountReviewRatings[reviewId] = rating;
+
+                // Update all stars in this container
+                const starsContainer = star.closest('.account-review-stars');
+                const stars = starsContainer?.querySelectorAll('.account-review-star');
+                if (stars) {
+                    stars.forEach((s, index) => {
+                        const r = index + 1;
+                        const icon = s.querySelector('i');
+                        if (r <= rating) {
+                            icon.classList.remove('far');
+                            icon.classList.add('fas');
+                            icon.style.color = '#ffc107';
+                        } else {
+                            icon.classList.remove('fas');
+                            icon.classList.add('far');
+                            icon.style.color = '#ddd';
+                        }
+                    });
+                }
             });
         }
 
@@ -1714,6 +2423,72 @@
             });
         }
 
+        // Edit review modal
+        editReviewModal = document.getElementById('editReviewModal');
+        editReviewForm = document.getElementById('editReviewForm');
+        closeEditReviewModal = document.getElementById('closeEditReviewModal');
+        cancelEditReviewBtn = document.getElementById('cancelEditReviewBtn');
+        editReviewStars = document.getElementById('editReviewStars');
+        editReviewText = document.getElementById('editReviewText');
+        editReviewItemName = document.getElementById('editReviewItemName');
+
+        if (closeEditReviewModal) {
+            closeEditReviewModal.addEventListener('click', closeEditReviewModalFunc);
+        }
+        if (cancelEditReviewBtn) {
+            cancelEditReviewBtn.addEventListener('click', closeEditReviewModalFunc);
+        }
+        if (editReviewModal) {
+            editReviewModal.addEventListener('click', function(e) {
+                if (e.target === editReviewModal) {
+                    closeEditReviewModalFunc();
+                }
+            });
+        }
+        if (editReviewForm) {
+            editReviewForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                await updateReview();
+            });
+        }
+
+        // Star rating for edit review
+        if (editReviewStars) {
+            editReviewStars.addEventListener('click', function(e) {
+                const star = e.target.closest('.review-star');
+                if (!star) return;
+                const rating = parseInt(star.getAttribute('data-rating'), 10);
+                if (isNaN(rating)) return;
+
+                currentEditRating = rating;
+                const stars = editReviewStars.querySelectorAll('.review-star');
+                stars.forEach((s, index) => {
+                    const r = index + 1;
+                    const icon = s.querySelector('i');
+                    if (r <= rating) {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                        icon.style.color = '#ffc107';
+                    } else {
+                        icon.classList.remove('fas');
+                        icon.classList.add('far');
+                        icon.style.color = '#ddd';
+                    }
+                });
+
+                // Clear rating error
+                const ratingError = document.getElementById('editReviewRatingError');
+                if (ratingError) ratingError.textContent = '';
+            });
+        }
+
+        if (editReviewText) {
+            editReviewText.addEventListener('input', function() {
+                const textError = document.getElementById('editReviewTextError');
+                if (textError) textError.textContent = '';
+            });
+        }
+
         // Keyboard shortcuts for modals (Esc to close)
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
@@ -1725,6 +2500,8 @@
                 closeDeletePasswordModalFunc();
             } else if (confirmModal && confirmModal.style.display === 'flex') {
                 closeConfirmModalFunc();
+            } else if (editReviewModal && editReviewModal.style.display === 'flex') {
+                closeEditReviewModalFunc();
             }
         });
 
@@ -1853,6 +2630,8 @@
         discountUploadForm = document.getElementById('discountUploadForm');
         discountTypeSelect = document.getElementById('discountType');
         discountProofInput = document.getElementById('discountProof');
+        discountSelfieInput = document.getElementById('discountSelfie');
+        selfieUploadGroup = document.getElementById('selfieUploadGroup');
         uploadDiscountBtn = document.getElementById('uploadDiscountBtn');
         uploadDiscountBtnText = document.getElementById('uploadDiscountBtnText');
         removeDiscountBtn = document.getElementById('removeDiscountBtn');
@@ -1867,15 +2646,46 @@
             discountToggleBtn.addEventListener('click', toggleDiscountSection);
         }
 
+        // Show/hide selfie upload based on discount type
         if (discountTypeSelect) {
-            discountTypeSelect.addEventListener('input', () => clearDiscountError('discountType'));
+            discountTypeSelect.addEventListener('change', function() {
+                clearDiscountError('discountType');
+                const selectedType = this.value;
+                if (selfieUploadGroup) {
+                    if (selectedType === 'pwd') {
+                        selfieUploadGroup.style.display = 'block';
+                        if (discountSelfieInput) {
+                            discountSelfieInput.setAttribute('required', 'required');
+                        }
+                    } else {
+                        selfieUploadGroup.style.display = 'none';
+                        if (discountSelfieInput) {
+                            discountSelfieInput.removeAttribute('required');
+                            discountSelfieInput.value = '';
+                        }
+                        // Clear selfie preview if switching away from PWD
+                        const selfiePreviewRow = document.getElementById('selfiePreviewRow');
+                        if (selfiePreviewRow) selfiePreviewRow.style.display = 'none';
+                    }
+                }
+            });
         }
 
         if (discountProofInput) {
             discountProofInput.addEventListener('change', function(e) {
                 clearDiscountError('discountProof');
-                const file = e.target.files?.[0];
-                updateDiscountPreview(file);
+                const idFile = e.target.files?.[0];
+                const selfieFile = discountSelfieInput?.files?.[0];
+                updateDiscountPreview(idFile, selfieFile);
+            });
+        }
+
+        if (discountSelfieInput) {
+            discountSelfieInput.addEventListener('change', function(e) {
+                clearDiscountError('discountSelfie');
+                const idFile = discountProofInput?.files?.[0];
+                const selfieFile = e.target.files?.[0];
+                updateDiscountPreview(idFile, selfieFile);
             });
         }
 
@@ -1883,7 +2693,17 @@
         if (removeDiscountPreviewBtn) {
             removeDiscountPreviewBtn.addEventListener('click', function() {
                 if (discountProofInput) discountProofInput.value = '';
-                updateDiscountPreview(null);
+                const selfieFile = discountSelfieInput?.files?.[0];
+                updateDiscountPreview(null, selfieFile);
+            });
+        }
+
+        const removeSelfiePreviewBtn = document.getElementById('removeSelfiePreview');
+        if (removeSelfiePreviewBtn) {
+            removeSelfiePreviewBtn.addEventListener('click', function() {
+                if (discountSelfieInput) discountSelfieInput.value = '';
+                const idFile = discountProofInput?.files?.[0];
+                updateDiscountPreview(idFile, null);
             });
         }
 

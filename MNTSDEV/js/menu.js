@@ -31,9 +31,15 @@
         return starsHtml;
     }
 
-    // Hydrate card ratings with live review data
+    // Hydrate card ratings with live review data - synced with Firebase menu subcollection
     async function hydrateCardRatings(items) {
         if (!Array.isArray(items) || !items.length) return;
+
+        // Ensure Firebase is ready
+        if (!window.firestore?.fetchReviewSummaryForItem) {
+            console.warn('Firestore not ready for review summaries');
+            return;
+        }
 
         await Promise.all(items.map(async (item) => {
             if (!item || !item.id) return;
@@ -45,7 +51,9 @@
             const starsDisplay = card.querySelector('[data-stars-display]');
             if (!ratingLabel) return;
 
-            const summary = await window.firestore.fetchReviewSummaryForItem(item.id);
+            try {
+                // Fetch fresh review summary from Firebase menu subcollection
+                const summary = await window.firestore.fetchReviewSummaryForItem(item.id);
             if (!summary) {
                 ratingLabel.textContent = 'No reviews yet';
                 if (starsDisplay) {
@@ -71,6 +79,14 @@
             
             if (starsDisplay) {
                 starsDisplay.innerHTML = generateStarDisplay(avg);
+            }
+            } catch (error) {
+                console.error('Error fetching review summary for item:', item.id, error);
+                // Set default values on error
+                ratingLabel.textContent = 'No reviews yet';
+                if (starsDisplay) {
+                    starsDisplay.innerHTML = '<i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i>';
+                }
             }
         }));
     }

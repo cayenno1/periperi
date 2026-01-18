@@ -48,8 +48,8 @@ service cloud.firestore {
              newData.quantity >= 0;
     }
 
-    // ----- Order Counters (for sequential order numbering) -----
-    match /order_counters/{counterId} {
+    // ----- Order Counter (for sequential order numbering) -----
+    match /order_counter/{counterId} {
       // Allow read and write for order counter generation
       // This is needed for the sequential order ID system (POS)
       allow read, write: if true;
@@ -61,8 +61,59 @@ service cloud.firestore {
       // Allow read for customers themselves and for admin dashboard (open read for now)
       // TODO: Implement Firebase Auth for staff to restrict this properly
       allow read: if true;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow updates: customers can update their own data OR allow ID verification updates
+      // Simple rule: allow customer updates OR allow updates that include ID verification fields
+      allow update: if 
+        // Customer updating their own data
+        (request.auth != null && request.auth.uid == userId) ||
+        // Allow ID verification updates - check if ID verification fields are being updated
+        request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'discountInfo.IDverification',
+          'discountInfo.idVerifiedAt',
+          'discountInfo.idVerifiedBy',
+          'discountInfo.idVerificationReason',
+          'discountInfo.proofUrl',
+          'discountInfo.proofPath',
+          'discountInfo.selfieUrl',
+          'discountInfo.selfiePath',
+          'idVerificationStatus',
+          'idVerifiedAt',
+          'idVerifiedBy',
+          'idVerificationReason'
+        ]);
+      
       allow delete: if request.auth != null && request.auth.uid == userId;
+
+      // ----- Reviews Subcollection (under customers) -----
+      match /reviews/{reviewId} {
+        // Allow reading reviews (for admin dashboard to view customer reviews)
+        allow read: if true;
+        // Allow creating reviews (customers can create their own reviews)
+        allow create: if true;
+        // Allow updating reviews (customers can update their own reviews)
+        allow update: if true;
+        // Allow deleting reviews (customers can delete their own reviews)
+        allow delete: if true;
+      }
+
+      // ----- Cart Items (subcollection under customers) -----
+      match /cartItems/{cartItemId} {
+        // Only the customer themselves can manage their cart items
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && 
+                         request.auth.uid == userId &&
+                         request.resource.data.keys().hasAll(['itemId', 'name', 'price', 'quantity']) &&
+                         request.resource.data.price is number &&
+                         request.resource.data.quantity is number &&
+                         request.resource.data.quantity > 0;
+        allow update: if request.auth != null && 
+                         request.auth.uid == userId &&
+                         request.resource.data.price is number &&
+                         request.resource.data.quantity is number &&
+                         request.resource.data.quantity > 0;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // ----- Staff -----

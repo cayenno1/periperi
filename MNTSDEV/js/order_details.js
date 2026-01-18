@@ -711,13 +711,15 @@
     currentOrderForReceipt = order;
     currentOrderIdForReceipt = orderId || order.id || null;
 
-    // Show reviews section for completed orders (not cancelled/declined)
+    // Show reviews section ONLY for completed orders (not cancelled/declined)
+    // Reviews are synced with Firebase for the specific account
     if (statusInfo.isCompleted && !statusInfo.isCancelled && reviewsSegment && orderItemReviews) {
       const auth = window.firebaseAuth;
       const user = auth?.currentUser;
       
       if (user) {
         reviewsSegment.style.display = 'block';
+        // Render reviews - fetches fresh from Firebase and filters by current user's account
         renderItemReviews(items, orderItemReviews);
       } else {
         reviewsSegment.style.display = 'none';
@@ -740,7 +742,14 @@
       return;
     }
 
+    // Ensure firestore is available
+    if (!window.firestore?.fetchReviewsForItem) {
+      container.innerHTML = '<p>Reviews are not available right now. Please try again later.</p>';
+      return;
+    }
+
     // Load existing reviews for each item and create review containers (hidden by default)
+    // Always fetch fresh from Firebase to ensure sync with account
     const reviewsHtml = await Promise.all(
       items.map(async (item, index) => {
         const itemId = item.itemId;
@@ -750,48 +759,66 @@
         let existingReview = null;
         
         try {
+          // Fetch fresh reviews from Firebase for this specific item
           const reviews = await window.firestore.fetchReviewsForItem(itemId);
-          existingReview = reviews.find(r => r.userId === user.uid);
+          
+          // Find review for the current user's account (strict matching)
+          existingReview = reviews.find(r => {
+            // Ensure userId matches exactly with current user's UID
+            return r.userId && user.uid && r.userId === user.uid;
+          });
+          
+          // Log for debugging if needed
+          if (existingReview) {
+            console.log(`[Order Details] Found existing review for item ${itemId} by user ${user.uid}`);
+          }
         } catch (e) {
-          console.warn('Error loading reviews for item:', e);
+          console.error('Error loading reviews for item:', itemId, e);
+          // Continue with no review if fetch fails
         }
 
+        // Escape HTML for safety
+        const safeItemName = (itemName || 'Item').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeItemId = (itemId || '').replace(/"/g, '&quot;');
+        const safeReviewId = existingReview ? (existingReview.id || '').replace(/"/g, '&quot;') : '';
+        const safeReviewText = existingReview ? (existingReview.text || 'No comment').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') : '';
+
         return `
-          <div class="od-review-item" data-item-id="${itemId}" data-item-index="${index}" style="display:none;">
+          <div class="od-review-item" data-item-id="${safeItemId}" data-item-index="${index}" style="display:none;">
             <div class="od-review-item-header">
-              <h4>${itemName}</h4>
+              <h4>${safeItemName}</h4>
               ${existingReview ? '<span class="review-badge">Reviewed</span>' : ''}
             </div>
             ${existingReview ? `
               <div class="od-review-existing">
                 <div class="od-review-rating">
-                  ${'★'.repeat(Math.floor(existingReview.rating))}${'☆'.repeat(5 - Math.floor(existingReview.rating))}
-                  <span>${existingReview.rating.toFixed(1)}</span>
+                  ${'★'.repeat(Math.floor(existingReview.rating || 0))}${'☆'.repeat(5 - Math.floor(existingReview.rating || 0))}
+                  <span>${(existingReview.rating || 0).toFixed(1)}</span>
                 </div>
-                <p class="od-review-text">${existingReview.text || 'No comment'}</p>
-                <button class="od-review-edit-btn" onclick="orderDetails.editReview('${itemId}', '${existingReview.id}')">
+                <p class="od-review-text">${safeReviewText}</p>
+                <button class="od-review-edit-btn" onclick="orderDetails.editReview('${safeItemId}', '${safeReviewId}')">
                   Edit Review
                 </button>
               </div>
             ` : `
               <div class="od-review-form-container">
-                <div class="od-review-stars" data-item-id="${itemId}">
+                <div class="od-review-stars" data-item-id="${safeItemId}">
                   ${[1, 2, 3, 4, 5].map(i => `
-                    <span class="od-review-star" data-rating="${i}" onclick="orderDetails.setItemRating('${itemId}', ${i})">
+                    <span class="od-review-star" data-rating="${i}" onclick="orderDetails.setItemRating('${safeItemId}', ${i})">
                       <i class="far fa-star"></i>
                     </span>
                   `).join('')}
                 </div>
                 <textarea 
                   class="od-review-textarea" 
-                  id="review-text-${itemId}"
+                  id="review-text-${safeItemId}"
                   placeholder="Share your experience with this item..."
                   rows="3"
                 ></textarea>
                 <button 
                   class="od-review-submit-btn" 
-                  onclick="orderDetails.submitItemReview('${itemId}')"
-                  data-item-id="${itemId}"
+                  onclick="orderDetails.submitItemReview('${safeItemId}')"
+                  data-item-id="${safeItemId}"
                 >
                   Submit Review
                 </button>
@@ -922,6 +949,12 @@
       return;
     }
 
+    // Ensure firestore is available
+    if (!window.firestore?.saveReviewForItem) {
+      showNotification('Reviews are not available right now. Please try again later.', 'error');
+      return;
+    }
+
     const rating = currentItemRatings[itemId] || 0;
     if (rating === 0) {
       showNotification('Please select a rating.', 'error');
@@ -932,6 +965,7 @@
     const text = textarea ? textarea.value.trim() : '';
 
     try {
+      // Save review to Firebase (will sync with account)
       await window.firestore.saveReviewForItem({
         itemId,
         rating,
@@ -939,10 +973,11 @@
         anonymous: false
       });
 
-      // Reload reviews and keep the review form open
+      // Reload reviews from Firebase to ensure sync with account
       const orderItemReviews = document.getElementById('orderItemReviews');
       const order = currentOrderForReceipt;
       if (order && orderItemReviews) {
+        // Re-render reviews to show the newly submitted review
         await renderItemReviews(order.items || [], orderItemReviews);
         // Show the review item after reload
         const reviewItem = document.querySelector(`.od-review-item[data-item-id="${itemId}"]`);
@@ -967,38 +1002,72 @@
   }
 
   async function editReview(itemId, reviewId) {
+    const auth = window.firebaseAuth;
+    const user = auth?.currentUser;
+    
+    if (!user) {
+      showNotification('Please sign in to edit reviews.', 'error');
+      return;
+    }
+
+    // Ensure firestore is available
+    if (!window.firestore?.fetchReviewsForItem) {
+      showNotification('Reviews are not available right now. Please try again later.', 'error');
+      return;
+    }
+
     try {
+      // Fetch fresh review data from Firebase to ensure sync with account
       const reviews = await window.firestore.fetchReviewsForItem(itemId);
       const review = reviews.find(r => r.id === reviewId);
-      if (!review) return;
+      
+      if (!review) {
+        showNotification('Review not found.', 'error');
+        return;
+      }
+
+      // Verify the review belongs to the current user's account
+      if (review.userId !== user.uid) {
+        showNotification('You can only edit your own reviews.', 'error');
+        return;
+      }
 
       const container = document.querySelector(`.od-review-item[data-item-id="${itemId}"]`);
-      if (!container) return;
+      if (!container) {
+        showNotification('Review container not found.', 'error');
+        return;
+      }
 
       currentItemRatings[itemId] = review.rating;
       
+      // Escape HTML for safety
+      const safeItemName = (review.itemName || 'Item').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safeItemId = (itemId || '').replace(/"/g, '&quot;');
+      const safeReviewId = (reviewId || '').replace(/"/g, '&quot;');
+      const safeReviewText = (review.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      
       container.innerHTML = `
         <div class="od-review-item-header">
-          <h4>${review.itemName || 'Item'}</h4>
+          <h4>${safeItemName}</h4>
         </div>
         <div class="od-review-form-container">
-          <div class="od-review-stars" data-item-id="${itemId}">
+          <div class="od-review-stars" data-item-id="${safeItemId}">
             ${[1, 2, 3, 4, 5].map(i => `
-              <span class="od-review-star" data-rating="${i}" onclick="orderDetails.setItemRating('${itemId}', ${i})">
+              <span class="od-review-star" data-rating="${i}" onclick="orderDetails.setItemRating('${safeItemId}', ${i})">
                 <i class="${i <= review.rating ? 'fas' : 'far'} fa-star" style="color: ${i <= review.rating ? '#ffc107' : '#ddd'}"></i>
               </span>
             `).join('')}
           </div>
           <textarea 
             class="od-review-textarea" 
-            id="review-text-${itemId}"
+            id="review-text-${safeItemId}"
             placeholder="Share your experience with this item..."
             rows="3"
-          >${review.text || ''}</textarea>
+          >${safeReviewText}</textarea>
           <button 
             class="od-review-submit-btn" 
-            onclick="orderDetails.updateItemReview('${itemId}', '${reviewId}')"
-            data-item-id="${itemId}"
+            onclick="orderDetails.updateItemReview('${safeItemId}', '${safeReviewId}')"
+            data-item-id="${safeItemId}"
           >
             Update Review
           </button>
@@ -1018,6 +1087,31 @@
       return;
     }
 
+    // Ensure firestore is available
+    if (!window.firestore?.saveReviewForItem) {
+      showNotification('Reviews are not available right now. Please try again later.', 'error');
+      return;
+    }
+
+    // Verify the review belongs to the current user before updating
+    try {
+      const reviews = await window.firestore.fetchReviewsForItem(itemId);
+      const reviewToUpdate = reviews.find(r => r.id === reviewId);
+      
+      if (!reviewToUpdate) {
+        showNotification('Review not found.', 'error');
+        return;
+      }
+      
+      // Ensure the review belongs to the current user's account
+      if (reviewToUpdate.userId !== user.uid) {
+        showNotification('You can only update your own reviews.', 'error');
+        return;
+      }
+    } catch (e) {
+      console.warn('Could not verify review ownership, proceeding anyway:', e);
+    }
+
     const rating = currentItemRatings[itemId] || 0;
     if (rating === 0) {
       showNotification('Please select a rating.', 'error');
@@ -1028,6 +1122,7 @@
     const text = textarea ? textarea.value.trim() : '';
 
     try {
+      // Update review in Firebase (will sync with account)
       await window.firestore.saveReviewForItem({
         itemId,
         rating,
@@ -1036,10 +1131,11 @@
         reviewId
       });
 
-      // Reload reviews and keep the review form open
+      // Reload reviews from Firebase to ensure sync with account
       const orderItemReviews = document.getElementById('orderItemReviews');
       const order = currentOrderForReceipt;
       if (order && orderItemReviews) {
+        // Re-render reviews to show the updated review
         await renderItemReviews(order.items || [], orderItemReviews);
         // Show the review item after reload
         const reviewItem = document.querySelector(`.od-review-item[data-item-id="${itemId}"]`);

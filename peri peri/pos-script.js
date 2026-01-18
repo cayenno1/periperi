@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Initialize service type (default to dine-in)
     selectServiceType('dine-in');
+    
+    // Don't load orders log on page load - will load when modal opens
 });
 
 // Wait for Firebase to be ready
@@ -56,7 +58,7 @@ async function getNextOrderNumber() {
         }
         
         const dateString = getTodayDateStringForOrderId();
-        const counterDocRef = fns.doc(window.db, 'order_counters', dateString);
+        const counterDocRef = fns.doc(window.db, 'order_counter', dateString);
         
         let orderNumber = 1;
         
@@ -930,6 +932,9 @@ async function processPayment() {
         await loadDailyServings();
         renderPOSProducts();
         
+        // Refresh walk-in orders log to show the new order
+        await loadWalkInOrdersLog();
+        
     } catch (error) {
         console.error('Error processing payment:', error);
         alert('Error processing payment: ' + (error.message || 'Please try again.'));
@@ -1252,9 +1257,15 @@ function isFirestoreReady() {
 
 // Close modal when clicking outside
 window.onclick = function(event) {
-    const modal = document.getElementById('posReceiptModal');
-    if (event.target === modal) {
+    const receiptModal = document.getElementById('posReceiptModal');
+    const ordersLogModal = document.getElementById('posOrdersLogModal');
+    
+    if (event.target === receiptModal) {
         closeReceiptModal();
+    }
+    
+    if (event.target === ordersLogModal) {
+        closeWalkInOrdersLog();
     }
 }
 
@@ -1264,4 +1275,209 @@ function toggleMobileSidebar() {
     if (sidebar) {
         sidebar.classList.toggle('mobile-open');
     }
+}
+
+// Load and display walk-in orders log
+async function loadWalkInOrdersLog() {
+    const logContent = document.getElementById('posOrdersLogContent');
+    if (!logContent) return;
+    
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        if (!fns || !window.db) {
+            throw new Error('Firestore is not ready yet.');
+        }
+        
+        // Query orders collection for walk-in orders
+        // Filter by walkin: true and order by createdAt descending (newest first)
+        const ordersRef = fns.collection(window.db, 'orders');
+        let ordersSnapshot;
+        
+        try {
+            // Try to query with orderBy first
+            ordersSnapshot = await fns.getDocs(fns.query(
+                ordersRef,
+                fns.where('walkin', '==', true),
+                fns.orderBy('createdAt', 'desc')
+            ));
+        } catch (orderError) {
+            // If orderBy fails (index missing), get all walk-in orders and sort manually
+            console.warn('Could not order by createdAt (index may be missing), fetching all walk-in orders:', orderError);
+            ordersSnapshot = await fns.getDocs(fns.query(
+                ordersRef,
+                fns.where('walkin', '==', true)
+            ));
+        }
+        
+        const orders = [];
+        ordersSnapshot.forEach(doc => {
+            const data = doc.data();
+            orders.push({
+                id: doc.id,
+                orderId: data.orderId || doc.id,
+                ...data
+            });
+        });
+        
+        // Sort by createdAt if not already sorted
+        orders.sort((a, b) => {
+            const aTime = a.createdAt?.toDate?.() || (a.createdAt ? new Date(a.createdAt) : new Date(0));
+            const bTime = b.createdAt?.toDate?.() || (b.createdAt ? new Date(b.createdAt) : new Date(0));
+            return bTime - aTime; // Most recent first
+        });
+        
+        // Limit to last 50 orders for performance
+        const displayOrders = orders.slice(0, 50);
+        
+        renderWalkInOrdersLog(displayOrders);
+        
+    } catch (error) {
+        console.error('Error loading walk-in orders log:', error);
+        logContent.innerHTML = `
+            <div class="pos-loading" style="grid-column: 1 / -1;">
+                <i class="fas fa-exclamation-circle"></i>
+                <p>Error loading orders. Please try again.</p>
+            </div>
+        `;
+    }
+}
+
+// Render walk-in orders log
+function renderWalkInOrdersLog(orders) {
+    const logContent = document.getElementById('posOrdersLogContent');
+    if (!logContent) return;
+    
+    if (!orders || orders.length === 0) {
+        logContent.innerHTML = `
+            <div class="pos-empty-cart" style="padding: 60px 20px;">
+                <i class="fas fa-receipt" style="font-size: 3em; margin-bottom: 15px; opacity: 0.3;"></i>
+                <p style="font-size: 16px; color: #6c757d;">No walk-in orders yet</p>
+            </div>
+        `;
+        return;
+    }
+    
+    logContent.innerHTML = orders.map(order => {
+        // Format timestamp
+        const createdAt = order.createdAt?.toDate?.() || (order.createdAt ? new Date(order.createdAt) : new Date());
+        const timeStr = createdAt.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        // Format service type
+        const serviceType = order.serviceType || order.deliveryInfo?.serviceType || '';
+        const serviceTypeDisplay = serviceType === 'take-out' ? 'Take Out' : 
+                                   serviceType === 'dine-in' ? 'Dine In' : 
+                                   serviceType || '—';
+        
+        // Format customer name
+        const customerName = order.customerName || order.deliveryInfo?.customerName || 'Walk-in Customer';
+        
+        // Format table number (if dine-in)
+        const tableNumber = order.tableNumber || order.deliveryInfo?.tableNumber || '';
+        const tableDisplay = tableNumber ? `Table ${tableNumber}` : '';
+        
+        // Format payment method
+        const paymentMethod = order.paymentMode || 'Cash';
+        
+        // Format total
+        const total = order.total || 0;
+        const totalDisplay = `₱${total.toFixed(2)}`;
+        
+        // Format items summary
+        const items = order.items || [];
+        const itemsCount = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const itemsSummary = items.length > 0 
+            ? items.slice(0, 2).map(item => `${item.quantity}x ${item.name}`).join(', ') + 
+              (items.length > 2 ? ` +${items.length - 2} more` : '')
+            : 'No items';
+        
+        // Format cashier name
+        const cashierName = order.processedByName || 'Staff';
+        
+        return `
+            <div class="pos-order-log-item">
+                <div class="pos-order-log-header">
+                    <div class="pos-order-log-id">${escapeHtml(order.orderId || order.id)}</div>
+                    <div class="pos-order-log-time">${escapeHtml(timeStr)}</div>
+                </div>
+                <div class="pos-order-log-details">
+                    <div class="pos-order-log-row">
+                        <span class="pos-order-log-label">Customer:</span>
+                        <span class="pos-order-log-value">${escapeHtml(customerName)}</span>
+                    </div>
+                    <div class="pos-order-log-row">
+                        <span class="pos-order-log-label">Service:</span>
+                        <span class="pos-order-log-value">${escapeHtml(serviceTypeDisplay)} ${tableDisplay ? `(${escapeHtml(tableDisplay)})` : ''}</span>
+                    </div>
+                    <div class="pos-order-log-row">
+                        <span class="pos-order-log-label">Items:</span>
+                        <span class="pos-order-log-value">${escapeHtml(itemsSummary)}</span>
+                    </div>
+                    <div class="pos-order-log-row">
+                        <span class="pos-order-log-label">Payment:</span>
+                        <span class="pos-order-log-value">${escapeHtml(paymentMethod)}</span>
+                    </div>
+                    <div class="pos-order-log-row">
+                        <span class="pos-order-log-label">Cashier:</span>
+                        <span class="pos-order-log-value">${escapeHtml(cashierName)}</span>
+                    </div>
+                </div>
+                <div class="pos-order-log-footer">
+                    <span class="pos-order-log-total">${totalDisplay}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Open walk-in orders log modal
+async function openWalkInOrdersLog() {
+    const modal = document.getElementById('posOrdersLogModal');
+    if (!modal) return;
+    
+    modal.style.display = 'block';
+    
+    // Load orders when modal opens
+    await loadWalkInOrdersLog();
+}
+
+// Close walk-in orders log modal
+function closeWalkInOrdersLog() {
+    const modal = document.getElementById('posOrdersLogModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Refresh walk-in orders log
+async function refreshWalkInOrdersLog() {
+    const logContent = document.getElementById('posOrdersLogContent');
+    if (!logContent) return;
+    
+    // Show loading state
+    logContent.innerHTML = `
+        <div class="pos-loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Refreshing...</p>
+        </div>
+    `;
+    
+    await loadWalkInOrdersLog();
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    if (text == null) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

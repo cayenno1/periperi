@@ -136,6 +136,9 @@
     }
 
     // Fetch all reviews for an item
+    // Reviews are stored in menu subcollection: menu/{itemId}/reviews/{reviewId}
+    // This ensures all pages (menu.html, index.html, food_item.html, account.html, order_details.html) 
+    // are synced with the same Firebase data source
     async function fetchReviewsForItem(itemId) {
         await window.utils.waitForFirebaseReady();
 
@@ -146,6 +149,7 @@
         }
 
         try {
+            // Fetch from menu subcollection: menu/{itemId}/reviews/{reviewId}
             const itemRef = window.doc(db, MENU_COLLECTION, itemId);
             const itemReviewsCol = window.collection(itemRef, REVIEWS_SUBCOLLECTION);
 
@@ -186,14 +190,18 @@
 
                 const name = data.anonymous ? 'Anonymous' : (data.displayName || 'Customer');
 
+                // Ensure strict user ID matching for account sync
+                const reviewUserId = data.userId || '';
+                const isOwn = currentUserId && reviewUserId && reviewUserId === currentUserId;
+
                 reviews.push({
                     id: docSnap.id,
-                    userId: data.userId || '',
+                    userId: reviewUserId,
                     rating,
                     text,
                     name,
                     createdAtLabel,
-                    isOwn: currentUserId && data.userId === currentUserId
+                    isOwn
                 });
             });
 

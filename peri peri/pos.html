@@ -161,15 +161,20 @@
                     <div class="title-bar"></div>
                     <h2>Point of Sale</h2>
                 </div>
-                <div class="user-profile">
-                    <button class="profile-btn" onclick="event.stopPropagation(); toggleDropdown('adminDropdown');">
-                        <i class="fas fa-user"></i>
-                        <span id="profileName"></span>
-                        <i class="fas fa-chevron-down"></i>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="openWalkInOrdersLog()" title="View Walk-in Orders Log">
+                        <i class="fas fa-receipt"></i> Walk-in Orders Log
                     </button>
-                    <div class="dropdown-menu" id="adminDropdown">
-                        <a href="#" class="dropdown-item" onclick="showUserProfile()">Profile Settings</a>
-                        <a href="#" class="dropdown-item">Logout</a>
+                    <div class="user-profile">
+                        <button class="profile-btn" onclick="event.stopPropagation(); toggleDropdown('adminDropdown');">
+                            <i class="fas fa-user"></i>
+                            <span id="profileName"></span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="dropdown-menu" id="adminDropdown">
+                            <a href="#" class="dropdown-item" onclick="showUserProfile()">Profile Settings</a>
+                            <a href="#" class="dropdown-item">Logout</a>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -367,6 +372,32 @@
                     <i class="fas fa-print"></i> Print
                 </button>
                 <button class="btn btn-secondary" onclick="closeReceiptModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Walk-in Orders Log Modal -->
+    <div id="posOrdersLogModal" class="modal" style="display: none;">
+        <div class="modal-content pos-orders-log-modal">
+            <div class="modal-header">
+                <h2>Walk-in Orders Log</h2>
+                <span class="close-modal" onclick="closeWalkInOrdersLog()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="pos-orders-log-header">
+                    <button class="btn btn-sm btn-secondary" onclick="refreshWalkInOrdersLog()" title="Refresh">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="pos-orders-log-content" id="posOrdersLogContent">
+                    <div class="pos-loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Loading orders...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeWalkInOrdersLog()">Close</button>
             </div>
         </div>
     </div>

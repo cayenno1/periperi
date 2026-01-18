@@ -57,9 +57,25 @@
         }
     }
 
-    // Fetch review summary for home page
+    // Fetch review summary for home page - synced with Firebase menu subcollection
     async function fetchHomeReviewSummary(itemId) {
-        return await window.firestore.fetchReviewSummaryForItem(itemId);
+        if (!itemId) {
+            return null;
+        }
+
+        // Ensure Firebase is ready
+        if (!window.firestore?.fetchReviewSummaryForItem) {
+            console.warn('Firestore not ready for review summaries');
+            return null;
+        }
+
+        try {
+            // Fetch fresh review summary from Firebase menu subcollection
+            return await window.firestore.fetchReviewSummaryForItem(itemId);
+        } catch (error) {
+            console.error('Error fetching review summary for item:', itemId, error);
+            return null;
+        }
     }
 
     // Carousel scroll function
@@ -118,12 +134,18 @@
             return;
         }
 
-        // Fetch ratings for display (do not filter by them)
+        // Fetch ratings for display - synced with Firebase menu subcollection
+        // Reviews are fetched fresh from menu/{itemId}/reviews/{reviewId}
         const itemsWithRatings = await Promise.all(
             nonSauceItems.map(async (item) => {
-                const reviewSummary = await fetchHomeReviewSummary(item.id);
-                const rating = reviewSummary ? reviewSummary.average : 0;
-                return { ...item, rating, reviewCount: reviewSummary ? reviewSummary.count : 0 };
+                try {
+                    const reviewSummary = await fetchHomeReviewSummary(item.id);
+                    const rating = reviewSummary ? reviewSummary.average : 0;
+                    return { ...item, rating, reviewCount: reviewSummary ? reviewSummary.count : 0 };
+                } catch (error) {
+                    console.error('Error fetching rating for item:', item.id, error);
+                    return { ...item, rating: 0, reviewCount: 0 };
+                }
             })
         );
 
