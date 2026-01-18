@@ -220,13 +220,21 @@
 
     function applyPoints() {
         if (!loyaltyEnabled || !(window.firebaseAuth && window.firebaseAuth.currentUser)) {
-            alert('Sign in to use loyalty points.');
+            if (window.showAlert) {
+                window.showAlert('Sign in to use loyalty points.', 'info');
+            } else {
+                alert('Sign in to use loyalty points.');
+            }
             return;
         }
 
         const remaining = getStoredPoints();
         if (!remaining) {
-            alert('No points available to apply.');
+            if (window.showAlert) {
+                window.showAlert('No points available to apply.', 'info');
+            } else {
+                alert('No points available to apply.');
+            }
             return;
         }
 
@@ -328,7 +336,11 @@
         const paymentMethod = document.querySelector('input[name="payment"]:checked')?.value;
         if (!paymentMethod) {
             flagCheckoutError(document.querySelector('.delivery-options'));
-            alert('Please select a payment method.');
+            if (window.showAlert) {
+                window.showAlert('Please select a payment method.', 'warning');
+            } else {
+                alert('Please select a payment method.');
+            }
             return;
         }
 
@@ -343,7 +355,11 @@
 
             if (!file) {
                 flagCheckoutError(document.querySelector('.payment-proof'));
-                alert('Please upload your GCash payment screenshot before placing your order.');
+                if (window.showAlert) {
+                    window.showAlert('Please upload your GCash payment screenshot before placing your order.', 'warning');
+                } else {
+                    alert('Please upload your GCash payment screenshot before placing your order.');
+                }
                 return;
             }
             gcashFile = file;
@@ -351,7 +367,11 @@
             gcashRefNo = (refInput?.value || '').trim();
             if (!gcashRefNo) {
                 flagCheckoutError(refInput);
-                alert('Please enter your GCash reference number.');
+                if (window.showAlert) {
+                    window.showAlert('Please enter your GCash reference number.', 'warning');
+                } else {
+                    alert('Please enter your GCash reference number.');
+                }
                 return;
             }
         }
@@ -385,7 +405,11 @@
         }
 
         if (hasContactError) {
-            alert('Please provide your name, mobile number, and email (for guest checkout).');
+            if (window.showAlert) {
+                window.showAlert('Please provide your name, mobile number, and email (for guest checkout).', 'warning');
+            } else {
+                alert('Please provide your name, mobile number, and email (for guest checkout).');
+            }
             if (btn) {
                 btn.disabled = false;
                 btn.classList.remove('is-processing');
@@ -438,7 +462,11 @@
                     if (!city) flagCheckoutError(cityInput);
                     if (!barangay) flagCheckoutError(barangayInput);
                     if (!postal) flagCheckoutError(postalInput);
-                    alert('Please complete the delivery address (street, city, barangay, and postal code).');
+                    if (window.showAlert) {
+                        window.showAlert('Please complete the delivery address (street, city, barangay, and postal code).', 'warning');
+                    } else {
+                        alert('Please complete the delivery address (street, city, barangay, and postal code).');
+                    }
                     if (btn) {
                         btn.disabled = false;
                         btn.classList.remove('is-processing');
@@ -479,7 +507,11 @@
                 paymentProof = await uploadPaymentProof(gcashFile);
             } catch (error) {
                 console.error('Payment proof upload failed:', error);
-                alert('Failed to upload your GCash payment screenshot. Please check your connection and try again.');
+                if (window.showAlert) {
+                    window.showAlert('Failed to upload your GCash payment screenshot. Please check your connection and try again.', 'error');
+                } else {
+                    alert('Failed to upload your GCash payment screenshot. Please check your connection and try again.');
+                }
                 if (btn) {
                     btn.disabled = false;
                     btn.classList.remove('is-processing');
@@ -541,11 +573,19 @@
             // Reset points used tracker
             pointsUsedInOrder = 0;
         } catch (error) {
-            console.error('Checkout failed due to inventory validation:', error);
+            console.error('Checkout failed due to availability validation:', error);
             if (error && error.code === 'inventory/insufficient') {
-                alert(error.message || 'Sorry, one or more ingredients are out of stock for this order.');
+                if (window.showAlert) {
+                    window.showAlert(error.message || 'Sorry, one or more items are currently unavailable.', 'error');
+                } else {
+                    alert(error.message || 'Sorry, one or more items are currently unavailable.');
+                }
             } else {
-                alert('Unable to complete checkout right now. Please try again.');
+                if (window.showAlert) {
+                    window.showAlert('Unable to complete checkout right now. Please try again.', 'error');
+                } else {
+                    alert('Unable to complete checkout right now. Please try again.');
+                }
             }
             if (btn) {
                 btn.disabled = false;
@@ -590,12 +630,20 @@
         
         if (file) {
             if (!file.type.startsWith('image/')) {
-                alert('Please select an image file');
+                if (window.showAlert) {
+                    window.showAlert('Please select an image file', 'warning');
+                } else {
+                    alert('Please select an image file');
+                }
                 return;
             }
 
             if (file.size > 5 * 1024 * 1024) {
-                alert('File size must be less than 5MB');
+                if (window.showAlert) {
+                    window.showAlert('File size must be less than 5MB', 'warning');
+                } else {
+                    alert('File size must be less than 5MB');
+                }
                 return;
             }
             
@@ -912,7 +960,7 @@
         const auth = window.firebaseAuth;
 
         if (!db || !auth || !window.doc || !window.collection || !window.getDocs || !window.runTransaction) {
-            console.warn('Firebase not fully initialized for order + inventory transaction');
+            console.warn('Firebase not fully initialized for order transaction');
             throw new Error('Checkout is temporarily unavailable. Please try again later.');
         }
 
@@ -935,16 +983,14 @@
         }
 
         const MENU_COLLECTION = 'menu';
-        const STOCK_COLLECTION = 'stocks';
 
         // Get next sequential order number before starting the transaction
         const orderNumber = await getNextOrderNumber(db);
 
         return await window.runTransaction(db, async (transaction) => {
-            const ingredientRequirements = {}; // stockId -> amount needed
-            const insufficient = [];
+            const unavailableItems = [];
             const orderItems = [];
-            const stockSnapshots = {}; // stockId -> document snapshot (read once per stock)
+            const menuUpdates = {}; // menuId -> { menuRef, currentMaxServingsPerDay, quantity }
 
             for (const cartItem of cartItems) {
                 const qty =
@@ -964,6 +1010,76 @@
                 // Include variation information if present
                 const variation = cartItem.variation || null;
 
+                const menuId = cartItem.itemId;
+                if (!menuId) {
+                    unavailableItems.push({
+                        itemId: null,
+                        name: cartItem.name || 'Item',
+                        reason: 'Missing menu item ID'
+                    });
+                    continue;
+                }
+
+                // Check menu item availability using maxServingsPerDay
+                const menuRef = window.doc(db, MENU_COLLECTION, menuId);
+                const menuSnap = await transaction.get(menuRef);
+                
+                if (!menuSnap.exists()) {
+                    unavailableItems.push({
+                        itemId: menuId,
+                        name: cartItem.name || 'Item',
+                        reason: 'Item no longer exists on menu'
+                    });
+                    continue;
+                }
+
+                const menuData = menuSnap.data() || {};
+                
+                // Check maxServingsPerDay to determine availability
+                // null/undefined means unlimited (available), only 0 or negative means unavailable
+                const maxServingsPerDay = typeof menuData.maxServingsPerDay === 'number' 
+                    ? menuData.maxServingsPerDay 
+                    : (typeof menuData.maxServingsPerDay === 'string' 
+                        ? parseFloat(menuData.maxServingsPerDay) 
+                        : null);
+
+                // Log for debugging
+                console.log(`[Checkout Guest] Menu item ${menuId} (${menuData.name || cartItem.name}): maxServingsPerDay = ${maxServingsPerDay}, menuData keys:`, Object.keys(menuData));
+
+                // If maxServingsPerDay is 0 or negative, item is unavailable
+                // null/undefined means unlimited (available)
+                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay <= 0) {
+                    unavailableItems.push({
+                        itemId: menuId,
+                        name: cartItem.name || menuData.name || 'Item',
+                        reason: 'Item is currently unavailable'
+                    });
+                    continue;
+                }
+
+                // Check if there are enough servings available (skip check if unlimited/null)
+                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay < qty) {
+                    unavailableItems.push({
+                        itemId: menuId,
+                        name: cartItem.name || menuData.name || 'Item',
+                        reason: `Only ${maxServingsPerDay} serving(s) available, but ${qty} requested`
+                    });
+                    continue;
+                }
+
+                // Track menu items that need to be updated (aggregate quantities if same item appears multiple times)
+                // Skip tracking if unlimited (null/undefined)
+                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay)) {
+                    if (!menuUpdates[menuId]) {
+                        menuUpdates[menuId] = {
+                            menuRef: menuRef,
+                            currentMaxServingsPerDay: maxServingsPerDay,
+                            quantity: 0
+                        };
+                    }
+                    menuUpdates[menuId].quantity += qty;
+                }
+
                 orderItems.push({
                     itemId: cartItem.itemId || cartItem.id,
                     name: cartItem.name || 'Item',
@@ -981,113 +1097,25 @@
                         price: 0 // Sauce has no fee when attached to a dish
                     } : null
                 });
-
-                const menuId = cartItem.itemId;
-                if (!menuId) continue;
-
-                const menuRef = window.doc(db, MENU_COLLECTION, menuId);
-                const menuSnap = await transaction.get(menuRef);
-                if (!menuSnap.exists()) continue;
-
-                const menuData = menuSnap.data() || {};
-                const ingredients = Array.isArray(menuData.ingredients) ? menuData.ingredients : [];
-
-                ingredients.forEach((ing) => {
-                    const stockId = ing.stockId || ing.ingredientId || ing.ingredientName;
-                    if (!stockId) return;
-
-                    const perDish =
-                        typeof ing.amountPerDish === 'number'
-                            ? ing.amountPerDish
-                            : typeof ing.baseAmountPerDish === 'number'
-                                ? ing.baseAmountPerDish
-                                : typeof ing.baseAmountPerDishGrams === 'number'
-                                    ? ing.baseAmountPerDishGrams
-                                    : 0;
-                    if (!perDish) return;
-
-                    const required = perDish * qty;
-                    ingredientRequirements[stockId] = (ingredientRequirements[stockId] || 0) + required;
-                });
             }
 
-            // Check stock (all reads happen before any writes)
-            for (const [stockId, required] of Object.entries(ingredientRequirements)) {
-                const stockRef = window.doc(db, STOCK_COLLECTION, stockId);
-                const stockSnap = await transaction.get(stockRef);
-
-                // Cache snapshot for later write phase so we don't read after writes
-                stockSnapshots[stockId] = stockSnap;
-
-                // If there is no matching stock document configured for this ingredient,
-                // skip it instead of treating it as "0" and failing the whole order.
-                if (!stockSnap.exists()) {
-                    continue;
-                }
-
-                const stockData = stockSnap.data() || {};
-
-                const available =
-                    typeof stockData.amount === 'number'
-                        ? stockData.amount
-                        : typeof stockData.quantity === 'number'
-                            ? stockData.quantity
-                            : typeof stockData.stock === 'number'
-                                ? stockData.stock
-                                : 0;
-
-                if (available < required) {
-                    insufficient.push({
-                        stockId,
-                        required,
-                        available
-                    });
-                }
-            }
-
-            // If any tracked ingredients are low, block the order and surface a clear error.
-            if (insufficient.length > 0) {
-                const details = insufficient
-                    .map((i) => `${i.stockId} (need ${i.required}, have ${i.available})`)
+            // If any items are unavailable, block the order
+            if (unavailableItems.length > 0) {
+                const details = unavailableItems
+                    .map((i) => `${i.name} (${i.reason})`)
                     .join(', ');
-                const error = new Error(`Insufficient stock for: ${details}`);
+                const error = new Error(`Unavailable items: ${details}`);
                 error.code = 'inventory/insufficient';
                 throw error;
             }
 
-            // Deduct stock (writes only, using cached snapshots from the read phase)
-            for (const [stockId, required] of Object.entries(ingredientRequirements)) {
-                const stockRef = window.doc(db, STOCK_COLLECTION, stockId);
-                const stockSnap = stockSnapshots[stockId];
-
-                // Only deduct from stocks that actually exist; ingredients without
-                // a configured stock document are treated as non-tracked.
-                if (!stockSnap || !stockSnap.exists()) {
-                    continue;
+            // Verify again that we have enough servings after aggregating quantities
+            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
+                if (updateInfo.currentMaxServingsPerDay < updateInfo.quantity) {
+                    const error = new Error(`Insufficient servings available for one or more items`);
+                    error.code = 'inventory/insufficient';
+                    throw error;
                 }
-
-                const stockData = stockSnap.data() || {};
-
-                const available =
-                    typeof stockData.amount === 'number'
-                        ? stockData.amount
-                        : typeof stockData.quantity === 'number'
-                            ? stockData.quantity
-                            : typeof stockData.stock === 'number'
-                                ? stockData.stock
-                                : 0;
-
-                const newAmount = Math.max(0, available - required);
-                const updatePayload = {};
-                if (typeof stockData.amount === 'number') {
-                    updatePayload.amount = newAmount;
-                } else if (typeof stockData.quantity === 'number') {
-                    updatePayload.quantity = newAmount;
-                } else {
-                    updatePayload.amount = newAmount;
-                }
-
-                transaction.update(stockRef, updatePayload);
             }
 
             // Create order document with sequential ID
@@ -1127,6 +1155,14 @@
 
             transaction.set(orderRef, orderDoc);
 
+            // Decrement maxServingsPerDay for each menu item that was ordered
+            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
+                const newMaxServingsPerDay = Math.max(0, updateInfo.currentMaxServingsPerDay - updateInfo.quantity);
+                transaction.update(updateInfo.menuRef, {
+                    maxServingsPerDay: newMaxServingsPerDay
+                });
+            }
+
             return orderRef.id;
         });
     }
@@ -1137,7 +1173,7 @@
         const db = window.firebaseDb;
 
         if (!db || !window.doc || !window.collection || !window.getDocs || !window.runTransaction) {
-            console.warn('Firebase not fully initialized for guest order + inventory transaction');
+            console.warn('Firebase not fully initialized for guest order transaction');
             throw new Error('Checkout is temporarily unavailable. Please try again later.');
         }
 
@@ -1147,16 +1183,14 @@
         }
 
         const MENU_COLLECTION = 'menu';
-        const STOCK_COLLECTION = 'stocks';
 
         // Get next sequential order number before starting the transaction
         const orderNumber = await getNextOrderNumber(db);
 
         return await window.runTransaction(db, async (transaction) => {
-            const ingredientRequirements = {}; // stockId -> amount needed
-            const insufficient = [];
+            const unavailableItems = [];
             const orderItems = [];
-            const stockSnapshots = {}; // stockId -> document snapshot (read once per stock)
+            const menuUpdates = {}; // menuId -> { menuRef, currentMaxServingsPerDay, quantity }
 
             for (const cartItem of cartItems) {
                 const qty =
@@ -1176,6 +1210,76 @@
                 // Include variation information if present
                 const variation = cartItem.variation || null;
 
+                const menuId = cartItem.itemId;
+                if (!menuId) {
+                    unavailableItems.push({
+                        itemId: null,
+                        name: cartItem.name || 'Item',
+                        reason: 'Missing menu item ID'
+                    });
+                    continue;
+                }
+
+                // Check menu item availability using maxServingsPerDay
+                const menuRef = window.doc(db, MENU_COLLECTION, menuId);
+                const menuSnap = await transaction.get(menuRef);
+                
+                if (!menuSnap.exists()) {
+                    unavailableItems.push({
+                        itemId: menuId,
+                        name: cartItem.name || 'Item',
+                        reason: 'Item no longer exists on menu'
+                    });
+                    continue;
+                }
+
+                const menuData = menuSnap.data() || {};
+                
+                // Check maxServingsPerDay to determine availability
+                // null/undefined means unlimited (available), only 0 or negative means unavailable
+                const maxServingsPerDay = typeof menuData.maxServingsPerDay === 'number' 
+                    ? menuData.maxServingsPerDay 
+                    : (typeof menuData.maxServingsPerDay === 'string' 
+                        ? parseFloat(menuData.maxServingsPerDay) 
+                        : null);
+
+                // Log for debugging
+                console.log(`[Checkout Guest] Menu item ${menuId} (${menuData.name || cartItem.name}): maxServingsPerDay = ${maxServingsPerDay}, menuData keys:`, Object.keys(menuData));
+
+                // If maxServingsPerDay is 0 or negative, item is unavailable
+                // null/undefined means unlimited (available)
+                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay <= 0) {
+                    unavailableItems.push({
+                        itemId: menuId,
+                        name: cartItem.name || menuData.name || 'Item',
+                        reason: 'Item is currently unavailable'
+                    });
+                    continue;
+                }
+
+                // Check if there are enough servings available (skip check if unlimited/null)
+                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay < qty) {
+                    unavailableItems.push({
+                        itemId: menuId,
+                        name: cartItem.name || menuData.name || 'Item',
+                        reason: `Only ${maxServingsPerDay} serving(s) available, but ${qty} requested`
+                    });
+                    continue;
+                }
+
+                // Track menu items that need to be updated (aggregate quantities if same item appears multiple times)
+                // Skip tracking if unlimited (null/undefined)
+                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay)) {
+                    if (!menuUpdates[menuId]) {
+                        menuUpdates[menuId] = {
+                            menuRef: menuRef,
+                            currentMaxServingsPerDay: maxServingsPerDay,
+                            quantity: 0
+                        };
+                    }
+                    menuUpdates[menuId].quantity += qty;
+                }
+
                 orderItems.push({
                     itemId: cartItem.itemId || cartItem.id,
                     name: cartItem.name || 'Item',
@@ -1193,113 +1297,25 @@
                         price: 0 // Sauce has no fee when attached to a dish
                     } : null
                 });
-
-                const menuId = cartItem.itemId;
-                if (!menuId) continue;
-
-                const menuRef = window.doc(db, MENU_COLLECTION, menuId);
-                const menuSnap = await transaction.get(menuRef);
-                if (!menuSnap.exists()) continue;
-
-                const menuData = menuSnap.data() || {};
-                const ingredients = Array.isArray(menuData.ingredients) ? menuData.ingredients : [];
-
-                ingredients.forEach((ing) => {
-                    const stockId = ing.stockId || ing.ingredientId || ing.ingredientName;
-                    if (!stockId) return;
-
-                    const perDish =
-                        typeof ing.amountPerDish === 'number'
-                            ? ing.amountPerDish
-                            : typeof ing.baseAmountPerDish === 'number'
-                                ? ing.baseAmountPerDish
-                                : typeof ing.baseAmountPerDishGrams === 'number'
-                                    ? ing.baseAmountPerDishGrams
-                                    : 0;
-                    if (!perDish) return;
-
-                    const required = perDish * qty;
-                    ingredientRequirements[stockId] = (ingredientRequirements[stockId] || 0) + required;
-                });
             }
 
-            // Check stock (all reads happen before any writes)
-            for (const [stockId, required] of Object.entries(ingredientRequirements)) {
-                const stockRef = window.doc(db, STOCK_COLLECTION, stockId);
-                const stockSnap = await transaction.get(stockRef);
-
-                // Cache snapshot so we don't read after writes
-                stockSnapshots[stockId] = stockSnap;
-
-                // Skip ingredients that don't have a matching stock document configured,
-                // so multi-ingredient dishes don't fail just because one ingredient
-                // isn't tracked in inventory yet.
-                if (!stockSnap.exists()) {
-                    continue;
-                }
-
-                const stockData = stockSnap.data() || {};
-
-                const available =
-                    typeof stockData.amount === 'number'
-                        ? stockData.amount
-                        : typeof stockData.quantity === 'number'
-                            ? stockData.quantity
-                            : typeof stockData.stock === 'number'
-                                ? stockData.stock
-                                : 0;
-
-                if (available < required) {
-                    insufficient.push({
-                        stockId,
-                        required,
-                        available
-                    });
-                }
-            }
-
-            // Guests also cannot order when tracked stock is insufficient.
-            if (insufficient.length > 0) {
-                const details = insufficient
-                    .map((i) => `${i.stockId} (need ${i.required}, have ${i.available})`)
+            // If any items are unavailable, block the order
+            if (unavailableItems.length > 0) {
+                const details = unavailableItems
+                    .map((i) => `${i.name} (${i.reason})`)
                     .join(', ');
-                const error = new Error(`Insufficient stock for: ${details}`);
+                const error = new Error(`Unavailable items: ${details}`);
                 error.code = 'inventory/insufficient';
                 throw error;
             }
 
-            // Deduct stock (writes only, using cached snapshots from the read phase)
-            for (const [stockId, required] of Object.entries(ingredientRequirements)) {
-                const stockRef = window.doc(db, STOCK_COLLECTION, stockId);
-                const stockSnap = stockSnapshots[stockId];
-
-                // Only adjust inventory for stock items that actually exist.
-                if (!stockSnap || !stockSnap.exists()) {
-                    continue;
+            // Verify again that we have enough servings after aggregating quantities
+            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
+                if (updateInfo.currentMaxServingsPerDay < updateInfo.quantity) {
+                    const error = new Error(`Insufficient servings available for one or more items`);
+                    error.code = 'inventory/insufficient';
+                    throw error;
                 }
-
-                const stockData = stockSnap.data() || {};
-
-                const available =
-                    typeof stockData.amount === 'number'
-                        ? stockData.amount
-                        : typeof stockData.quantity === 'number'
-                            ? stockData.quantity
-                            : typeof stockData.stock === 'number'
-                                ? stockData.stock
-                                : 0;
-
-                const newAmount = Math.max(0, available - required);
-                const updatePayload = {};
-                if (typeof stockData.amount === 'number') {
-                    updatePayload.amount = newAmount;
-                } else if (typeof stockData.quantity === 'number') {
-                    updatePayload.quantity = newAmount;
-                } else {
-                    updatePayload.amount = newAmount;
-                }
-
-                transaction.update(stockRef, updatePayload);
             }
 
             // Create order document for guest with sequential ID
@@ -1339,6 +1355,14 @@
             };
 
             transaction.set(orderRef, orderDoc);
+
+            // Decrement maxServingsPerDay for each menu item that was ordered
+            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
+                const newMaxServingsPerDay = Math.max(0, updateInfo.currentMaxServingsPerDay - updateInfo.quantity);
+                transaction.update(updateInfo.menuRef, {
+                    maxServingsPerDay: newMaxServingsPerDay
+                });
+            }
 
             return orderRef.id;
         });

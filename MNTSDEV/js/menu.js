@@ -152,6 +152,15 @@
                 const popular = !!item.popular;
                 const badge = item.badge || '';
 
+                // Check maxServingsPerDay to determine availability
+                // null/undefined means unlimited (available), only 0 or negative means unavailable
+                const maxServingsPerDay = typeof item.maxServingsPerDay === 'number' 
+                    ? item.maxServingsPerDay 
+                    : (typeof item.maxServingsPerDay === 'string' 
+                        ? parseFloat(item.maxServingsPerDay) 
+                        : null);
+                const isUnavailable = maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay <= 0;
+
                 // Get display name from displayName field first, then fallback to other fields
                 const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
                 const primaryIngredient = ingredients[0] || {};
@@ -205,7 +214,7 @@
                        </div>`;
 
                 return `
-                    <div class="menu-card" data-popular="${popular}" data-item-id="${item.id}" onclick="openFoodItem('${item.id}')">
+                    <div class="menu-card ${isUnavailable ? 'unavailable' : ''}" data-popular="${popular}" data-item-id="${item.id}" ${isUnavailable ? '' : `onclick="openFoodItem('${item.id}')"`}>
                         <div class="card-image-container">
                             ${imageHtml}
                             ${badge ? `<div class="badge"><i class="fas fa-star"></i> ${badge}</div>` : ''}
@@ -221,7 +230,7 @@
                                     data-item-name="${attrSafeName}"
                                     data-item-price="${basePrice}"
                                     data-item-img="${attrSafeImg}"
-                                    onclick="window.cart.addToCart(event)"
+                                    ${isUnavailable ? 'disabled' : 'onclick="window.cart.addToCart(event)"'}
                                 >
                                     <i class="fas fa-plus"></i>
                                 </button>

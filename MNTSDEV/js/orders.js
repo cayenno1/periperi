@@ -26,6 +26,22 @@
         return true; // default to available when unknown
     }
 
+    function checkMasServingPerDayAvailability(item) {
+        if (!item) return false;
+        
+        // Check maxServingsPerDay to determine availability
+        // null/undefined means unlimited (available), only 0 or negative means unavailable
+        const maxServingsPerDay = typeof item.maxServingsPerDay === 'number' 
+            ? item.maxServingsPerDay 
+            : (typeof item.maxServingsPerDay === 'string' 
+                ? parseFloat(item.maxServingsPerDay) 
+                : null);
+
+        // If maxServingsPerDay is null/undefined, item is available (unlimited)
+        // Only 0 or negative means unavailable
+        return maxServingsPerDay === null || maxServingsPerDay === undefined || (!isNaN(maxServingsPerDay) && maxServingsPerDay > 0);
+    }
+
   function getReorderState(order) {
     if (!order || order.status !== 'completed') {
       return { allowed: false, reason: 'Order not completed yet.' };
@@ -328,7 +344,8 @@
                 const item = await window.firestore.fetchMenuItemById(id);
                 const exists = !!item && item.active !== false;
                 if (!exists) missingItemsCache.add(id);
-                itemAvailability[id] = exists && toBoolAvailability(item.available ?? item.isAvailable ?? item.availability);
+                // Use masServingPerDay to check availability
+                itemAvailability[id] = exists && checkMasServingPerDayAvailability(item);
             }
         } catch (error) {
             console.warn('Failed to refresh item availability for orders:', error);
@@ -359,7 +376,8 @@
             for (const id of ids) {
                 const item = await window.firestore.fetchMenuItemById(id);
                 const exists = !!item && item.active !== false;
-                itemAvailability[id] = exists && toBoolAvailability(item.available ?? item.isAvailable ?? item.availability);
+                // Use masServingPerDay to check availability
+                itemAvailability[id] = exists && checkMasServingPerDayAvailability(item);
                 if (!exists || missingItemsCache.has(id) || !itemAvailability[id]) {
                     missingItemsCache.add(id);
                     return { ok: false, message: 'One or more items are no longer on the menu.' };
@@ -382,7 +400,11 @@
             } catch (e) {}
             window.location.href = `order_details.html?orderId=${encodeURIComponent(id)}`;
         } else {
-            alert('Order not found');
+            if (window.showAlert) {
+                window.showAlert('Order not found', 'error');
+            } else {
+                alert('Order not found');
+            }
         }
     }
 
@@ -392,7 +414,11 @@
         const items = Array.isArray(raw?.items) ? raw.items : [];
 
         if (!order || !items.length) {
-            alert('Order not found or has no items.');
+            if (window.showAlert) {
+                window.showAlert('Order not found or has no items.', 'error');
+            } else {
+                alert('Order not found or has no items.');
+            }
             return;
         }
 
@@ -471,7 +497,11 @@
             }
         } catch (error) {
             console.error('Error while reordering:', error);
-            alert('Could not reorder right now. Please try again.');
+            if (window.showAlert) {
+                window.showAlert('Could not reorder right now. Please try again.', 'error');
+            } else {
+                alert('Could not reorder right now. Please try again.');
+            }
         }
     }
 

@@ -46,7 +46,11 @@
                 }
                 window.location.href = 'driver.html';
             } else {
-                alert('Invalid username or password');
+                if (window.showAlert) {
+                    window.showAlert('Invalid username or password', 'error');
+                } else {
+                    alert('Invalid username or password');
+                }
             }
         });
     }

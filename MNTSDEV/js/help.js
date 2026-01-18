@@ -46,7 +46,11 @@
         if (logoutBtn) {
             logoutBtn.addEventListener('click', function() {
                 dropdown.classList.remove('show');
-                alert('You have been logged out.');
+                if (window.showAlert) {
+                    window.showAlert('You have been logged out.', 'info');
+                } else {
+                    alert('You have been logged out.');
+                }
                 setTimeout(() => {
                     window.location.href = 'login.html';
                 }, 300);

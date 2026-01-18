@@ -409,6 +409,153 @@
         return window.setCartCount(0);
     };
 
+    // ============================================
+    // CUSTOM MODAL SYSTEM (replaces browser alerts)
+    // ============================================
+    function createModalContainer() {
+        let container = document.getElementById('customModalContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'customModalContainer';
+            container.className = 'custom-modal-container';
+            container.innerHTML = `
+                <div class="custom-modal-overlay" id="customModalOverlay"></div>
+                <div class="custom-modal" id="customModal">
+                    <div class="custom-modal-content">
+                        <button class="custom-modal-close" id="customModalClose" aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <div class="custom-modal-icon" id="customModalIcon">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div class="custom-modal-title" id="customModalTitle"></div>
+                        <div class="custom-modal-message" id="customModalMessage"></div>
+                        <div class="custom-modal-actions" id="customModalActions"></div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(container);
+        }
+        return container;
+    }
+
+    function showModal(message, options = {}) {
+        const {
+            title = '',
+            type = 'info', // 'info', 'success', 'error', 'warning'
+            showCancel = false,
+            confirmText = 'OK',
+            cancelText = 'Cancel',
+            onConfirm = null,
+            onCancel = null,
+            autoClose = false,
+            duration = 3000
+        } = options;
+
+        const container = createModalContainer();
+        const modal = document.getElementById('customModal');
+        const overlay = document.getElementById('customModalOverlay');
+        const iconEl = document.getElementById('customModalIcon');
+        const titleEl = document.getElementById('customModalTitle');
+        const messageEl = document.getElementById('customModalMessage');
+        const actionsEl = document.getElementById('customModalActions');
+        const closeBtn = document.getElementById('customModalClose');
+
+        if (!modal || !messageEl) return;
+
+        // Set icon based on type
+        const iconMap = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            warning: 'fa-exclamation-triangle',
+            info: 'fa-info-circle'
+        };
+        const icon = iconMap[type] || iconMap.info;
+        iconEl.innerHTML = `<i class="fas ${icon}"></i>`;
+        modal.className = `custom-modal custom-modal-${type}`;
+
+        // Set title and message
+        if (title) {
+            titleEl.textContent = title;
+            titleEl.style.display = 'block';
+        } else {
+            titleEl.style.display = 'none';
+        }
+        messageEl.textContent = message;
+
+        // Set up actions
+        actionsEl.innerHTML = '';
+        if (showCancel) {
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'custom-modal-btn custom-modal-btn-secondary';
+            cancelBtn.textContent = cancelText;
+            cancelBtn.onclick = () => {
+                hideModal();
+                if (onCancel) onCancel();
+            };
+            actionsEl.appendChild(cancelBtn);
+        }
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'custom-modal-btn custom-modal-btn-primary';
+        confirmBtn.textContent = confirmText;
+        confirmBtn.onclick = () => {
+            hideModal();
+            if (onConfirm) onConfirm();
+        };
+        actionsEl.appendChild(confirmBtn);
+
+        // Close button handler
+        const closeHandler = () => {
+            hideModal();
+            if (onCancel) onCancel();
+        };
+        closeBtn.onclick = closeHandler;
+        overlay.onclick = closeHandler;
+
+        // Show modal
+        container.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+            overlay.classList.add('show');
+        }, 10);
+
+        // Auto-close if enabled
+        if (autoClose && !showCancel) {
+            setTimeout(() => {
+                hideModal();
+                if (onConfirm) onConfirm();
+            }, duration);
+        }
+    }
+
+    function hideModal() {
+        const container = document.getElementById('customModalContainer');
+        const modal = document.getElementById('customModal');
+        const overlay = document.getElementById('customModalOverlay');
+        if (container && modal && overlay) {
+            modal.classList.remove('show');
+            overlay.classList.remove('show');
+            setTimeout(() => {
+                container.style.display = 'none';
+            }, 300);
+        }
+    }
+
+    // Replace window.alert with custom modal
+    window.showAlert = function(message, type = 'info') {
+        showModal(message, { type, autoClose: true, duration: 3000 });
+    };
+
+    // Replace window.confirm with custom modal
+    window.showConfirm = function(message, onConfirm, onCancel) {
+        showModal(message, {
+            type: 'warning',
+            showCancel: true,
+            onConfirm: onConfirm || (() => {}),
+            onCancel: onCancel || (() => {})
+        });
+    };
+
     // Initialize cart badges and cart preview on load
     document.addEventListener('DOMContentLoaded', () => {
         updateCartBadges();

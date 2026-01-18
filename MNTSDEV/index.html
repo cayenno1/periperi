@@ -90,7 +90,7 @@
                     <img src="ribs.jpg" alt="Grilled ribs from Pablo's Peri Peri" class="img-fluid w-100">
                 </div>
                 <div class="hero-slide">
-                    <img src="peri.jpg" alt="Peri Peri chicken from Pablo's Peri Peri" class="img-fluid w-100">
+                    <img src="dish1.jpg" alt="Peri Peri chicken from Pablo's Peri Peri" class="img-fluid w-100">
                 </div>
 
                 <button class="hero-slider-control hero-slider-control-prev btn btn-light rounded-circle" type="button" aria-label="Previous image">
@@ -140,7 +140,13 @@
                                 <p class="bestseller-description">Flame-grilled chicken with our signature peri peri sauce</p>
                                 <div class="price-section d-flex align-items-center justify-content-between">
                                     <p class="bestseller-price mb-0">₱299.00</p>
-                                    <button class="add-to-cart-btn" onclick="addToCart('peri-peri-chicken')">
+                                    <button 
+                                        class="add-to-cart-btn" 
+                                        data-item-id="peri-peri-chicken"
+                                        data-item-name="Peri Peri Chicken"
+                                        data-item-price="299"
+                                        data-item-img="food_img.png"
+                                        onclick="event.stopPropagation(); window.cart.addToCart(event)">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -163,7 +169,13 @@
                                 <p class="bestseller-description">Complete meal with chicken, sides, and refreshing drink</p>
                                 <div class="price-section d-flex align-items-center justify-content-between">
                                     <p class="bestseller-price mb-0">₱399.00</p>
-                                    <button class="add-to-cart-btn" onclick="addToCart('special-combo')">
+                                    <button 
+                                        class="add-to-cart-btn" 
+                                        data-item-id="special-combo"
+                                        data-item-name="Special Combo Meal"
+                                        data-item-price="399"
+                                        data-item-img="new_dish.png"
+                                        onclick="event.stopPropagation(); window.cart.addToCart(event)">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -186,7 +198,13 @@
                                 <p class="bestseller-description">Perfect complement to your spicy peri peri meal</p>
                                 <div class="price-section d-flex align-items-center justify-content-between">
                                     <p class="bestseller-price mb-0">₱89.00</p>
-                                    <button class="add-to-cart-btn" onclick="addToCart('drinks')">
+                                    <button 
+                                        class="add-to-cart-btn" 
+                                        data-item-id="drinks"
+                                        data-item-name="Refreshing Drinks"
+                                        data-item-price="89"
+                                        data-item-img="coke.png"
+                                        onclick="event.stopPropagation(); window.cart.addToCart(event)">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -209,7 +227,13 @@
                                 <p class="bestseller-description">Premium tea varieties to soothe your palate</p>
                                 <div class="price-section d-flex align-items-center justify-content-between">
                                     <p class="bestseller-price mb-0">₱75.00</p>
-                                    <button class="add-to-cart-btn" onclick="addToCart('hot-tea')">
+                                    <button 
+                                        class="add-to-cart-btn" 
+                                        data-item-id="hot-tea"
+                                        data-item-name="Hot Tea Selection"
+                                        data-item-price="75"
+                                        data-item-img="tea.png"
+                                        onclick="event.stopPropagation(); window.cart.addToCart(event)">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -229,7 +253,7 @@
             <div class="row align-items-center g-4">
                 <div class="col-12 col-lg-6">
                     <div class="story-media">
-                        <img src="new.jpg" alt="Grilled peri peri chicken" class="img-fluid rounded-4 shadow-sm" />
+                        <img src="dish1.jpg" alt="Grilled peri peri chicken" class="img-fluid rounded-4 shadow-sm" />
                     </div>
                 </div>
                 <div class="col-12 col-lg-6">

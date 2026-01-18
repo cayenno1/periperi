@@ -48,6 +48,22 @@
     return true;
   }
 
+  function checkMasServingPerDayAvailability(item) {
+    if (!item) return false;
+    
+    // Check maxServingsPerDay to determine availability
+    // null/undefined means unlimited (available), only 0 or negative means unavailable
+    const maxServingsPerDay = typeof item.maxServingsPerDay === 'number' 
+      ? item.maxServingsPerDay 
+      : (typeof item.maxServingsPerDay === 'string' 
+        ? parseFloat(item.maxServingsPerDay) 
+        : null);
+
+    // If maxServingsPerDay is null/undefined, item is available (unlimited)
+    // Only 0 or negative means unavailable
+    return maxServingsPerDay === null || maxServingsPerDay === undefined || (!isNaN(maxServingsPerDay) && maxServingsPerDay > 0);
+  }
+
   function setCartCountShared(count) {
     const next = Math.max(0, safeNumber(count, 0));
     if (typeof window.setCartCount === 'function') {
@@ -95,7 +111,8 @@
         try {
           const item = await window.firestore.fetchMenuItemById(id);
           const exists = !!item && item.active !== false;
-          const available = exists && toBoolAvailability(item?.available ?? item?.isAvailable ?? item?.availability);
+          // Use masServingPerDay to check availability
+          const available = exists && checkMasServingPerDayAvailability(item);
           itemAvailability[id] = available;
           if (!available) missingItemsCache.add(id);
         } catch (e) {
@@ -334,7 +351,11 @@
       }
     } catch (error) {
       console.error('Error while seeding cart for reorder:', error);
-      alert('Could not reorder right now. Please try again.');
+      if (window.showAlert) {
+        window.showAlert('Could not reorder right now. Please try again.', 'error');
+      } else {
+        alert('Could not reorder right now. Please try again.');
+      }
     }
   }
 
@@ -360,7 +381,11 @@
         message: message || (missingNames?.length ? `Unavailable: ${missingNames.join(', ')}` : 'Item unavailable')
       });
       if (message || (missingNames && missingNames.length)) {
-        alert(message || `Unavailable: ${missingNames.join(', ')}`);
+        if (window.showAlert) {
+          window.showAlert(message || `Unavailable: ${missingNames.join(', ')}`, 'error');
+        } else {
+          alert(message || `Unavailable: ${missingNames.join(', ')}`);
+        }
       }
       return;
     }
@@ -1045,7 +1070,11 @@
 
     const win = window.open(url, '_blank');
     if (!win) {
-      alert('Please allow popups to view the receipt.');
+      if (window.showAlert) {
+        window.showAlert('Please allow popups to view the receipt.', 'warning');
+      } else {
+        alert('Please allow popups to view the receipt.');
+      }
     }
   }
 

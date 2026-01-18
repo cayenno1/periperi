@@ -134,14 +134,22 @@
             const email = emailInput ? emailInput.value.trim() : '';
 
             if (!email) {
-                alert('Please enter your email address.');
+                if (window.showAlert) {
+                    window.showAlert('Please enter your email address.', 'warning');
+                } else {
+                    alert('Please enter your email address.');
+                }
                 return;
             }
 
             const result = await window.auth.sendPasswordReset(email);
 
             if (result.success) {
-                alert('Password reset email sent. Please check your inbox.');
+                if (window.showAlert) {
+                    window.showAlert('Password reset email sent. Please check your inbox.', 'success');
+                } else {
+                    alert('Password reset email sent. Please check your inbox.');
+                }
                 closeModal();
             } else {
                 let message = 'Failed to send password reset email. Please try again.';
@@ -160,7 +168,11 @@
                             message = result.error.message || message;
                     }
                 }
-                alert(message);
+                if (window.showAlert) {
+                    window.showAlert(message, 'error');
+                } else {
+                    alert(message);
+                }
             }
         });
     }
