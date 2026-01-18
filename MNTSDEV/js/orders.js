@@ -30,16 +30,14 @@
         if (!item) return false;
         
         // Check maxServingsPerDay to determine availability
-        // null/undefined means unlimited (available), only 0 or negative means unavailable
         const maxServingsPerDay = typeof item.maxServingsPerDay === 'number' 
             ? item.maxServingsPerDay 
             : (typeof item.maxServingsPerDay === 'string' 
                 ? parseFloat(item.maxServingsPerDay) 
                 : null);
 
-        // If maxServingsPerDay is null/undefined, item is available (unlimited)
-        // Only 0 or negative means unavailable
-        return maxServingsPerDay === null || maxServingsPerDay === undefined || (!isNaN(maxServingsPerDay) && maxServingsPerDay > 0);
+        // If maxServingsPerDay is 0, null, undefined, or negative, item is unavailable
+        return maxServingsPerDay !== null && maxServingsPerDay !== undefined && maxServingsPerDay > 0;
     }
 
   function getReorderState(order) {

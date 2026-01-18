@@ -1036,7 +1036,6 @@
                 const menuData = menuSnap.data() || {};
                 
                 // Check maxServingsPerDay to determine availability
-                // null/undefined means unlimited (available), only 0 or negative means unavailable
                 const maxServingsPerDay = typeof menuData.maxServingsPerDay === 'number' 
                     ? menuData.maxServingsPerDay 
                     : (typeof menuData.maxServingsPerDay === 'string' 
@@ -1046,19 +1045,18 @@
                 // Log for debugging
                 console.log(`[Checkout Guest] Menu item ${menuId} (${menuData.name || cartItem.name}): maxServingsPerDay = ${maxServingsPerDay}, menuData keys:`, Object.keys(menuData));
 
-                // If maxServingsPerDay is 0 or negative, item is unavailable
-                // null/undefined means unlimited (available)
-                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay <= 0) {
+                // If maxServingsPerDay is null, undefined, or negative, item is unavailable
+                if (maxServingsPerDay === null || maxServingsPerDay === undefined || isNaN(maxServingsPerDay) || maxServingsPerDay < 0) {
                     unavailableItems.push({
                         itemId: menuId,
                         name: cartItem.name || menuData.name || 'Item',
-                        reason: 'Item is currently unavailable'
+                        reason: `Item is currently unavailable (maxServingsPerDay: ${maxServingsPerDay})`
                     });
                     continue;
                 }
 
-                // Check if there are enough servings available (skip check if unlimited/null)
-                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay < qty) {
+                // Check if there are enough servings available
+                if (maxServingsPerDay < qty) {
                     unavailableItems.push({
                         itemId: menuId,
                         name: cartItem.name || menuData.name || 'Item',
@@ -1068,17 +1066,14 @@
                 }
 
                 // Track menu items that need to be updated (aggregate quantities if same item appears multiple times)
-                // Skip tracking if unlimited (null/undefined)
-                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay)) {
-                    if (!menuUpdates[menuId]) {
-                        menuUpdates[menuId] = {
-                            menuRef: menuRef,
-                            currentMaxServingsPerDay: maxServingsPerDay,
-                            quantity: 0
-                        };
-                    }
-                    menuUpdates[menuId].quantity += qty;
+                if (!menuUpdates[menuId]) {
+                    menuUpdates[menuId] = {
+                        menuRef: menuRef,
+                        currentMaxServingsPerDay: maxServingsPerDay,
+                        quantity: 0
+                    };
                 }
+                menuUpdates[menuId].quantity += qty;
 
                 orderItems.push({
                     itemId: cartItem.itemId || cartItem.id,
@@ -1236,7 +1231,6 @@
                 const menuData = menuSnap.data() || {};
                 
                 // Check maxServingsPerDay to determine availability
-                // null/undefined means unlimited (available), only 0 or negative means unavailable
                 const maxServingsPerDay = typeof menuData.maxServingsPerDay === 'number' 
                     ? menuData.maxServingsPerDay 
                     : (typeof menuData.maxServingsPerDay === 'string' 
@@ -1246,19 +1240,18 @@
                 // Log for debugging
                 console.log(`[Checkout Guest] Menu item ${menuId} (${menuData.name || cartItem.name}): maxServingsPerDay = ${maxServingsPerDay}, menuData keys:`, Object.keys(menuData));
 
-                // If maxServingsPerDay is 0 or negative, item is unavailable
-                // null/undefined means unlimited (available)
-                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay <= 0) {
+                // If maxServingsPerDay is null, undefined, or negative, item is unavailable
+                if (maxServingsPerDay === null || maxServingsPerDay === undefined || isNaN(maxServingsPerDay) || maxServingsPerDay < 0) {
                     unavailableItems.push({
                         itemId: menuId,
                         name: cartItem.name || menuData.name || 'Item',
-                        reason: 'Item is currently unavailable'
+                        reason: `Item is currently unavailable (maxServingsPerDay: ${maxServingsPerDay})`
                     });
                     continue;
                 }
 
-                // Check if there are enough servings available (skip check if unlimited/null)
-                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay < qty) {
+                // Check if there are enough servings available
+                if (maxServingsPerDay < qty) {
                     unavailableItems.push({
                         itemId: menuId,
                         name: cartItem.name || menuData.name || 'Item',
@@ -1268,17 +1261,14 @@
                 }
 
                 // Track menu items that need to be updated (aggregate quantities if same item appears multiple times)
-                // Skip tracking if unlimited (null/undefined)
-                if (maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay)) {
-                    if (!menuUpdates[menuId]) {
-                        menuUpdates[menuId] = {
-                            menuRef: menuRef,
-                            currentMaxServingsPerDay: maxServingsPerDay,
-                            quantity: 0
-                        };
-                    }
-                    menuUpdates[menuId].quantity += qty;
+                if (!menuUpdates[menuId]) {
+                    menuUpdates[menuId] = {
+                        menuRef: menuRef,
+                        currentMaxServingsPerDay: maxServingsPerDay,
+                        quantity: 0
+                    };
                 }
+                menuUpdates[menuId].quantity += qty;
 
                 orderItems.push({
                     itemId: cartItem.itemId || cartItem.id,

@@ -153,13 +153,12 @@
                 const badge = item.badge || '';
 
                 // Check maxServingsPerDay to determine availability
-                // null/undefined means unlimited (available), only 0 or negative means unavailable
                 const maxServingsPerDay = typeof item.maxServingsPerDay === 'number' 
                     ? item.maxServingsPerDay 
                     : (typeof item.maxServingsPerDay === 'string' 
                         ? parseFloat(item.maxServingsPerDay) 
                         : null);
-                const isUnavailable = maxServingsPerDay !== null && maxServingsPerDay !== undefined && !isNaN(maxServingsPerDay) && maxServingsPerDay <= 0;
+                const isUnavailable = maxServingsPerDay === null || maxServingsPerDay === undefined || isNaN(maxServingsPerDay) || maxServingsPerDay <= 0;
 
                 // Get display name from displayName field first, then fallback to other fields
                 const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
