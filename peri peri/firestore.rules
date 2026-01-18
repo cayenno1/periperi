@@ -89,13 +89,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ----- Stocks (Inventory) -----
-    match /stocks/{stockId} {
-      allow read: if true;
-      allow create: if isValidStockDocument(request.resource.data);
-      allow update: if isValidStockUpdate(request.resource.data, resource.data);
-      allow delete: if false;
-    }
+    // ----- Stocks (Inventory) - REMOVED: System is now recipe-based -----
+    // Stocks collection is no longer used, but kept in rules for backward compatibility
+    // match /stocks/{stockId} {
+    //   allow read: if true;
+    //   allow create: if isValidStockDocument(request.resource.data);
+    //   allow update: if isValidStockUpdate(request.resource.data, resource.data);
+    //   allow delete: if false;
+    // }
 
     // ----- Menu (Dishes) -----
     function isValidMenuItem(data) {

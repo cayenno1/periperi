@@ -7,7 +7,7 @@ async function generateUnique8DigitId() {
         await waitForFirebaseReady();
     }
     const fns = window.firestoreFunctions;
-    const collectionsToCheck = ['stocks', 'menu'];
+    const collectionsToCheck = ['menu'];
     const existingIds = new Set();
 
     for (const col of collectionsToCheck) {
@@ -38,7 +38,6 @@ async function generateUnique8DigitId() {
     }
     throw new Error('Unable to generate a unique 8-digit ID. Please try again.');
 }
-let inventoryState = [];
 let menuState = [];
 let menuQuantityMode = 'stored'; // Always 'stored' - ingredients mode removed
 let currentMenuEditItem = null;
@@ -51,8 +50,6 @@ let menuDetailNewImageFile = null; // Stores the new image file for product deta
 let ordersState = [];
 let ordersUnsubscribe = null;
 let ordersSubscriptionInitialized = false;
-let inventoryUnsubscribe = null;
-let inventorySubscriptionInitialized = false;
 let menuUnsubscribe = null;
 let menuSubscriptionInitialized = false;
 const customerDetailsCache = new Map();
@@ -71,177 +68,7 @@ let customersState = [];
 let selectedCustomerId = null;
 let customerSearchTerm = '';
 
-const InventoryStore = (() => {
-    const COLLECTION = 'stocks';
-
-    function assertFirestoreReady() {
-        if (!isFirestoreReady()) {
-            throw new Error('Inventory service is still loading. Please wait a moment and try again.');
-        }
-        return window.firestoreFunctions;
-    }
-
-    function normalizeTimestamp(value) {
-        if (!value) return null;
-        if (value instanceof Date) {
-            return value;
-        }
-        if (typeof value.toDate === 'function') {
-            return value.toDate();
-        }
-        const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? null : date;
-    }
-
-    function normalizeItem(item) {
-        if (!item || !item.id) {
-            return null;
-        }
-        const normalizedUnitType = item.unitType === 'count' ? 'count' : 'weight';
-        return {
-            id: item.id,
-        ingredientId: item.ingredientId || item.id,
-            name: item.name || toTitleCase(item.id.replace(/-/g, ' ')),
-            unitType: normalizedUnitType,
-            baseUnit: item.baseUnit || (normalizedUnitType === 'count' ? 'pcs' : 'g'),
-            quantity: Number(item.quantity) || 0,
-            reorderLevel: Number(item.reorderLevel) || defaultReorderLevel(normalizedUnitType),
-            createdAt: normalizeTimestamp(item.createdAt),
-            updatedAt: normalizeTimestamp(item.updatedAt)
-        };
-    }
-
-    async function getItems() {
-        const fns = assertFirestoreReady();
-        const snapshot = await fns.getDocs(fns.collection(window.db, COLLECTION));
-        return snapshot.docs
-            .map(docSnap => normalizeItem({ id: docSnap.id, ...docSnap.data() }))
-            .filter(Boolean)
-            .sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    async function registerIngredient({ name, unitType, amount, reorderLevel }) {
-        const trimmedName = (name || '').trim();
-        if (!trimmedName) {
-            throw new Error('Ingredient name is required.');
-        }
-
-        const normalizedUnitType = unitType === 'count' ? 'count' : 'weight';
-        const normalizedAmount = Number(amount) || 0;
-        if (normalizedAmount < 0) {
-            throw new Error('Initial quantity cannot be negative.');
-        }
-
-        const fns = assertFirestoreReady();
-        const slug = slugify(trimmedName);
-        const docRef = fns.doc(window.db, COLLECTION, slug);
-        const existing = await fns.getDoc(docRef);
-        if (existing.exists()) {
-            throw new Error(`${toTitleCase(trimmedName)} is already registered.`);
-        }
-
-        const ingredientId = await generateUnique8DigitId();
-
-        await fns.setDoc(docRef, {
-            ingredientId,
-            name: toTitleCase(trimmedName),
-            unitType: normalizedUnitType,
-            baseUnit: normalizedUnitType === 'count' ? 'pcs' : 'g',
-            quantity: +normalizedAmount.toFixed(2),
-            reorderLevel: reorderLevel !== undefined && reorderLevel !== null && reorderLevel !== ''
-                ? Math.max(0, Number(reorderLevel))
-                : defaultReorderLevel(normalizedUnitType),
-            createdAt: fns.serverTimestamp(),
-            updatedAt: fns.serverTimestamp()
-        });
-
-        return await getItems();
-    }
-
-    async function restock({ name, amount }) {
-        const trimmedName = (name || '').trim();
-        if (!trimmedName) {
-            throw new Error('Ingredient name is required.');
-        }
-
-        const normalizedAmount = Number(amount) || 0;
-        if (normalizedAmount <= 0) {
-            throw new Error('Quantity must be greater than zero.');
-        }
-
-        const fns = assertFirestoreReady();
-        const slug = slugify(trimmedName);
-        const docRef = fns.doc(window.db, COLLECTION, slug);
-        const existing = await fns.getDoc(docRef);
-
-        if (!existing.exists()) {
-            throw new Error(`${toTitleCase(trimmedName)} is not registered in the inventory.`);
-        }
-
-        await fns.updateDoc(docRef, {
-            quantity: fns.increment(+normalizedAmount.toFixed(2)),
-            updatedAt: fns.serverTimestamp()
-        });
-
-        return await getItems();
-    }
-
-    async function consume({ idOrIngredientId, amount }) {
-        if (!idOrIngredientId) {
-            throw new Error('Ingredient identifier is required.');
-        }
-        const normalizedAmount = Number(amount) || 0;
-        if (normalizedAmount <= 0) {
-            throw new Error('Amount to consume must be greater than zero.');
-        }
-        const fns = assertFirestoreReady();
-
-        // Find the doc by id or ingredientId
-        const snap = await fns.getDocs(fns.collection(window.db, COLLECTION));
-        const targetDoc = snap.docs.find(docSnap => {
-            const data = docSnap.data() || {};
-            return docSnap.id === idOrIngredientId || data.ingredientId === idOrIngredientId;
-        });
-        if (!targetDoc) {
-            throw new Error('Ingredient not found in inventory.');
-        }
-        const docRef = targetDoc.ref;
-        await fns.updateDoc(docRef, {
-            quantity: fns.increment(-normalizedAmount),
-            updatedAt: fns.serverTimestamp()
-        });
-        return await getItems();
-    }
-
-    function slugify(value) {
-        return value
-            .toString()
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-    }
-
-    function toTitleCase(value) {
-        return value
-            .toString()
-            .trim()
-            .toLowerCase()
-            .replace(/(^|\s|-)\S/g, letter => letter.toUpperCase());
-    }
-
-    function defaultReorderLevel(unitType) {
-        return unitType === 'count' ? 100 : 2000;
-    }
-
-    return {
-        getItems,
-        registerIngredient,
-        restock,
-        consume,
-        slugifyName: slugify
-    };
-})();
+// InventoryStore removed - system is now recipe-based
 
 // ============================================================================
 // DAILY SERVINGS SYSTEM (Replaces Inventory-Based Order Blocking)
@@ -479,6 +306,7 @@ window.IngredientLogStore = IngredientLogStore;
 // Cache for today's servings (to avoid repeated queries)
 let todayServingsCache = {};
 let todayServingsCacheDate = null;
+let dailyServingsUnsubscribe = null;
 
 // Get cached serving count or fetch if needed
 async function getCachedTodayServings(menuItemId) {
@@ -1561,11 +1389,6 @@ function renderOrdersTable(orders) {
                     <i class="fas fa-redo"></i> Reopen Order
                 </button>`);
             } else {
-                // Always show Decline Order button (except for declined orders)
-                buttons.push(`<button class="order-action-btn btn-decline" onclick="event.stopPropagation(); declinePayment('${escapedOrderId}')" title="Decline Order">
-                    <i class="fas fa-times-circle"></i> Decline Order
-                </button>`);
-                
                 // Show Accept Payment button for unverified GCash orders
                 if (isGCashOrder && !isPaymentVerified) {
                     buttons.push(`<button class="order-action-btn btn-accept-payment" onclick="event.stopPropagation(); verifyPayment('${escapedOrderId}')" title="Accept Payment">
@@ -1834,7 +1657,7 @@ function waitForFirebaseReady(timeout = 10000) {
     });
 }
 
-window.InventoryStore = InventoryStore;
+// window.InventoryStore removed - system is now recipe-based
 
 // Dropdown functionality
 function toggleDropdown(dropdownId) {
@@ -2183,6 +2006,11 @@ async function updateOrderStatus(orderId, newStatus) {
             if (menuState && menuState.length > 0) {
                 const menuItemIds = menuState.map(item => item.id);
                 await refreshServingsCache(menuItemIds);
+                // Re-render menu list table to show updated serving counts
+                const menuListTable = document.getElementById('menuListTableBody');
+                if (menuListTable) {
+                    await renderMenuListTable();
+                }
             }
         } catch (e) {
             console.error('Daily serving deduction failed:', e);
@@ -3185,11 +3013,6 @@ async function attemptAutomatedPaymentVerification(order) {
         return { verified: false, reason: 'Order not in pending status' };
     }
     
-    // Edge case: Order has been declined before - requires manual review
-    if (order.paymentDeclined === true || order.status === 'declined') {
-        return { verified: false, reason: 'Requires manual review: Previously declined', requiresReview: true };
-    }
-    
     // Edge case: Multiple payment proof versions (resubmission) - requires manual review
     if (order.paymentProofVersion && order.paymentProofVersion > 1) {
         return { verified: false, reason: 'Requires manual review: Payment resubmission', requiresReview: true };
@@ -3472,158 +3295,6 @@ async function processOrdersForAutoVerification(previousOrders, currentOrders) {
     // Note: This is a simple cleanup - in production you might want more sophisticated tracking
 }
 
-function declinePayment(orderId) {
-    // Ensure orderId is provided
-    if (!orderId) {
-        showNotification('No order selected for decline.', 'error');
-        return;
-    }
-    
-    // Set the current verifying order ID for the modal
-    currentVerifyingOrderId = orderId;
-    
-    // Reset the modal state
-    const declineModal = document.getElementById('declinePaymentModal');
-    const radioButtons = document.querySelectorAll('input[name="declineReason"]');
-    const otherReasonContainer = document.getElementById('declineOtherReasonContainer');
-    const otherReasonTextarea = document.getElementById('declineOtherReason');
-    
-    if (!declineModal) {
-        showNotification('Decline payment modal not found.', 'error');
-        return;
-    }
-    
-    // Reset form
-    radioButtons.forEach(radio => radio.checked = false);
-    if (otherReasonTextarea) otherReasonTextarea.value = '';
-    if (otherReasonContainer) otherReasonContainer.style.display = 'none';
-    
-    // Show modal
-    declineModal.style.display = 'block';
-}
-
-function handleDeclineReasonChange() {
-    const selectedReason = document.querySelector('input[name="declineReason"]:checked');
-    const otherReasonContainer = document.getElementById('declineOtherReasonContainer');
-    const otherReasonTextarea = document.getElementById('declineOtherReason');
-    
-    if (selectedReason && selectedReason.value === 'Other') {
-        if (otherReasonContainer) otherReasonContainer.style.display = 'block';
-    } else {
-        if (otherReasonContainer) otherReasonContainer.style.display = 'none';
-        if (otherReasonTextarea) otherReasonTextarea.value = '';
-    }
-}
-
-function closeDeclinePaymentModal() {
-    const declineModal = document.getElementById('declinePaymentModal');
-    if (declineModal) {
-        declineModal.style.display = 'none';
-        
-        // Reset form
-        const radioButtons = document.querySelectorAll('input[name="declineReason"]');
-        const otherReasonContainer = document.getElementById('declineOtherReasonContainer');
-        const otherReasonTextarea = document.getElementById('declineOtherReason');
-        
-        radioButtons.forEach(radio => radio.checked = false);
-        if (otherReasonTextarea) otherReasonTextarea.value = '';
-        if (otherReasonContainer) otherReasonContainer.style.display = 'none';
-    }
-}
-
-async function confirmDeclinePayment() {
-    if (!currentVerifyingOrderId) {
-        showNotification('No order selected for decline.', 'error');
-        return;
-    }
-    
-    const order = ordersState.find(o => o.id === currentVerifyingOrderId);
-    if (!order) {
-        showNotification('Order not found.', 'error');
-        return;
-    }
-    
-    // Get selected reason
-    const selectedReason = document.querySelector('input[name="declineReason"]:checked');
-    if (!selectedReason) {
-        showNotification('Please select a reason for declining the order.', 'error');
-        return;
-    }
-    
-    let declineReason = selectedReason.value;
-    
-    // If "Other" is selected, get the custom reason
-    if (declineReason === 'Other') {
-        const otherReasonTextarea = document.getElementById('declineOtherReason');
-        const customReason = otherReasonTextarea ? otherReasonTextarea.value.trim() : '';
-        
-        if (!customReason) {
-            showNotification('Please provide a reason for declining the order.', 'error');
-            return;
-        }
-        
-        declineReason = `Other: ${customReason}`;
-    }
-    
-    try {
-        if (!isFirestoreReady()) {
-            showNotification('Database is not ready. Please try again.', 'error');
-            return;
-        }
-        
-        const fns = window.firestoreFunctions;
-        if (!fns || !fns.doc || !fns.updateDoc || !fns.serverTimestamp) {
-            throw new Error('Firestore functions are not available. Please refresh the page.');
-        }
-        
-        if (!window.db) {
-            throw new Error('Database connection is not available. Please refresh the page.');
-        }
-        
-        const orderRef = fns.doc(window.db, 'orders', currentVerifyingOrderId);
-        
-        // Verify the order document exists
-        if (fns.getDoc) {
-            const orderDoc = await fns.getDoc(orderRef);
-            if (!orderDoc.exists()) {
-                throw new Error('Order document does not exist in database.');
-            }
-        }
-        
-        await fns.updateDoc(orderRef, {
-            status: 'declined',
-            paymentDeclined: true,
-            paymentDeclinedAt: fns.serverTimestamp(),
-            paymentDeclineReason: declineReason,
-            declineReason: declineReason,
-            declinedAt: fns.serverTimestamp(),
-            updatedAt: fns.serverTimestamp()
-        });
-        
-        // Update local state
-        const orderIndex = ordersState.findIndex(o => o.id === currentVerifyingOrderId);
-        if (orderIndex !== -1) {
-            ordersState[orderIndex].status = 'declined';
-            ordersState[orderIndex].paymentDeclined = true;
-            ordersState[orderIndex].paymentDeclinedAt = new Date();
-            ordersState[orderIndex].paymentDeclineReason = declineReason;
-            ordersState[orderIndex].declineReason = declineReason;
-            ordersState[orderIndex].declinedAt = new Date();
-        }
-        
-        // Refresh the orders table
-        renderOrdersTable(ordersState);
-        
-        showNotification(`Order declined: ${order.trackingId || currentVerifyingOrderId}. Reason: ${declineReason}`, 'success');
-        closeDeclinePaymentModal();
-        closePaymentReceiptModal();
-    } catch (error) {
-        console.error('Error declining order:', error);
-        const errorMessage = error.message || 'Unknown error occurred';
-        showNotification(`Failed to decline order: ${errorMessage}`, 'error');
-    }
-}
-
 async function reopenOrder(orderId) {
     if (!orderId) {
         showNotification('No order selected for reopening.', 'error');
@@ -3772,16 +3443,30 @@ function deleteItem(itemId) {
 let currentReportPeriod = 'weekly'; // 'weekly', 'monthly', 'yearly'
 
 // Sales report functions
+// switchAnalyticsTab removed - ingredient logs moved to menu page
+
 function switchReport(reportType) {
-    // Remove active class from all sales activity tabs
-    document.querySelectorAll('.sales-activity-tabs .tab-btn').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Add active class to clicked tab
-    const clickedTab = event?.target || document.querySelector(`.sales-activity-tabs .tab-btn[onclick*="${reportType}"]`);
-    if (clickedTab) {
-        clickedTab.classList.add('active');
+    // Remove active class from all sales period tabs (within sales content)
+    const salesContent = document.getElementById('sales-content');
+    if (salesContent) {
+        salesContent.querySelectorAll('.sales-activity-tabs .tab-btn').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Add active class to clicked tab
+        const clickedTab = event?.target || salesContent.querySelector(`.sales-activity-tabs .tab-btn[onclick*="${reportType}"]`);
+        if (clickedTab) {
+            clickedTab.classList.add('active');
+        }
+    } else {
+        // Fallback for old structure
+        document.querySelectorAll('.sales-activity-tabs .tab-btn').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        const clickedTab = event?.target || document.querySelector(`.sales-activity-tabs .tab-btn[onclick*="${reportType}"]`);
+        if (clickedTab) {
+            clickedTab.classList.add('active');
+        }
     }
     
     // Update period selector if it exists
@@ -5062,100 +4747,17 @@ function exportReport() {
     // Note: Export buttons don't need backend functionality as per requirements
 }
 
-async function exportInventoryReport() {
-    try {
-        await waitForFirebaseReady();
-        const items = (inventoryState && inventoryState.length)
-            ? inventoryState
-            : await InventoryStore.getItems();
+// exportInventoryReport removed - system is now recipe-based
 
-        if (!items || !items.length) {
-            showNotification('No inventory data available to export yet.', 'info');
-            return;
-        }
-
-        const header = 'Ingredient,Quantity (base unit),Display Quantity,Unit Type,Last Updated';
-        const rows = [...items]
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map(item => {
-                const unitLabel = item.unitType === 'weight' ? 'Weight' : 'Count';
-                const displayValue = formatInventoryQuantity(item, true);
-                return [
-                    `"${item.name}"`,
-                    item.quantity,
-                    `"${displayValue}"`,
-                    unitLabel,
-                    item.updatedAt || item.createdAt || ''
-                ].join(',');
-            });
-
-        const csvContent = [header, ...rows].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'inventory_report_' + new Date().toISOString().split('T')[0] + '.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        showNotification('Inventory report exported successfully!', 'success');
-    } catch (error) {
-        console.error('Export inventory failed:', error);
-        showNotification(error.message || 'Unable to export inventory report.', 'error');
-    }
-}
-
-// Inventory UI helpers
+// initInventoryManagement removed - system is now recipe-based
+// Ingredient logs can still be initialized separately if needed
 async function initInventoryManagement() {
-    const restockForm = document.getElementById('inventoryForm');
-    const registerForm = document.getElementById('ingredientRegisterForm');
-
-    if (!restockForm) {
-        return;
+    // Recipe-based system: no inventory management needed
+    // Initialize ingredient logs if the UI exists
+    const logsSection = document.getElementById('ingredientLogsSection');
+    if (logsSection) {
+        initIngredientLogs();
     }
-
-    try {
-        await waitForFirebaseReady();
-        await refreshInventoryState();
-        // Subscribe to real-time inventory updates
-        await subscribeToInventoryCollection();
-        inventorySubscriptionInitialized = true;
-    } catch (error) {
-        console.error('Unable to initialize inventory management:', error);
-        showNotification(error.message || 'Inventory data could not be loaded. Please try again later.', 'error');
-        return;
-    }
-
-    const ingredientInput = document.getElementById('inventoryIngredientName');
-    const unitTypeSelect = document.getElementById('inventoryUnitType');
-    const registerUnitTypeSelect = document.getElementById('registerUnitType');
-    const registerUnitSelect = document.getElementById('registerUnit');
-    const registerQuantityInput = document.getElementById('registerQuantity');
-
-    if (ingredientInput) {
-        ingredientInput.addEventListener('input', () => syncIngredientUnitType(ingredientInput, unitTypeSelect));
-    }
-
-    if (unitTypeSelect) {
-        unitTypeSelect.addEventListener('change', () => updateUnitOptions(unitTypeSelect.value));
-        updateUnitOptions(unitTypeSelect.value);
-    }
-
-    restockForm.addEventListener('submit', handleInventoryFormSubmit);
-    if (registerForm) {
-        registerForm.addEventListener('submit', handleIngredientRegisterSubmit);
-    }
-    populateIngredientIdPreview();
-    if (registerUnitTypeSelect) {
-        const updateRegisterUnits = () => updateUnitOptions(registerUnitTypeSelect.value, registerUnitSelect, registerQuantityInput);
-        registerUnitTypeSelect.addEventListener('change', updateRegisterUnits);
-        updateRegisterUnits();
-    }
-    
-    // Initialize ingredient logs
-    initIngredientLogs();
 }
 
 // ============================================================================
@@ -5203,9 +4805,13 @@ async function initIngredientLogs() {
                 // Apply current filters
                 const ingredientSelect = document.getElementById('ingredientLogFilter');
                 const dateInput = document.getElementById('ingredientLogDateFilter');
+                const typeSelect = document.getElementById('ingredientLogTypeFilter');
+                const searchInput = document.getElementById('ingredientLogSearch');
                 const ingredientId = ingredientSelect ? ingredientSelect.value || null : null;
                 const filterDate = dateInput && dateInput.value ? dateInput.value : null;
-                renderIngredientLogs(ingredientId, filterDate);
+                const filterType = typeSelect ? typeSelect.value || null : null;
+                const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : null;
+                renderIngredientLogs(ingredientId, filterDate, filterType, searchTerm);
                 updateIngredientLogFilter();
             },
             (error) => {
@@ -5215,12 +4821,16 @@ async function initIngredientLogs() {
     }
 }
 
+// Current sort state
+let ingredientLogsSortColumn = 'timestamp';
+let ingredientLogsSortDirection = 'desc';
+
 // Render ingredient logs table
-function renderIngredientLogs(filterIngredientId = null, filterDate = null) {
+function renderIngredientLogs(filterIngredientId = null, filterDate = null, filterType = null, searchTerm = null) {
     const tableBody = document.getElementById('ingredientLogsTableBody');
     if (!tableBody) return;
     
-    let logsToShow = ingredientLogsState;
+    let logsToShow = [...ingredientLogsState];
     
     // Filter by ingredient
     if (filterIngredientId) {
@@ -5236,8 +4846,62 @@ function renderIngredientLogs(filterIngredientId = null, filterDate = null) {
         });
     }
     
+    // Filter by type
+    if (filterType) {
+        logsToShow = logsToShow.filter(log => log.type === filterType);
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+        logsToShow = logsToShow.filter(log => {
+            const ingredientName = (log.ingredientName || log.ingredientId || '').toLowerCase();
+            const orderId = (log.orderId || '').toLowerCase();
+            const menuItem = (log.menuItemName || '').toLowerCase();
+            return ingredientName.includes(searchTerm) || 
+                   orderId.includes(searchTerm) || 
+                   menuItem.includes(searchTerm);
+        });
+    }
+    
+    // Sort logs
+    logsToShow.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch (ingredientLogsSortColumn) {
+            case 'timestamp':
+                aVal = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
+                bVal = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
+                break;
+            case 'ingredient':
+                aVal = (a.ingredientName || a.ingredientId || '').toLowerCase();
+                bVal = (b.ingredientName || b.ingredientId || '').toLowerCase();
+                break;
+            case 'type':
+                aVal = a.type || '';
+                bVal = b.type || '';
+                break;
+            case 'amount':
+                aVal = Number(a.amount || 0);
+                bVal = Number(b.amount || 0);
+                break;
+            default:
+                return 0;
+        }
+        
+        if (ingredientLogsSortColumn === 'timestamp' || ingredientLogsSortColumn === 'amount') {
+            return ingredientLogsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        } else {
+            if (aVal < bVal) return ingredientLogsSortDirection === 'asc' ? -1 : 1;
+            if (aVal > bVal) return ingredientLogsSortDirection === 'asc' ? 1 : -1;
+            return 0;
+        }
+    });
+    
+    // Update summary statistics
+    updateIngredientLogsSummary(logsToShow);
+    
     if (logsToShow.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5" class="empty-table">No logs available yet.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="5" class="empty-table">No logs match the current filters.</td></tr>';
         return;
     }
     
@@ -5272,6 +4936,82 @@ function renderIngredientLogs(filterIngredientId = null, filterDate = null) {
             </tr>
         `;
     }).join('');
+    
+    // Update sort icons
+    updateSortIcons();
+}
+
+// Update summary statistics
+function updateIngredientLogsSummary(logs) {
+    const summarySection = document.getElementById('ingredientLogsSummary');
+    const totalUsedEl = document.getElementById('totalUsed');
+    const totalReceivedEl = document.getElementById('totalReceived');
+    const netUsageEl = document.getElementById('netUsage');
+    
+    if (!summarySection) return;
+    
+    let totalUsed = 0;
+    let totalReceived = 0;
+    
+    logs.forEach(log => {
+        const amount = Number(log.amount || 0);
+        if (log.type === 'used') {
+            totalUsed += amount;
+        } else if (log.type === 'received') {
+            totalReceived += amount;
+        }
+    });
+    
+    const netUsage = totalReceived - totalUsed;
+    
+    if (totalUsedEl) totalUsedEl.textContent = totalUsed.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    if (totalReceivedEl) totalReceivedEl.textContent = totalReceived.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    if (netUsageEl) {
+        netUsageEl.textContent = netUsage.toLocaleString('en-US', { maximumFractionDigits: 2 });
+        netUsageEl.className = 'summary-value ' + (netUsage >= 0 ? 'positive' : 'negative');
+    }
+    
+    // Show summary if there are logs
+    summarySection.style.display = logs.length > 0 ? 'flex' : 'none';
+}
+
+// Sort ingredient logs
+function sortIngredientLogs(column) {
+    if (ingredientLogsSortColumn === column) {
+        // Toggle direction if same column
+        ingredientLogsSortDirection = ingredientLogsSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        // New column, default to desc for timestamp/amount, asc for text
+        ingredientLogsSortColumn = column;
+        ingredientLogsSortDirection = (column === 'timestamp' || column === 'amount') ? 'desc' : 'asc';
+    }
+    
+    // Get current filter values and re-render
+    const ingredientSelect = document.getElementById('ingredientLogFilter');
+    const dateInput = document.getElementById('ingredientLogDateFilter');
+    const typeSelect = document.getElementById('ingredientLogTypeFilter');
+    const searchInput = document.getElementById('ingredientLogSearch');
+    
+    const ingredientId = ingredientSelect ? ingredientSelect.value || null : null;
+    const filterDate = dateInput && dateInput.value ? dateInput.value : null;
+    const filterType = typeSelect ? typeSelect.value || null : null;
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : null;
+    
+    renderIngredientLogs(ingredientId, filterDate, filterType, searchTerm);
+}
+
+// Update sort icons
+function updateSortIcons() {
+    // Reset all icons
+    document.querySelectorAll('.sort-icon').forEach(icon => {
+        icon.className = 'fas fa-sort sort-icon';
+    });
+    
+    // Update active column icon
+    const activeIcon = document.getElementById(`sortIcon-${ingredientLogsSortColumn}`);
+    if (activeIcon) {
+        activeIcon.className = `fas fa-sort-${ingredientLogsSortDirection === 'asc' ? 'up' : 'down'} sort-icon active`;
+    }
 }
 
 // Update filter dropdown
@@ -5295,15 +5035,34 @@ function updateIngredientLogFilter() {
     }
 }
 
-// Filter logs by ingredient and/or date
+// Filter logs by ingredient, date, type, and search term
 function filterIngredientLogs() {
     const ingredientSelect = document.getElementById('ingredientLogFilter');
     const dateInput = document.getElementById('ingredientLogDateFilter');
+    const typeSelect = document.getElementById('ingredientLogTypeFilter');
+    const searchInput = document.getElementById('ingredientLogSearch');
     
     const ingredientId = ingredientSelect ? ingredientSelect.value || null : null;
     const filterDate = dateInput && dateInput.value ? dateInput.value : null;
+    const filterType = typeSelect ? typeSelect.value || null : null;
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : null;
     
-    renderIngredientLogs(ingredientId, filterDate);
+    renderIngredientLogs(ingredientId, filterDate, filterType, searchTerm);
+}
+
+// Clear all filters
+function clearIngredientLogFilters() {
+    const ingredientSelect = document.getElementById('ingredientLogFilter');
+    const dateInput = document.getElementById('ingredientLogDateFilter');
+    const typeSelect = document.getElementById('ingredientLogTypeFilter');
+    const searchInput = document.getElementById('ingredientLogSearch');
+    
+    if (ingredientSelect) ingredientSelect.value = '';
+    if (dateInput) dateInput.value = '';
+    if (typeSelect) typeSelect.value = '';
+    if (searchInput) searchInput.value = '';
+    
+    filterIngredientLogs();
 }
 
 // Export logs
@@ -5353,254 +5112,14 @@ async function exportIngredientLogs() {
 // Expose functions globally
 window.filterIngredientLogs = filterIngredientLogs;
 window.exportIngredientLogs = exportIngredientLogs;
+window.clearIngredientLogFilters = clearIngredientLogFilters;
+window.sortIngredientLogs = sortIngredientLogs;
 
-function findInventoryItemByIdOrIngredientId(idOrIngredientId) {
-    if (!idOrIngredientId) return null;
-    const target = (inventoryState || []).find(item =>
-        item.id === idOrIngredientId || item.ingredientId === idOrIngredientId
-    );
-    return target || null;
-}
+// Inventory functions removed - system is now recipe-based
 
-async function refreshInventoryState() {
-    inventoryState = await InventoryStore.getItems();
-    renderInventoryState();
-}
+// handleInventoryFormSubmit removed - system is now recipe-based
 
-async function subscribeToInventoryCollection() {
-    if (!isFirestoreReady()) {
-        await waitForFirebaseReady();
-    }
-    const fns = window.firestoreFunctions;
-    if (!fns || !window.db) {
-        throw new Error('Firestore is not ready yet. Please refresh the page.');
-    }
-
-    const stocksQuery = fns.collection(window.db, 'stocks');
-
-    if (typeof fns.onSnapshot === 'function') {
-        if (typeof inventoryUnsubscribe === 'function') {
-            inventoryUnsubscribe();
-        }
-        inventoryUnsubscribe = fns.onSnapshot(
-            stocksQuery,
-            async (snapshot) => {
-                // Update inventory state when stocks change - refresh from InventoryStore to ensure proper normalization
-                try {
-                    inventoryState = await InventoryStore.getItems();
-                    // Re-render inventory views and menu list with updated quantities
-                    renderInventoryState();
-                } catch (error) {
-                    console.error('Failed to refresh inventory state in listener:', error);
-                }
-            },
-            (error) => {
-                console.error('Inventory listener error:', error);
-                showNotification('Live inventory updates failed. Showing last known data.', 'error');
-            }
-        );
-    } else {
-        // Fallback: just refresh once if onSnapshot is not available
-        await refreshInventoryState();
-    }
-}
-
-async function handleInventoryFormSubmit(event) {
-    event.preventDefault();
-    const form = event.target;
-    const nameInput = form.querySelector('#inventoryIngredientName');
-    const unitTypeSelect = form.querySelector('#inventoryUnitType');
-    const quantityInput = form.querySelector('#inventoryQuantity');
-    const unitSelect = form.querySelector('#inventoryUnit');
-
-    const ingredientName = (nameInput?.value || '').trim();
-    const selectedUnitType = unitTypeSelect?.value || 'weight';
-    const quantityValue = parseFloat(quantityInput?.value || '0');
-    const selectedUnit = unitSelect?.value || 'g';
-
-    if (!ingredientName) {
-        showNotification('Please enter an ingredient name.', 'error');
-        return;
-    }
-
-    if (!quantityValue || quantityValue <= 0) {
-        showNotification('Quantity must be greater than zero.', 'error');
-        return;
-    }
-
-    const existingIngredient = findIngredientInStateByName(ingredientName);
-    if (!existingIngredient) {
-        showNotification(`${formatIngredientLabel(ingredientName)} is not registered. Please select an ingredient from the list.`, 'error');
-        return;
-    }
-
-    const normalizedUnitType = existingIngredient.unitType;
-    const baseAmount = convertToBaseUnits(quantityValue, normalizedUnitType, selectedUnit);
-
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-
-        inventoryState = await InventoryStore.restock({
-            name: existingIngredient.name,
-            amount: baseAmount
-        });
-        
-        // NEW: Log ingredient restock
-        try {
-            await IngredientLogStore.logIngredientRestock(
-                existingIngredient.id || existingIngredient.ingredientId,
-                existingIngredient.name,
-                baseAmount
-            );
-        } catch (error) {
-            console.error('Error logging ingredient restock:', error);
-            // Don't fail the restock if logging fails
-        }
-        
-        renderInventoryState();
-        form.reset();
-        if (unitTypeSelect) {
-            unitTypeSelect.disabled = false;
-            unitTypeSelect.value = 'weight';
-            updateUnitOptions('weight');
-        }
-        showNotification(`${existingIngredient.name} updated successfully!`, 'success');
-    } catch (error) {
-        console.error('Inventory restock failed:', error);
-        showNotification(error.message || 'Unable to update inventory.', 'error');
-    }
-}
-
-function syncIngredientUnitType(ingredientInput, unitTypeSelect) {
-    if (!ingredientInput || !unitTypeSelect) return;
-    const existingIngredient = findIngredientInStateByName(ingredientInput.value);
-    if (existingIngredient) {
-        unitTypeSelect.value = existingIngredient.unitType;
-        unitTypeSelect.disabled = true;
-    } else {
-        unitTypeSelect.disabled = false;
-    }
-    updateUnitOptions(unitTypeSelect.value);
-}
-
-function updateUnitOptions(unitType, unitSelectOverride, quantityInputOverride) {
-    const unitSelect = unitSelectOverride || document.getElementById('inventoryUnit');
-    const quantityInput = quantityInputOverride || document.getElementById('inventoryQuantity');
-    if (!unitSelect || !quantityInput) return;
-
-    if (unitType === 'count') {
-        unitSelect.innerHTML = '<option value="pcs">Pieces</option>';
-        quantityInput.step = '1';
-        quantityInput.placeholder = '0';
-    } else {
-        unitSelect.innerHTML = `
-            <option value="g">Grams (g)</option>
-            <option value="kg">Kilograms (kg)</option>
-        `;
-        quantityInput.step = '0.01';
-        quantityInput.placeholder = '0.00';
-    }
-}
-
-function renderInventoryState() {
-    renderInventoryTable(inventoryState);
-    renderInventoryMetrics(inventoryState);
-    updateInventoryDatalist(inventoryState);
-    updateInventoryLastUpdated(inventoryState);
-    updateMenuIngredientsOptions(inventoryState);
-    renderMenuState();
-}
-
-function renderInventoryTable(items) {
-    const tableBody = document.getElementById('inventoryTableBody');
-    if (!tableBody) return;
-
-    tableBody.innerHTML = '';
-
-    if (!items.length) {
-        const emptyRow = document.createElement('tr');
-        emptyRow.innerHTML = '<td colspan="5" class="empty-table">Inventory data will appear after you add stock.</td>';
-        tableBody.appendChild(emptyRow);
-        return;
-    }
-
-    const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
-    sortedItems.forEach(item => {
-        const row = document.createElement('tr');
-        const status = getStockStatus(item);
-        const ingredientId = item.ingredientId || item.id || '—';
-        row.innerHTML = `
-            <td data-label="ID">${ingredientId}</td>
-            <td data-label="Ingredient">${item.name}</td>
-            <td data-label="Available Stock">${formatInventoryQuantity(item)}</td>
-            <td data-label="Unit Type">${item.unitType === 'weight' ? 'Weight (grams)' : 'Pieces'}</td>
-            <td data-label="Status"><span class="status ${status.className}">${status.label}</span></td>
-            <td data-label="Last Update">${formatDateLabel(item.updatedAt || item.createdAt)}</td>
-        `;
-        tableBody.appendChild(row);
-    });
-}
-
-function renderInventoryMetrics(items) {
-    const totalIngredientsEl = document.getElementById('totalIngredientsMetric');
-    const lowStockEl = document.getElementById('lowStockMetric');
-    const weightMetricEl = document.getElementById('weightMetric');
-    const packagingMetricEl = document.getElementById('packagingMetric');
-
-    const totalItems = items.length;
-    const lowStockItems = items.filter(item => getStockStatus(item).level !== 'healthy').length;
-    const totalWeight = items
-        .filter(item => item.unitType === 'weight')
-        .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    const totalPackaging = items
-        .filter(item => item.unitType === 'count')
-        .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-
-    if (totalIngredientsEl) totalIngredientsEl.textContent = totalItems.toString();
-    if (lowStockEl) lowStockEl.textContent = lowStockItems.toString();
-    if (weightMetricEl) weightMetricEl.textContent = formatQuantityValue(totalWeight / 1000, 2);
-    if (packagingMetricEl) packagingMetricEl.textContent = formatQuantityValue(totalPackaging, 0);
-}
-
-function updateInventoryDatalist(items) {
-    const datalist = document.getElementById('inventoryIngredientsList');
-    if (!datalist) return;
-
-    datalist.innerHTML = '';
-    const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
-    sortedItems.forEach(item => {
-        const option = document.createElement('option');
-        option.value = item.name;
-        datalist.appendChild(option);
-    });
-}
-
-function updateInventoryLastUpdated(items) {
-    const label = document.getElementById('inventoryLastUpdated');
-    if (!label) return;
-
-    const timestamps = items
-        .map(item => item.updatedAt || item.createdAt)
-        .filter(Boolean)
-        .map(value => {
-            if (value instanceof Date) {
-                return value.getTime();
-            }
-            const dateValue = value && typeof value.toDate === 'function' ? value.toDate() : new Date(value);
-            return dateValue.getTime();
-        })
-        .filter(time => !Number.isNaN(time));
-
-    if (!timestamps.length) {
-        label.textContent = 'Not updated yet';
-        return;
-    }
-
-    const latest = new Date(Math.max(...timestamps));
-    label.textContent = `Updated ${formatDateLabel(latest)}`;
-}
+// Inventory UI functions removed - system is now recipe-based
 
 async function checkAndDeactivateExpiredMenuItems() {
     if (!isFirestoreReady()) {
@@ -7355,60 +6874,21 @@ function renderMenuItemsTable(items) {
 }
 
 function calculateAvailableQuantity(menuItem, variation = null) {
-    // If no menu item, return 0
+    // Recipe-based system: availability is only based on daily serving limits
     if (!menuItem) return 0;
     
-    // Use variation's ingredient if it exists, otherwise use menu item's ingredients
-    let ingredients = [];
-    if (variation && variation.ingredientId) {
-        // Variation has its own single ingredient
-        const ingredient = inventoryState.find(item => item.id === variation.ingredientId);
-        if (ingredient) {
-            const amountPerDish = Number(variation.amount || variation.baseAmount || 0);
-            if (amountPerDish > 0) {
-                return Math.floor(ingredient.quantity / amountPerDish);
-            }
-        }
-        return 0;
-    } else if (Array.isArray(menuItem.ingredients) && menuItem.ingredients.length > 0) {
-        // Use menu item's ingredients
-        ingredients = menuItem.ingredients;
-    } else {
-        // No ingredients defined
-        return 0;
+    // If no daily serving limit is set, return unlimited (999999 for display purposes)
+    const maxServings = menuItem.maxServingsPerDay;
+    if (!maxServings || maxServings <= 0) {
+        return 999999; // Unlimited
     }
     
-    // If no ingredients, return 0
-    if (!ingredients.length) return 0;
+    // Get today's serving count
+    const todayCount = todayServingsCache[menuItem.id] || 0;
     
-    // Calculate available quantity based on limiting ingredient
-    const availableQuantities = [];
-    
-    for (const ingredient of ingredients) {
-        if (!ingredient || !ingredient.ingredientId) continue;
-        
-        const stockItem = inventoryState.find(item => item.id === ingredient.ingredientId);
-        if (!stockItem) {
-            // Missing ingredient means 0 available
-            return 0;
-        }
-        
-        const amountPerDish = Number(ingredient.baseAmountPerDish || ingredient.amount || ingredient.baseAmount || 0);
-        if (amountPerDish <= 0) {
-            // If ingredient has no amount requirement, skip it (doesn't limit quantity)
-            continue;
-        }
-        
-        // Calculate how many dishes can be made with this ingredient
-        const availableFromThisIngredient = Math.floor(stockItem.quantity / amountPerDish);
-        availableQuantities.push(availableFromThisIngredient);
-    }
-    
-    // If no ingredients had amounts, return 0
-    if (availableQuantities.length === 0) return 0;
-    
-    // Return the minimum (limiting ingredient)
-    return Math.min(...availableQuantities);
+    // Calculate remaining available
+    const available = Math.max(0, maxServings - todayCount);
+    return available;
 }
 
 function getMenuItemStatus(menuItem) {
@@ -7425,20 +6905,16 @@ function getMenuItemStatus(menuItem) {
     if (menuItem && menuItem.isActive === false) {
         return { label: 'Inactive', className: 'inactive' };
     }
-    if (!menuItem || !Array.isArray(menuItem.ingredients) || !menuItem.ingredients.length) {
-        return { label: 'No Ingredients', className: 'no-stock' };
+    
+    // Recipe-based: check daily serving limit
+    const maxServings = menuItem.maxServingsPerDay;
+    if (maxServings && maxServings > 0) {
+        const todayCount = todayServingsCache[menuItem.id] || 0;
+        if (todayCount >= maxServings) {
+            return { label: 'Sold Out Today', className: 'no-stock' };
+        }
     }
-    const missingIngredients = getMissingIngredientsForDish(menuItem);
-    if (missingIngredients.length) {
-        return { label: 'Missing Ingredient', className: 'no-stock' };
-    }
-    const depleted = menuItem.ingredients.some(ingredient => {
-        const inventoryItem = inventoryState.find(item => item.id === ingredient.ingredientId);
-        return inventoryItem && inventoryItem.quantity <= 0;
-    });
-    if (depleted) {
-        return { label: 'Restock Needed', className: 'low-stock' };
-    }
+    
     return { label: 'Active', className: 'active' };
 }
 
@@ -7592,7 +7068,6 @@ function renderMenuDetailsCarousel() {
     const menuIdEl = document.getElementById('menuDetailMenuId');
     const ordersCountEl = document.getElementById('menuDetailOrdersCount');
     const descriptionEl = document.getElementById('menuDetailDescription');
-    const ingredientsListEl = document.getElementById('menuDetailIngredients');
     const priceInput = document.getElementById('menuDetailPriceInput');
     const availabilityInput = document.getElementById('menuDetailAvailabilityInput');
     const categoryInput = document.getElementById('menuDetailCategoryInput');
@@ -7716,16 +7191,69 @@ function renderMenuDetailsCarousel() {
     if (descriptionInput) descriptionInput.value = item.description || '';
     if (allergensInput) allergensInput.value = item.allergens || '';
 
-    if (ingredientsListEl) {
-        if (!item.ingredients || !item.ingredients.length) {
-            ingredientsListEl.innerHTML = '<li class="empty-state">No ingredients linked yet.</li>';
+    // Render ingredients - show editable version in edit mode, read-only in view mode
+    const ingredientsListEl = document.getElementById('menuDetailIngredients');
+    const ingredientsEditableEl = document.getElementById('menuDetailIngredientsEditable');
+    const ingredientsListContainer = document.getElementById('menuDetailIngredientsList');
+    
+    if (ingredientsListEl && ingredientsEditableEl && ingredientsListContainer) {
+        if (menuDetailEditing) {
+            // Edit mode - show editable ingredients
+            ingredientsListEl.style.display = 'none';
+            ingredientsEditableEl.style.display = 'block';
+            
+            // Clear existing rows
+            ingredientsListContainer.innerHTML = '';
+            
+            if (!item.ingredients || !item.ingredients.length) {
+                // No ingredients - add one empty row
+                addMenuDetailIngredientRow();
+            } else {
+                // Render existing ingredients
+                item.ingredients.forEach((ing, index) => {
+                    // Parse displayAmount to extract amount and unit
+                    let amountValue = '';
+                    let unitValue = 'kg'; // Default to kg
+                    
+                    if (ing.displayAmount) {
+                        const match = ing.displayAmount.match(/^([\d.]+)\s+(.+)$/);
+                        if (match) {
+                            amountValue = match[1];
+                            const unitStr = match[2].toLowerCase();
+                            // Normalize unit values
+                            if (unitStr === 'pieces' || unitStr === 'piece' || unitStr === 'pcs') {
+                                unitValue = 'pcs';
+                            } else if (unitStr === 'grams' || unitStr === 'gram' || unitStr === 'g') {
+                                unitValue = 'g';
+                            } else if (unitStr === 'kilograms' || unitStr === 'kilogram' || unitStr === 'kg') {
+                                unitValue = 'kg';
+                            }
+                        }
+                    }
+                    
+                    const ingredientName = ing.ingredientName || ing.ingredientId || '';
+                    addMenuDetailIngredientRow({
+                        name: ingredientName,
+                        amount: amountValue,
+                        unit: unitValue
+                    });
+                });
+            }
         } else {
-            ingredientsListEl.innerHTML = item.ingredients.map(ing => `
-                <li>
-                    <span>${ing.ingredientName || ing.ingredientId}</span>
-                    <small>${ing.displayAmount || ''}</small>
-                </li>
-            `).join('');
+            // View mode - show read-only list
+            ingredientsListEl.style.display = 'block';
+            ingredientsEditableEl.style.display = 'none';
+            
+            if (!item.ingredients || !item.ingredients.length) {
+                ingredientsListEl.innerHTML = '<li class="empty-state">No ingredients linked yet.</li>';
+            } else {
+                ingredientsListEl.innerHTML = item.ingredients.map(ing => `
+                    <li>
+                        <span>${ing.ingredientName || ing.ingredientId}</span>
+                        <small>${ing.displayAmount || ''}</small>
+                    </li>
+                `).join('');
+            }
         }
     }
 
@@ -7753,15 +7281,7 @@ function renderMenuDetailsCarousel() {
                         }
                     });
                     
-                    // Get available ingredients
-                    const availableIngredients = inventoryState.filter(ing => 
-                        !usedIngredientIds.has(ing.id) || ing.id === variation.ingredientId
-                    );
-                    
-                    const ingredientOptions = availableIngredients.map(ing => 
-                        `<option value="${ing.name}" ${variation.ingredientId === ing.id ? 'selected' : ''}>${ing.name}</option>`
-                    ).join('');
-                    
+                    // Recipe-based: ingredients are free-form
                     // Parse displayAmount to extract amount and unit
                     let amountValue = '';
                     let unitValue = '';
@@ -7777,15 +7297,14 @@ function renderMenuDetailsCarousel() {
                         }
                     }
                     
-                    // Find the ingredient to determine unit type
-                    const variationIngredient = inventoryState.find(ing => ing.id === variation.ingredientId);
-                    const unitType = variationIngredient?.unitType || 'weight';
-                    const defaultUnit = unitType === 'count' ? 'pcs' : 'g';
-                    const finalUnit = unitValue || defaultUnit;
-                    const unitOptions = unitType === 'count' 
-                        ? `<option value="pcs" ${finalUnit === 'pcs' ? 'selected' : ''}>Pieces (pcs)</option>`
-                        : `<option value="g" ${finalUnit === 'g' ? 'selected' : ''}>Grams (g)</option>
-                           <option value="kg" ${finalUnit === 'kg' ? 'selected' : ''}>Kilograms (kg)</option>`;
+                    // Default to weight, allow user to select
+                    const defaultUnit = unitValue || 'g';
+                    const unitOptions = `<option value="g" ${defaultUnit === 'g' ? 'selected' : ''}>Grams (g)</option>
+                           <option value="kg" ${defaultUnit === 'kg' ? 'selected' : ''}>Kilograms (kg)</option>
+                           <option value="pcs" ${defaultUnit === 'pcs' ? 'selected' : ''}>Pieces (pcs)</option>`;
+                    
+                    // Ingredient input is free-form (text input, not select)
+                    const ingredientValue = variation.ingredientName || variation.ingredientId || '';
                     
                     return `
                     <div class="menu-detail-variation-item menu-detail-variation-item-editable" id="${variationId}">
@@ -7797,17 +7316,14 @@ function renderMenuDetailsCarousel() {
                                 <input type="number" class="form-control menu-detail-variation-price-input" placeholder="Price (PHP)" value="${variation.price || 0}" min="0" step="0.01" required>
                             </div>
                             <div class="form-group">
-                                <select class="form-control menu-detail-variation-ingredient" required>
-                                    <option value="">Select Ingredient</option>
-                                    ${ingredientOptions}
-                                </select>
+                                <input type="text" class="form-control menu-detail-variation-ingredient-input" placeholder="Ingredient name" value="${ingredientValue}" required>
                             </div>
                             <div class="form-group">
-                                <input type="number" class="form-control menu-detail-variation-amount-input" placeholder="Amount" min="0" step="${unitType === 'count' ? '1' : '0.01'}" value="${amountValue}">
+                                <input type="number" class="form-control menu-detail-variation-amount-input" placeholder="Amount" min="0" step="0.01" value="${amountValue}">
                             </div>
                             <div class="form-group">
-                                <select class="form-control menu-detail-variation-unit-input" ${variationIngredient ? '' : 'disabled'}>
-                                    ${variationIngredient ? unitOptions : '<option value="">Select ingredient first</option>'}
+                                <select class="form-control menu-detail-variation-unit-input">
+                                    ${unitOptions}
                                 </select>
                             </div>
                             <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailVariation('${variationId}')" style="flex: 0 0 auto;">
@@ -7821,55 +7337,8 @@ function renderMenuDetailsCarousel() {
                 `;
                 }).join('');
                 
-                // Add event handlers for ingredient selection in rendered variations
-                variationsListEl.querySelectorAll('.menu-detail-variation-item-editable').forEach(variationItem => {
-                    const ingredientSelect = variationItem.querySelector('.menu-detail-variation-ingredient');
-                    const amountInput = variationItem.querySelector('.menu-detail-variation-amount-input');
-                    const unitSelect = variationItem.querySelector('.menu-detail-variation-unit-input');
-                    
-                    if (ingredientSelect) {
-                        // Remove existing listeners to avoid duplicates
-                        const newIngredientSelect = ingredientSelect.cloneNode(true);
-                        ingredientSelect.parentNode.replaceChild(newIngredientSelect, ingredientSelect);
-                        
-                        newIngredientSelect.addEventListener('change', function() {
-                            const selectedIngredient = findIngredientInStateByName(this.value);
-                            const currentAmountInput = variationItem.querySelector('.menu-detail-variation-amount-input');
-                            const currentUnitSelect = variationItem.querySelector('.menu-detail-variation-unit-input');
-                            
-                            if (selectedIngredient) {
-                                variationItem.dataset.ingredientId = selectedIngredient.id;
-                                
-                                // Update unit options based on ingredient type
-                                if (currentUnitSelect) {
-                                    if (selectedIngredient.unitType === 'count') {
-                                        currentUnitSelect.innerHTML = '<option value="pcs">Pieces (pcs)</option>';
-                                        currentUnitSelect.value = 'pcs';
-                                    } else {
-                                        currentUnitSelect.innerHTML = `
-                                            <option value="g">Grams (g)</option>
-                                            <option value="kg">Kilograms (kg)</option>
-                                        `;
-                                        currentUnitSelect.value = 'g';
-                                    }
-                                    currentUnitSelect.disabled = false;
-                                }
-                                
-                                // Update amount input step and placeholder
-                                if (currentAmountInput) {
-                                    currentAmountInput.step = selectedIngredient.unitType === 'count' ? '1' : '0.01';
-                                    currentAmountInput.placeholder = selectedIngredient.unitType === 'count' ? '0' : '0.00';
-                                }
-                            } else {
-                                variationItem.dataset.ingredientId = '';
-                                if (currentUnitSelect) {
-                                    currentUnitSelect.innerHTML = '<option value="">Select ingredient first</option>';
-                                    currentUnitSelect.disabled = true;
-                                }
-                            }
-                        });
-                    }
-                });
+                // Recipe-based: ingredients are free-form text inputs, no special handlers needed
+                // Unit select is always enabled and allows all unit types
             }
             // Add "Add Variation" button in edit mode if it doesn't exist
             if (!variationsListEl.querySelector('button[onclick*="addMenuDetailVariation"]')) {
@@ -8134,6 +7603,9 @@ async function saveMenuDetailChanges() {
         // Gather variations from edit form
         const variations = gatherMenuDetailVariations();
         
+        // Gather ingredients from edit form
+        const ingredients = gatherMenuDetailIngredients();
+        
         // If variations exist, set base price to the smallest variation price
         let finalBasePrice = +Number(priceValue).toFixed(2);
         if (variations && variations.length > 0) {
@@ -8153,6 +7625,7 @@ async function saveMenuDetailChanges() {
             description: descriptionValue,
             allergens: allergensValue,
             variations: variations,
+            ingredients: ingredients,
             imageDataUrl: newImageUrl
         };
         menuState = await MenuStore.updateItem(currentItem.id, payload);
@@ -8265,11 +7738,15 @@ function showMenuCatalogue() {
     const promotionSection = document.getElementById('promotionDashboard');
     const bannerCatalogueSection = document.getElementById('bannerCatalogue');
     const tableNumbersSection = document.getElementById('tableNumbers');
+    const ingredientLogsSection = document.getElementById('ingredient-logs');
+    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
     const catalogueGrid = document.getElementById('menu-catalogue-grid');
     const menuListTable = document.getElementById('menu-list');
     if (foodSection) foodSection.style.display = 'block';
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
     if (tableNumbersSection) tableNumbersSection.style.display = 'none';
+    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
+    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'none';
     if (catalogueGrid) {
         catalogueGrid.style.display = 'block';
         catalogueGrid.style.visibility = 'visible';
@@ -8315,11 +7792,15 @@ async function showMenuList() {
     const promotionSection = document.getElementById('promotionDashboard');
     const bannerCatalogueSection = document.getElementById('bannerCatalogue');
     const tableNumbersSection = document.getElementById('tableNumbers');
+    const ingredientLogsSection = document.getElementById('ingredient-logs');
+    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
     const catalogueGrid = document.getElementById('menu-catalogue-grid');
     const menuListTable = document.getElementById('menu-list');
     if (foodSection) foodSection.style.display = 'block';
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
     if (tableNumbersSection) tableNumbersSection.style.display = 'none';
+    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
+    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'none';
     if (catalogueGrid) {
         catalogueGrid.style.display = 'none';
         catalogueGrid.style.visibility = 'hidden';
@@ -8358,12 +7839,16 @@ function showAddProduct() {
     const promotionSection = document.getElementById('promotionDashboard');
     const bannerCatalogueSection = document.getElementById('bannerCatalogue');
     const tableNumbersSection = document.getElementById('tableNumbers');
+    const ingredientLogsSection = document.getElementById('ingredient-logs');
+    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
     if (foodSection) foodSection.style.display = 'none';
     if (addFoodSection) addFoodSection.style.display = 'block';
     if (productDetailSection) productDetailSection.style.display = 'none';
     if (promotionSection) promotionSection.style.display = 'none';
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
     if (tableNumbersSection) tableNumbersSection.style.display = 'none';
+    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
+    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'none';
     menuDetailVisible = false;
     menuDetailEditing = false;
     renderMenuDetailsCarousel();
@@ -8388,11 +7873,15 @@ function showMenuProductDetail() {
     const promotionSection = document.getElementById('promotionDashboard');
     const bannerCatalogueSection = document.getElementById('bannerCatalogue');
     const tableNumbersSection = document.getElementById('tableNumbers');
+    const ingredientLogsSection = document.getElementById('ingredient-logs');
+    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
     if (foodSection) foodSection.style.display = 'none';
     if (promotionSection) promotionSection.style.display = 'none';
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
     if (addFoodSection) addFoodSection.style.display = 'none';
     if (tableNumbersSection) tableNumbersSection.style.display = 'none';
+    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
+    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'none';
     if (productDetailSection) productDetailSection.style.display = 'block';
     if (!menuState || !menuState.length) {
         menuDetailVisible = false;
@@ -8521,26 +8010,20 @@ function handleMenuItemDeleteFromDetail() {
     handleMenuItemDelete();
 }
 
+// Recipe-based system: ingredients are informational only, no missing ingredients check needed
 function getMissingIngredientsForDish(menuItem) {
-    if (!menuItem || !Array.isArray(menuItem.ingredients)) {
-        return [];
-    }
-    return menuItem.ingredients
-        .filter(ingredient => !inventoryState.some(item => item.id === ingredient.ingredientId))
-        .map(ingredient => ingredient.ingredientName || ingredient.ingredientId);
+    // Always return empty - ingredients are just recipe information
+    return [];
 }
 
+// Recipe-based: ingredients are free-form, no need to populate from inventory
 function updateMenuIngredientsOptions(items) {
+    // In recipe-based system, ingredients can be entered freely
+    // This function is kept for compatibility but does nothing
     const datalist = document.getElementById('menuIngredientsOptions');
     if (!datalist) return;
-
-    datalist.innerHTML = '';
-    const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
-    sortedItems.forEach(item => {
-        const option = document.createElement('option');
-        option.value = item.name;
-        datalist.appendChild(option);
-    });
+    // Optionally, we could populate from existing menu items' ingredients
+    // For now, leave empty to allow free-form entry
 }
 
 function ensureDishIngredientBuilderInitialized() {
@@ -8624,37 +8107,155 @@ function removeDishIngredientRow(row) {
 }
 
 function handleIngredientSelection(row, ingredientName) {
-    const ingredient = findIngredientInStateByName(ingredientName);
+    // Recipe-based: allow free-form ingredient entry
     const amountInput = row.querySelector('.dish-ingredient-amount');
     const unitSelect = row.querySelector('.dish-ingredient-unit');
 
-    if (ingredient) {
-        row.dataset.ingredientId = ingredient.id;
+    if (ingredientName && ingredientName.trim()) {
+        // Create a basic ingredient object for the row
+        const slug = ingredientName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        row.dataset.ingredientId = slug;
+        
+        // Default to weight units, but allow user to change
         if (unitSelect) {
-            if (ingredient.unitType === 'count') {
-                unitSelect.innerHTML = '<option value="pcs">Pieces (pcs)</option>';
-                unitSelect.value = 'pcs';
-            } else {
-                unitSelect.innerHTML = `
-                    <option value="g">Grams (g)</option>
-                    <option value="kg">Kilograms (kg)</option>
-                `;
-                unitSelect.value = 'g';
-            }
+            unitSelect.innerHTML = `
+                <option value="g">Grams (g)</option>
+                <option value="kg">Kilograms (kg)</option>
+                <option value="pcs">Pieces (pcs)</option>
+            `;
+            unitSelect.value = 'g';
             unitSelect.disabled = false;
         }
         if (amountInput) {
-            amountInput.step = ingredient.unitType === 'count' ? '1' : '0.01';
-            amountInput.placeholder = ingredient.unitType === 'count' ? '0' : '0.00';
+            amountInput.step = '0.01';
+            amountInput.placeholder = '0.00';
         }
     } else {
         row.dataset.ingredientId = '';
         if (unitSelect) {
-            unitSelect.innerHTML = '<option value="">Select ingredient first</option>';
-            unitSelect.value = '';
-            unitSelect.disabled = true;
+            unitSelect.innerHTML = '<option value="g">Grams (g)</option><option value="kg">Kilograms (kg)</option><option value="pcs">Pieces (pcs)</option>';
+            unitSelect.value = 'g';
+            unitSelect.disabled = false;
         }
     }
+}
+
+// Add ingredient row in product details
+function addMenuDetailIngredientRow(prefill = {}) {
+    const container = document.getElementById('menuDetailIngredientsList');
+    if (!container) return;
+    
+    const rowId = `menuDetailIngredient_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const row = document.createElement('div');
+    row.className = 'menu-detail-ingredient-row';
+    row.id = rowId;
+    row.style.display = 'flex';
+    row.style.gap = '10px';
+    row.style.marginBottom = '10px';
+    row.style.alignItems = 'flex-end';
+    
+    // Parse unit value - normalize from existing data
+    let unitValue = prefill.unit || 'kg';
+    // Normalize unit values from existing data
+    if (unitValue === 'g' || unitValue === 'grams' || unitValue === 'gram') {
+        unitValue = 'kg'; // Convert grams to kg for consistency
+    } else if (unitValue === 'pieces' || unitValue === 'piece') {
+        unitValue = 'pcs';
+    }
+    
+    const unitOptions = `
+        <option value="kg" ${unitValue === 'kg' ? 'selected' : ''}>Kilograms (kg)</option>
+        <option value="pcs" ${unitValue === 'pcs' ? 'selected' : ''}>Pieces (pcs)</option>
+    `;
+    
+    row.innerHTML = `
+        <div style="flex: 1;">
+            <label style="display: block; margin-bottom: 4px; font-size: 14px; color: #495057;">Ingredient Name</label>
+            <input type="text" class="form-control menu-detail-ingredient-name" placeholder="e.g., Chicken" value="${prefill.name || ''}" list="menuIngredientsOptions">
+        </div>
+        <div style="width: 120px;">
+            <label style="display: block; margin-bottom: 4px; font-size: 14px; color: #495057;">Amount</label>
+            <input type="number" class="form-control menu-detail-ingredient-amount" min="0" step="0.01" placeholder="0.00" value="${prefill.amount || ''}">
+        </div>
+        <div style="width: 150px;">
+            <label style="display: block; margin-bottom: 4px; font-size: 14px; color: #495057;">Unit</label>
+            <select class="form-control menu-detail-ingredient-unit">
+                ${unitOptions}
+            </select>
+        </div>
+        <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailIngredientRow('${rowId}')" style="flex: 0 0 auto; height: 38px;">
+            <i class="fas fa-trash"></i>
+        </button>
+    `;
+    
+    container.appendChild(row);
+}
+
+// Remove ingredient row from product details
+function removeMenuDetailIngredientRow(rowId) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    
+    const container = document.getElementById('menuDetailIngredientsList');
+    if (!container) return;
+    
+    // If it's the last row, just clear it instead of removing
+    if (container.children.length <= 1) {
+        const nameInput = row.querySelector('.menu-detail-ingredient-name');
+        const amountInput = row.querySelector('.menu-detail-ingredient-amount');
+        const unitSelect = row.querySelector('.menu-detail-ingredient-unit');
+        if (nameInput) nameInput.value = '';
+        if (amountInput) amountInput.value = '';
+        if (unitSelect) unitSelect.value = 'kg';
+    } else {
+        row.remove();
+    }
+}
+
+// Gather ingredients from product details edit form
+function gatherMenuDetailIngredients() {
+    const container = document.getElementById('menuDetailIngredientsList');
+    if (!container) return [];
+    
+    const ingredientRows = container.querySelectorAll('.menu-detail-ingredient-row');
+    const ingredients = [];
+    
+    ingredientRows.forEach(row => {
+        const nameInput = row.querySelector('.menu-detail-ingredient-name');
+        const amountInput = row.querySelector('.menu-detail-ingredient-amount');
+        const unitSelect = row.querySelector('.menu-detail-ingredient-unit');
+        
+        const ingredientName = (nameInput?.value || '').trim();
+        const amountValue = parseFloat(amountInput?.value || '0');
+        const unit = (unitSelect?.value || 'kg').trim();
+        
+        // Only add ingredients that have a name
+        if (ingredientName) {
+            const slug = ingredientName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const unitType = (unit === 'pcs') ? 'count' : 'weight';
+            
+            // Create display amount
+            let displayAmount = '';
+            if (amountValue > 0) {
+                if (unit === 'pcs') {
+                    displayAmount = `${Math.round(amountValue)} pcs`;
+                } else if (unit === 'kg') {
+                    displayAmount = `${amountValue.toFixed(2)} kg`;
+                }
+            }
+            
+            ingredients.push({
+                ingredientId: slug,
+                ingredientName: ingredientName,
+                amount: amountValue,
+                unit: unit,
+                unitType: unitType,
+                displayAmount: displayAmount
+            });
+        }
+    });
+    
+    return ingredients;
 }
 
 function gatherDishIngredients() {
@@ -8677,33 +8278,40 @@ function gatherDishIngredients() {
             return;
         }
 
-        // If ingredient name is provided, it must be valid
+        // Recipe-based: ingredients are free-form, no inventory validation needed
         if (ingredientName) {
-            const ingredient = findIngredientInStateByName(ingredientName);
-            if (!ingredient) {
-                throw new Error(`Ingredient "${ingredientName || 'Unnamed'}" must match a registered inventory item. Please check the ingredient name matches exactly with an item in your inventory.`);
-            }
-
             // Amount must be greater than zero if ingredient is specified
             if (!amountValue || amountValue <= 0) {
-                throw new Error(`Amount for ${ingredient.name} must be greater than zero.`);
+                throw new Error(`Amount for ${ingredientName} must be greater than zero.`);
             }
 
-            const unit = unitSelect?.value || (ingredient.unitType === 'count' ? 'pcs' : 'g');
-            const baseAmount = convertToBaseUnits(amountValue, ingredient.unitType, unit);
-            const displayAmount = ingredient.unitType === 'count'
+            // Determine unit type from unit select or default to weight
+            const unit = unitSelect?.value || 'g';
+            const unitType = (unit === 'pcs') ? 'count' : 'weight';
+            
+            // Get or create ingredient object
+            const ingredient = findIngredientInStateByName(ingredientName);
+            const finalIngredient = ingredient || {
+                id: ingredientName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                name: ingredientName,
+                unitType: unitType,
+                baseUnit: unitType === 'count' ? 'pcs' : 'g'
+            };
+            
+            const baseAmount = convertToBaseUnits(amountValue, unitType, unit);
+            const displayAmount = unitType === 'count'
                 ? `${formatQuantityValue(amountValue, 0)} pcs`
                 : `${formatQuantityValue(amountValue, unit === 'kg' ? 2 : 0)} ${unit}`;
             
             collected.push({
-                ingredient,
+                ingredient: finalIngredient,
                 baseAmount,
                 displayAmount
             });
         }
     });
     
-        return collected;
+    return collected;
 }
 
 async function handleMenuFormSubmit(event) {
@@ -8788,12 +8396,10 @@ async function handleMenuFormSubmit(event) {
             await waitForFirebaseReady();
         }
 
-        if (!inventoryState.length) {
-            await refreshInventoryState();
-        }
+        // Recipe-based: no inventory needed
 
         const slugSource = foodId || foodName || (hasFormVariations ? (addFormVariations[0]?.name || '') : '');
-        const slugify = MenuStore.slugifyName || InventoryStore.slugifyName;
+        const slugify = MenuStore.slugifyName || ((name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
         const slug = slugify(slugSource);
         let baseNameForFormatting = foodName || (hasFormVariations ? (addFormVariations[0]?.name || '') : '');
         if (!baseNameForFormatting) {
@@ -9266,33 +8872,17 @@ function addVariation() {
     const usedIngredientIds = new Set();
     
     existingVariations.forEach(variation => {
-        const ingredientSelect = variation.querySelector('.variation-ingredient');
-        if (ingredientSelect && ingredientSelect.value) {
-            const ingredient = findIngredientInStateByName(ingredientSelect.value);
-            if (ingredient) {
-                usedIngredientIds.add(ingredient.id);
-            }
-        }
+        // Recipe-based: ingredients are free-form, no need to track
     });
     
-    // Get available ingredients (excluding already used ones in variations)
-    // Note: The first ingredient from main ingredients can still be used in variations
-    const availableIngredients = inventoryState.filter(ing => !usedIngredientIds.has(ing.id));
-    
-    if (availableIngredients.length === 0) {
-        showNotification('No more ingredients available. Each variation must use a different ingredient.', 'error');
-        return;
-    }
+    // Recipe-based: ingredients are free-form, no need to check availability
     
     const variationId = `variation_${variationCounter++}`;
     const variationItem = document.createElement('div');
     variationItem.className = 'variation-item';
     variationItem.id = variationId;
     
-    // Build ingredient options HTML
-    const ingredientOptions = availableIngredients.map(ing => 
-        `<option value="${ing.name}">${ing.name}</option>`
-    ).join('');
+    // Recipe-based: ingredients are free-form
     
     variationItem.innerHTML = `
         <div class="variation-item-content">
@@ -9303,17 +8893,16 @@ function addVariation() {
                 <input type="number" class="form-control variation-price" placeholder="Price (PHP)" min="0" step="0.01" required>
             </div>
             <div class="form-group">
-                <select class="form-control variation-ingredient" required>
-                    <option value="">Select Ingredient</option>
-                    ${ingredientOptions}
-                </select>
+                <input type="text" class="form-control variation-ingredient" placeholder="Ingredient name" required>
             </div>
             <div class="form-group">
                 <input type="number" class="form-control variation-amount" placeholder="Amount" min="0" step="0.01">
             </div>
             <div class="form-group">
-                <select class="form-control variation-unit" disabled>
-                    <option value="">Select ingredient first</option>
+                <select class="form-control variation-unit">
+                    <option value="g">Grams (g)</option>
+                    <option value="kg">Kilograms (kg)</option>
+                    <option value="pcs">Pieces (pcs)</option>
                 </select>
             </div>
             <button type="button" class="btn btn-danger btn-sm" onclick="removeVariation('${variationId}')" style="flex: 0 0 auto;">
@@ -9325,44 +8914,8 @@ function addVariation() {
         </div>
     `;
     
-    // Handle ingredient selection
-    const ingredientSelect = variationItem.querySelector('.variation-ingredient');
-    const amountInput = variationItem.querySelector('.variation-amount');
-    const unitSelect = variationItem.querySelector('.variation-unit');
-    
-    ingredientSelect.addEventListener('change', function() {
-        const selectedIngredient = findIngredientInStateByName(this.value);
-        if (selectedIngredient) {
-            variationItem.dataset.ingredientId = selectedIngredient.id;
-            
-            // Update unit options based on ingredient type
-            if (unitSelect) {
-                if (selectedIngredient.unitType === 'count') {
-                    unitSelect.innerHTML = '<option value="pcs">Pieces (pcs)</option>';
-                    unitSelect.value = 'pcs';
-                } else {
-                    unitSelect.innerHTML = `
-                        <option value="g">Grams (g)</option>
-                        <option value="kg">Kilograms (kg)</option>
-                    `;
-                    unitSelect.value = 'g';
-                }
-                unitSelect.disabled = false;
-            }
-            
-            // Update amount input step and placeholder
-            if (amountInput) {
-                amountInput.step = selectedIngredient.unitType === 'count' ? '1' : '0.01';
-                amountInput.placeholder = selectedIngredient.unitType === 'count' ? '0' : '0.00';
-            }
-        } else {
-            variationItem.dataset.ingredientId = '';
-            if (unitSelect) {
-                unitSelect.innerHTML = '<option value="">Select ingredient first</option>';
-                unitSelect.disabled = true;
-            }
-        }
-    });
+    // Recipe-based: ingredients are free-form, no special handlers needed
+    // Unit select is always enabled
     
     variationsList.appendChild(variationItem);
 }
@@ -9386,40 +8939,38 @@ function gatherMenuDetailVariations() {
         const nameInput = item.querySelector('.menu-detail-variation-name-input');
         const priceInput = item.querySelector('.menu-detail-variation-price-input');
         const descriptionInput = item.querySelector('.menu-detail-variation-description-input');
-        const ingredientSelect = item.querySelector('.menu-detail-variation-ingredient');
+        const ingredientInput = item.querySelector('.menu-detail-variation-ingredient-input');
         const amountInput = item.querySelector('.menu-detail-variation-amount-input');
         const unitSelect = item.querySelector('.menu-detail-variation-unit-input');
         
         const name = (nameInput?.value || '').trim();
         const price = parseFloat(priceInput?.value || '0');
         const description = (descriptionInput?.value || '').trim();
-        const ingredientName = (ingredientSelect?.value || '').trim();
+        const ingredientName = (ingredientInput?.value || '').trim();
         const amountValue = parseFloat(amountInput?.value || '0');
-        const unit = (unitSelect?.value || '').trim();
+        const unit = (unitSelect?.value || 'g').trim();
         
         // Only process variations that have at least a name and price
         if (name && !isNaN(price) && price >= 0) {
-            // If ingredient is specified, validate it exists
+            // Recipe-based: ingredients are free-form
             if (ingredientName) {
-                const ingredient = findIngredientInStateByName(ingredientName);
-                if (!ingredient) {
-                    throw new Error(`Ingredient "${ingredientName}" must match a registered inventory item.`);
-                }
+                // Create a simple ingredient object for compatibility
+                const slug = ingredientName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                const unitType = (unit === 'pcs') ? 'count' : 'weight';
                 
                 // If amount is provided and greater than zero, use it
                 if (amountInput && amountInput.value && !isNaN(amountValue) && amountValue > 0) {
-                    // Get unit or use default based on ingredient type
-                    const finalUnit = unit || (ingredient.unitType === 'count' ? 'pcs' : 'g');
-                    const baseAmount = convertToBaseUnits(amountValue, ingredient.unitType, finalUnit);
+                    const finalUnit = unit || 'g';
+                    const baseAmount = convertToBaseUnits(amountValue, unitType, finalUnit);
                     
                     variations.push({
                         name: name,
                         price: Number(price.toFixed(2)),
                         description: description || '',
-                        ingredientId: ingredient.id,
-                        ingredientName: ingredient.name,
+                        ingredientId: slug,
+                        ingredientName: ingredientName,
                         amount: baseAmount,
-                        displayAmount: ingredient.unitType === 'count'
+                        displayAmount: unitType === 'count'
                             ? `${formatQuantityValue(amountValue, 0)} pcs`
                             : `${formatQuantityValue(amountValue, finalUnit === 'kg' ? 2 : 0)} ${finalUnit}`
                     });
@@ -9429,8 +8980,8 @@ function gatherMenuDetailVariations() {
                         name: name,
                         price: Number(price.toFixed(2)),
                         description: description || '',
-                        ingredientId: ingredient.id || null,
-                        ingredientName: ingredient.name || null,
+                        ingredientId: slug,
+                        ingredientName: ingredientName,
                         amount: null,
                         displayAmount: ''
                     });
@@ -9457,26 +9008,9 @@ function addMenuDetailVariation() {
     const variationsListEl = document.getElementById('menuDetailVariations');
     if (!variationsListEl) return;
     
-    // Get already used ingredients from existing variations
-    const existingVariations = variationsListEl.querySelectorAll('.menu-detail-variation-item-editable');
-    const usedIngredientIds = new Set();
-    existingVariations.forEach(variation => {
-        const ingredientSelect = variation.querySelector('.menu-detail-variation-ingredient');
-        if (ingredientSelect && ingredientSelect.value) {
-            const ingredient = findIngredientInStateByName(ingredientSelect.value);
-            if (ingredient) {
-                usedIngredientIds.add(ingredient.id);
-            }
-        }
-    });
+    // Recipe-based: ingredients are free-form, no need to track used ingredients
     
-    // Get available ingredients (excluding already used ones)
-    const availableIngredients = inventoryState.filter(ing => !usedIngredientIds.has(ing.id));
-    
-    if (availableIngredients.length === 0) {
-        showNotification('No more ingredients available. Each variation must use a different ingredient.', 'error');
-        return;
-    }
+    // Recipe-based: ingredients are free-form, no need to check availability
     
     // Remove empty state message if present
     const emptyState = variationsListEl.querySelector('.empty-state');
@@ -9496,10 +9030,7 @@ function addMenuDetailVariation() {
     variationItem.className = 'menu-detail-variation-item menu-detail-variation-item-editable';
     variationItem.id = variationId;
     
-    // Build ingredient options HTML
-    const ingredientOptions = availableIngredients.map(ing => 
-        `<option value="${ing.name}">${ing.name}</option>`
-    ).join('');
+    // Recipe-based: ingredients are free-form
     
     variationItem.innerHTML = `
         <div class="variation-item-content">
@@ -9510,17 +9041,16 @@ function addMenuDetailVariation() {
                 <input type="number" class="form-control menu-detail-variation-price-input" placeholder="Price (PHP)" value="0" min="0" step="0.01" required>
             </div>
             <div class="form-group">
-                <select class="form-control menu-detail-variation-ingredient" required>
-                    <option value="">Select Ingredient</option>
-                    ${ingredientOptions}
-                </select>
+                <input type="text" class="form-control menu-detail-variation-ingredient-input" placeholder="Ingredient name" required>
             </div>
             <div class="form-group">
                 <input type="number" class="form-control menu-detail-variation-amount-input" placeholder="Amount" min="0" step="0.01">
             </div>
             <div class="form-group">
-                <select class="form-control menu-detail-variation-unit-input" disabled>
-                    <option value="">Select ingredient first</option>
+                <select class="form-control menu-detail-variation-unit-input">
+                    <option value="g">Grams (g)</option>
+                    <option value="kg">Kilograms (kg)</option>
+                    <option value="pcs">Pieces (pcs)</option>
                 </select>
             </div>
             <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailVariation('${variationId}')" style="flex: 0 0 auto;">
@@ -9532,44 +9062,8 @@ function addMenuDetailVariation() {
         </div>
     `;
     
-    // Handle ingredient selection
-    const ingredientSelect = variationItem.querySelector('.menu-detail-variation-ingredient');
-    const amountInput = variationItem.querySelector('.menu-detail-variation-amount-input');
-    const unitSelect = variationItem.querySelector('.menu-detail-variation-unit-input');
-    
-    ingredientSelect.addEventListener('change', function() {
-        const selectedIngredient = findIngredientInStateByName(this.value);
-        if (selectedIngredient) {
-            variationItem.dataset.ingredientId = selectedIngredient.id;
-            
-            // Update unit options based on ingredient type
-            if (unitSelect) {
-                if (selectedIngredient.unitType === 'count') {
-                    unitSelect.innerHTML = '<option value="pcs">Pieces (pcs)</option>';
-                    unitSelect.value = 'pcs';
-                } else {
-                    unitSelect.innerHTML = `
-                        <option value="g">Grams (g)</option>
-                        <option value="kg">Kilograms (kg)</option>
-                    `;
-                    unitSelect.value = 'g';
-                }
-                unitSelect.disabled = false;
-            }
-            
-            // Update amount input step and placeholder
-            if (amountInput) {
-                amountInput.step = selectedIngredient.unitType === 'count' ? '1' : '0.01';
-                amountInput.placeholder = selectedIngredient.unitType === 'count' ? '0' : '0.00';
-            }
-        } else {
-            variationItem.dataset.ingredientId = '';
-            if (unitSelect) {
-                unitSelect.innerHTML = '<option value="">Select ingredient first</option>';
-                unitSelect.disabled = true;
-            }
-        }
-    });
+    // Recipe-based: ingredients are free-form, no special handlers needed
+    // Unit select is always enabled
     
     variationsListEl.appendChild(variationItem);
     
@@ -9621,40 +9115,39 @@ function gatherVariations() {
         const nameInput = item.querySelector('.variation-name');
         const priceInput = item.querySelector('.variation-price');
         const descriptionInput = item.querySelector('.variation-description');
-        const ingredientSelect = item.querySelector('.variation-ingredient');
+        const ingredientInput = item.querySelector('.variation-ingredient');
         const amountInput = item.querySelector('.variation-amount');
         const unitSelect = item.querySelector('.variation-unit');
         
         const name = (nameInput?.value || '').trim();
         const price = parseFloat(priceInput?.value || '0');
         const description = (descriptionInput?.value || '').trim();
-        const ingredientName = (ingredientSelect?.value || '').trim();
+        const ingredientName = (ingredientInput?.value || '').trim();
         const amountValue = parseFloat(amountInput?.value || '0');
-        const unit = (unitSelect?.value || '').trim();
+        const unit = (unitSelect?.value || 'g').trim();
         
         if (name && !isNaN(price) && price >= 0 && ingredientName) {
-            const ingredient = findIngredientInStateByName(ingredientName);
-            if (!ingredient) {
-                throw new Error(`Ingredient "${ingredientName}" must match a registered inventory item.`);
-            }
+            // Recipe-based: ingredients are free-form
+            const slug = ingredientName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const unitType = (unit === 'pcs') ? 'count' : 'weight';
             
             // Amount is required for variations
             if (!amountInput || !amountInput.value || isNaN(amountValue) || amountValue <= 0) {
                 throw new Error(`Amount for variation "${name}" must be greater than zero.`);
             }
             
-            // Get unit or use default based on ingredient type
-            const finalUnit = unit || (ingredient.unitType === 'count' ? 'pcs' : 'g');
-            const baseAmount = convertToBaseUnits(amountValue, ingredient.unitType, finalUnit);
+            // Get unit or use default
+            const finalUnit = unit || 'g';
+            const baseAmount = convertToBaseUnits(amountValue, unitType, finalUnit);
             
             variations.push({
                 name: name,
                 price: Number(price.toFixed(2)),
                 description: description || '',
-                ingredientId: ingredient.id,
-                ingredientName: ingredient.name,
+                ingredientId: slug,
+                ingredientName: ingredientName,
                 amount: baseAmount,
-                displayAmount: ingredient.unitType === 'count'
+                displayAmount: unitType === 'count'
                     ? `${formatQuantityValue(amountValue, 0)} pcs`
                     : `${formatQuantityValue(amountValue, finalUnit === 'kg' ? 2 : 0)} ${finalUnit}`
             });
@@ -9743,6 +9236,57 @@ async function resetMenuForm() {
     }
 }
 
+// Subscribe to dailyServings collection for real-time updates
+async function subscribeToDailyServings() {
+    if (!isFirestoreReady()) {
+        await waitForFirebaseReady();
+    }
+    const fns = window.firestoreFunctions;
+    if (!fns || !window.db) {
+        return;
+    }
+    
+    const today = DailyServingsStore.getTodayDateString();
+    const dailyServingsQuery = fns.query(
+        fns.collection(window.db, 'dailyServings'),
+        fns.where('date', '==', today)
+    );
+    
+    if (typeof fns.onSnapshot === 'function') {
+        if (typeof dailyServingsUnsubscribe === 'function') {
+            dailyServingsUnsubscribe();
+        }
+        
+        dailyServingsUnsubscribe = fns.onSnapshot(
+            dailyServingsQuery,
+            async (snapshot) => {
+                // Update cache with latest serving counts
+                const today = DailyServingsStore.getTodayDateString();
+                if (todayServingsCacheDate !== today) {
+                    todayServingsCache = {};
+                    todayServingsCacheDate = today;
+                }
+                
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    if (data.menuItemId) {
+                        todayServingsCache[data.menuItemId] = data.count || 0;
+                    }
+                });
+                
+                // Refresh menu list table if it's visible
+                const menuListTable = document.getElementById('menuListTableBody');
+                if (menuListTable && menuState && menuState.length > 0) {
+                    await renderMenuListTable();
+                }
+            },
+            (error) => {
+                console.error('Daily servings listener error:', error);
+            }
+        );
+    }
+}
+
 async function subscribeToMenuCollection() {
     if (!isFirestoreReady()) {
         await waitForFirebaseReady();
@@ -9789,15 +9333,14 @@ async function initMenuManagement() {
 
     try {
         await waitForFirebaseReady();
-        if (!inventoryState.length) {
-            await refreshInventoryState();
-        } else {
-            updateMenuIngredientsOptions(inventoryState);
-        }
+        // Recipe-based: no inventory needed
+        updateMenuIngredientsOptions([]);
         await refreshMenuState();
         updateIncludedSaucesCheckboxes();
         // Subscribe to real-time menu updates
         await subscribeToMenuCollection();
+        // Subscribe to daily servings to auto-update menu list
+        await subscribeToDailyServings();
         menuSubscriptionInitialized = true;
     } catch (error) {
         console.error('Unable to initialize menu management:', error);
@@ -9837,20 +9380,10 @@ async function initMenuManagement() {
     }
 }
 
+// initSalesInventoryAlerts removed - no longer needed in recipe-based system
 async function initSalesInventoryAlerts() {
-    const alertsContainer = document.getElementById('salesInventoryAlerts');
-    if (!alertsContainer) return;
-
-    try {
-        await waitForFirebaseReady();
-        if (!inventoryState.length) {
-            await refreshInventoryState();
-        }
-        await refreshMenuState();
-        renderSalesMenuAlerts();
-    } catch (error) {
-        console.error('Unable to initialize sales overview:', error);
-    }
+    // Recipe-based system: no inventory alerts needed
+    // This function is kept for compatibility but does nothing
 }
 
 function renderSalesMenuAlerts() {
@@ -10061,25 +9594,22 @@ function getStockStatus(item) {
     return { label: 'In Stock', className: 'high-stock', level: 'healthy' };
 }
 
+// Recipe-based: ingredients are free-form, no inventory lookup needed
 function findIngredientInStateByName(name) {
+    // Return a simple object structure for compatibility
+    // In recipe-based system, ingredients don't need to exist in inventory
     if (!name) return null;
     const trimmedName = name.trim();
     if (!trimmedName) return null;
     
-    // Try matching by slugified ID first
-    const slug = InventoryStore.slugifyName ? InventoryStore.slugifyName(trimmedName) : trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    let found = inventoryState.find(item => item.id === slug);
-    
-    // If not found by ID, try matching by name (case-insensitive)
-    if (!found) {
-        const lowerName = trimmedName.toLowerCase();
-        found = inventoryState.find(item => {
-            const itemName = (item.name || '').toLowerCase();
-            return itemName === lowerName || itemName.includes(lowerName) || lowerName.includes(itemName);
-        });
-    }
-    
-    return found || null;
+    // Return a basic ingredient object for unit type detection
+    // Default to weight, but allow manual selection
+    return {
+        id: trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        name: trimmedName,
+        unitType: 'weight', // Default, can be changed by user
+        baseUnit: 'g'
+    };
 }
 
 function formatIngredientLabel(value) {
@@ -10101,55 +9631,11 @@ async function populateIngredientIdPreview() {
     }
 }
 
+// handleIngredientRegisterSubmit removed - system is now recipe-based
+// Ingredients are entered directly when creating menu items, no registration needed
 async function handleIngredientRegisterSubmit(event) {
     event.preventDefault();
-    const form = event.target;
-    const nameInput = form.querySelector('#registerIngredientName');
-    const unitTypeSelect = form.querySelector('#registerUnitType');
-    const quantityInput = form.querySelector('#registerQuantity');
-    const unitSelect = form.querySelector('#registerUnit');
-    const reorderInput = form.querySelector('#registerReorderLevel');
-
-    const ingredientName = (nameInput?.value || '').trim();
-    const selectedUnitType = unitTypeSelect?.value || 'weight';
-    const quantityValue = parseFloat(quantityInput?.value || '0');
-    const selectedUnit = unitSelect?.value || (selectedUnitType === 'count' ? 'pcs' : 'g');
-    const reorderLevel = reorderInput && reorderInput.value !== '' ? Number(reorderInput.value) : undefined;
-
-    if (!ingredientName) {
-        showNotification('Please enter an ingredient name to register.', 'error');
-        return;
-    }
-
-    if (quantityValue < 0) {
-        showNotification('Initial quantity cannot be negative.', 'error');
-        return;
-    }
-
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-
-        const baseAmount = convertToBaseUnits(quantityValue, selectedUnitType, selectedUnit);
-        inventoryState = await InventoryStore.registerIngredient({
-            name: ingredientName,
-            unitType: selectedUnitType,
-            amount: baseAmount,
-            reorderLevel
-        });
-        renderInventoryState();
-        form.reset();
-        if (unitTypeSelect) {
-            unitTypeSelect.value = 'weight';
-        }
-        updateUnitOptions('weight', unitSelect, quantityInput);
-        populateIngredientIdPreview();
-        showNotification(`${formatIngredientLabel(ingredientName)} registered successfully!`, 'success');
-    } catch (error) {
-        console.error('Register ingredient failed:', error);
-        showNotification(error.message || 'Unable to register ingredient.', 'error');
-    }
+    showNotification('Ingredient registration is not needed in recipe-based system. Add ingredients directly when creating menu items.', 'info');
 }
 
 // Customer management functions
@@ -11749,6 +11235,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 showBannerCatalogue();
             } else if (hash === '#tableNumbers') {
                 showTableNumbers();
+            } else if (hash === '#ingredient-logs') {
+                showIngredientLogs();
             } else if (hash === '#menu-product-detail' || hash === '#product-detail') {
                 showMenuProductDetail();
             } else {
@@ -11762,10 +11250,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const foodSection = document.getElementById('foodSection');
                     const addFoodSection = document.getElementById('addFoodDashboard');
                     const promotionSection = document.getElementById('promotionDashboard');
+                    const ingredientLogsSection = document.getElementById('ingredient-logs');
                     if (foodSection) foodSection.style.display = 'none';
                     if (addFoodSection) addFoodSection.style.display = 'none';
                     if (productDetailSection) productDetailSection.style.display = 'none';
                     if (promotionSection) promotionSection.style.display = 'none';
+                    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
                     menuDetailVisible = false;
                     menuDetailEditing = false;
                     // Reset to base title if no section is shown
@@ -12012,13 +11502,9 @@ window.closeOrderDetailsModal = closeOrderDetailsModal;
 window.verifyPayment = verifyPayment;
 window.closePaymentReceiptModal = closePaymentReceiptModal;
 window.verifyPaymentConfirm = verifyPaymentConfirm;
-window.declinePayment = declinePayment;
 window.DailyServingsStore = DailyServingsStore;
 window.updateMenuServingLimit = updateMenuServingLimit;
 window.getMenuServingInfo = getMenuServingInfo;
-window.closeDeclinePaymentModal = closeDeclinePaymentModal;
-window.confirmDeclinePayment = confirmDeclinePayment;
-window.handleDeclineReasonChange = handleDeclineReasonChange;
 window.reopenOrder = reopenOrder;
 // Backfill function to create for_delivery documents for existing orders with drivers
 async function backfillForDeliveryDocuments() {
@@ -12121,10 +11607,11 @@ window.printDriver = printDriver;
 window.editItem = editItem;
 window.deleteItem = deleteItem;
 window.switchReport = switchReport;
+// window.switchAnalyticsTab removed - ingredient logs moved to menu page
 window.switchTime = switchTime;
 window.changePage = changePage;
 window.exportReport = exportReport;
-window.exportInventoryReport = exportInventoryReport;
+// window.exportInventoryReport removed - system is now recipe-based
 window.selectCustomer = selectCustomer;
 window.updateDailySalesReport = updateDailySalesReport;
 window.switchTab = switchTab;
@@ -12356,6 +11843,63 @@ function generateUUID() {
 }
 
 // Show table numbers section
+function showIngredientLogs() {
+    // Hide other sections
+    const foodSection = document.getElementById('foodSection');
+    const addFoodSection = document.getElementById('addFoodDashboard');
+    const productDetailSection = document.getElementById('menu-product-detail');
+    const promotionSection = document.getElementById('promotionDashboard');
+    const bannerCatalogueSection = document.getElementById('bannerCatalogue');
+    const menuListWrapper = document.getElementById('menu-list');
+    const menuCatalogueGrid = document.getElementById('menu-catalogue-grid');
+    const tableNumbersSection = document.getElementById('tableNumbers');
+    const ingredientLogsSection = document.getElementById('ingredient-logs');
+    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
+    
+    if (foodSection) foodSection.style.display = 'none';
+    if (addFoodSection) addFoodSection.style.display = 'none';
+    if (productDetailSection) productDetailSection.style.display = 'none';
+    if (promotionSection) promotionSection.style.display = 'none';
+    if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
+    if (menuListWrapper) menuListWrapper.style.display = 'none';
+    if (menuCatalogueGrid) menuCatalogueGrid.style.display = 'none';
+    if (tableNumbersSection) tableNumbersSection.style.display = 'none';
+    if (ingredientLogsSection) ingredientLogsSection.style.display = 'block';
+    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'block';
+    
+    menuDetailVisible = false;
+    menuDetailEditing = false;
+    updatePageTitle('Menu', 'Ingredient Logs');
+    
+    // Scroll to top of main content to show the table
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+        mainContent.scrollTop = 0;
+    }
+    
+    // Initialize ingredient logs when section is shown
+    if (typeof initIngredientLogs === 'function') {
+        setTimeout(() => initIngredientLogs(), 100);
+    }
+    
+    // Update hash
+    const currentHash = window.location.hash;
+    if (currentHash !== '#ingredient-logs') {
+        if (history.replaceState) {
+            history.replaceState(null, null, '#ingredient-logs');
+        } else {
+            window.location.hash = '#ingredient-logs';
+        }
+    }
+    
+    // Highlight the Ingredient Logs dropdown item
+    setTimeout(() => {
+        if (window.highlightActiveMenuItem) {
+            window.highlightActiveMenuItem();
+        }
+    }, 50);
+}
+
 function showTableNumbers() {
     // Hide other sections
     const foodSection = document.getElementById('foodSection');
@@ -12366,6 +11910,7 @@ function showTableNumbers() {
     const menuListWrapper = document.getElementById('menu-list');
     const menuCatalogueGrid = document.getElementById('menu-catalogue-grid');
     const tableNumbersSection = document.getElementById('tableNumbers');
+    const ingredientLogsSection = document.getElementById('ingredient-logs');
     
     if (foodSection) foodSection.style.display = 'none';
     if (addFoodSection) addFoodSection.style.display = 'none';
@@ -12374,6 +11919,7 @@ function showTableNumbers() {
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
     if (menuListWrapper) menuListWrapper.style.display = 'none';
     if (menuCatalogueGrid) menuCatalogueGrid.style.display = 'none';
+    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
     if (tableNumbersSection) tableNumbersSection.style.display = 'block';
     
     menuDetailVisible = false;

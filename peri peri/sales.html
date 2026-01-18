@@ -66,6 +66,12 @@
             <nav class="navigation">
                 <ul class="nav-list">
                     <li class="nav-item">
+                        <a href="pos.html" class="nav-link">
+                            <i class="fas fa-cash-register"></i>
+                            <span>POS</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="index.html" class="nav-link">
                             <i class="fas fa-shopping-cart"></i>
                             <span>Orders</span>
@@ -122,7 +128,7 @@
                         </button>
                         <ul class="menu-nav-submenu" id="analyticsTabDropdown">
                             <li><a href="sales.html#sales">Sales</a></li>
-                            <li><a href="sales.html#inventory">Inventory</a></li>
+                            <li><a href="sales.html#ingredient-logs">Ingredient Logs</a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
@@ -193,7 +199,7 @@
 
             <!-- Sales Section -->
             <div id="sales" class="analytics-section">
-                <!-- Sales Activity Tabs -->
+                <!-- Sales Period Tabs -->
                 <div class="sales-activity-tabs">
                     <div class="tab-navigation">
                         <button class="tab-btn active" onclick="switchReport('weekly')">Weekly</button>
@@ -383,215 +389,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Inventory Section -->
-            <div id="inventory" class="analytics-section" style="display: none;">
-            <!-- Inventory Overview -->
-            <div class="inventory-overview">
-                <div class="inventory-header">
-                    <div>
-                        <h3>Inventory Overview</h3>
-                        <p class="inventory-subtitle">Track meat, staples, packaging, and utensils in grams/kg or pieces.</p>
-                    </div>
-                </div>
-
-                <div id="salesInventoryAlerts" class="sales-alerts" style="display: none;"></div>
-
-                <div class="inventory-cards">
-                    <div class="inventory-card blue">
-                        <div class="card-icon">
-                            <i class="fas fa-layer-group"></i>
-                        </div>
-                        <div class="card-content">
-                            <h4>Total Ingredients</h4>
-                            <span class="card-value" id="totalIngredientsMetric">0</span>
-                        </div>
-                    </div>
-                    <div class="inventory-card orange">
-                        <div class="card-icon">
-                            <i class="fas fa-exclamation-triangle"></i>
-                        </div>
-                        <div class="card-content">
-                            <h4>Low Stock Items</h4>
-                            <span class="card-value" id="lowStockMetric">0</span>
-                        </div>
-                    </div>
-                    <div class="inventory-card light-green">
-                        <div class="card-icon">
-                            <i class="fas fa-weight-hanging"></i>
-                        </div>
-                        <div class="card-content">
-                            <h4>Total Weight (kg)</h4>
-                            <span class="card-value" id="weightMetric">0</span>
-                        </div>
-                    </div>
-                    <div class="inventory-card light-blue">
-                        <div class="card-icon">
-                            <i class="fas fa-box-open"></i>
-                        </div>
-                        <div class="card-content">
-                            <h4>Packaging &amp; Utensils</h4>
-                            <span class="card-value" id="packagingMetric">0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="inventory-forms-grid">
-                    <div class="inventory-form-card">
-                        <div class="inventory-form-header">
-                            <h4>Restock / Add Ingredient</h4>
-                            <p>Add stock in grams, kilograms, or pieces. New items are supported.</p>
-                        </div>
-                        <form id="inventoryForm">
-                            <div class="form-field">
-                                <label for="inventoryIngredientName">Ingredient Name</label>
-                                <input type="text" id="inventoryIngredientName" name="ingredientName" list="inventoryIngredientsList" placeholder="e.g., Chicken, Take-out boxes" required>
-                                <datalist id="inventoryIngredientsList"></datalist>
-                            </div>
-                            <div class="form-field">
-                                <label for="inventoryUnitType">Unit Type</label>
-                                <select id="inventoryUnitType" name="unitType">
-                                    <option value="weight">Weight (grams)</option>
-                                    <option value="count">Pieces</option>
-                                </select>
-                            </div>
-                            <div class="form-field inline-fields">
-                                <div>
-                                    <label for="inventoryQuantity">Quantity</label>
-                                    <input type="number" id="inventoryQuantity" name="quantity" min="0" step="0.01" placeholder="0.00" required>
-                                </div>
-                                <div>
-                                    <label for="inventoryUnit">Unit</label>
-                                    <select id="inventoryUnit" name="unit">
-                                        <option value="g">Grams (g)</option>
-                                        <option value="kg">Kilograms (kg)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <p class="form-hint">Selecting an existing ingredient will lock its unit type for consistency.</p>
-                            <button type="submit" class="export-btn solid">Save to Inventory</button>
-                        </form>
-                    </div>
-
-                    <div class="inventory-form-card">
-                        <div class="inventory-form-header">
-                            <h4>Register New Ingredient</h4>
-                            <p>Introduce additional ingredients before using them on new dishes.</p>
-                        </div>
-                        <form id="ingredientRegisterForm">
-                            <div class="form-field">
-                                <label for="registerIngredientId">Ingredient ID (auto-generated)</label>
-                                <input type="text" id="registerIngredientId" name="registerIngredientId" readonly placeholder="Auto-generated on save">
-                            </div>
-                            <div class="form-field">
-                                <label for="registerIngredientName">Ingredient Name</label>
-                                <input type="text" id="registerIngredientName" name="registerIngredientName" placeholder="e.g., Lettuce" required>
-                            </div>
-                            <div class="form-field">
-                                <label for="registerUnitType">Unit Type</label>
-                                <select id="registerUnitType" name="registerUnitType">
-                                    <option value="weight">Weight (grams)</option>
-                                    <option value="count">Pieces</option>
-                                </select>
-                            </div>
-                            <div class="form-field inline-fields">
-                                <div>
-                                    <label for="registerQuantity">Initial Quantity</label>
-                                    <input type="number" id="registerQuantity" name="registerQuantity" min="0" step="0.01" placeholder="0.00">
-                                </div>
-                                <div>
-                                    <label for="registerUnit">Unit</label>
-                                    <select id="registerUnit" name="registerUnit">
-                                        <option value="g">Grams (g)</option>
-                                        <option value="kg">Kilograms (kg)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-field">
-                                <label for="registerReorderLevel">Reorder Level (optional)</label>
-                                <input type="number" id="registerReorderLevel" name="registerReorderLevel" min="0" step="1" placeholder="Default based on unit type">
-                            </div>
-                            <p class="form-hint">Register an ingredient once. Afterwards, manage it through the restock form.</p>
-                            <button type="submit" class="export-btn solid">Register Ingredient</button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Inventory Table -->
-                <div class="inventory-table-section">
-                    <div class="inventory-table-header">
-                        <div>
-                            <h4>Current Inventory</h4>
-                            <p class="inventory-subtitle">Weights are stored in grams but can be entered in kg.</p>
-                        </div>
-                        <div class="inventory-table-actions">
-                            <span id="inventoryLastUpdated" class="inventory-updated-label">Not updated yet</span>
-                            <button class="export-btn" onclick="exportInventoryReport()">
-                                <i class="fas fa-download"></i>
-                                Export Inventory Report
-                            </button>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table class="orders-table inventory-table">
-                            <thead>
-                                <tr>
-                                            <th>ID</th>
-                                            <th>Ingredient</th>
-                                            <th>Available Stock</th>
-                                            <th>Unit Type</th>
-                                            <th>Status</th>
-                                            <th>Last Update</th>
-                                </tr>
-                            </thead>
-                            <tbody id="inventoryTableBody">
-                                <tr>
-                                            <td colspan="6" class="empty-table">Inventory data will appear after you add stock.</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Ingredient Logs Table -->
-                <div class="inventory-logs-section" style="margin-top: 40px;">
-                    <div class="inventory-table-header">
-                        <div>
-                            <h4>Ingredient Activity Logs</h4>
-                            <p class="inventory-subtitle">Real-time tracking of ingredients used and received</p>
-                        </div>
-                        <div class="inventory-table-actions">
-                            <input type="date" id="ingredientLogDateFilter" class="form-control" style="width: 180px; display: inline-block; margin-right: 10px;" onchange="filterIngredientLogs()">
-                            <select id="ingredientLogFilter" class="form-control" style="width: 200px; display: inline-block; margin-right: 10px;" onchange="filterIngredientLogs()">
-                                <option value="">All Ingredients</option>
-                            </select>
-                            <button class="export-btn" onclick="exportIngredientLogs()">
-                                <i class="fas fa-download"></i>
-                                Export Logs
-                            </button>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table class="orders-table inventory-logs-table">
-                            <thead>
-                                <tr>
-                                    <th>Timestamp</th>
-                                    <th>Ingredient</th>
-                                    <th>Type</th>
-                                    <th>Amount</th>
-                                    <th>Order/Menu Item</th>
-                                </tr>
-                            </thead>
-                            <tbody id="ingredientLogsTableBody">
-                                <tr>
-                                    <td colspan="5" class="empty-table">Loading logs...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            </div>
         </main>
     </div>
 
@@ -600,19 +397,9 @@
         function showAnalyticsSection() {
             const hash = window.location.hash;
             const salesSection = document.getElementById('sales');
-            const inventorySection = document.getElementById('inventory');
             
-            if (hash === '#inventory') {
-                if (salesSection) salesSection.style.display = 'none';
-                if (inventorySection) inventorySection.style.display = 'block';
-                // Initialize ingredient logs when inventory section is shown
-                if (typeof initIngredientLogs === 'function') {
-                    setTimeout(() => initIngredientLogs(), 100);
-                }
-            } else {
-                // Default to sales
-                if (salesSection) salesSection.style.display = 'block';
-                if (inventorySection) inventorySection.style.display = 'none';
+            if (salesSection) {
+                salesSection.style.display = 'block';
             }
         }
         

@@ -99,6 +99,7 @@
                             <li><a href="menu.html#addFoodDashboard" onclick="event.preventDefault(); window.location.href='menu.html#addFoodDashboard';">Add Product</a></li>
                             <li><a href="menu.html#menu-product-detail">Product Detail</a></li>
                             <li><a href="menu.html#tableNumbers">Table Number</a></li>
+                            <li><a href="menu.html#ingredient-logs">Ingredient Logs</a></li>
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
@@ -132,7 +133,6 @@
                         </button>
                         <ul class="menu-nav-submenu" id="analyticsTabDropdown">
                             <li><a href="sales.html#sales">Sales</a></li>
-                            <li><a href="sales.html#inventory">Inventory</a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
@@ -150,6 +150,14 @@
                 </ul>
             </nav>
         </aside>
+
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <!-- Sidebar Overlay for Mobile -->
+        <div class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
 
         <!-- Main Content Area -->
         <main class="main-content">
@@ -318,54 +326,6 @@
         </div>
     </div>
 
-    <!-- Decline Payment Modal -->
-    <div id="declinePaymentModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h2>Decline Order</h2>
-                <span class="close-modal" onclick="closeDeclinePaymentModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <p style="margin-bottom: 20px;">Please select a reason for declining this order:</p>
-                <div style="margin-bottom: 15px;">
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Payment did not transfer" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Payment did not transfer</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Location too far" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Location too far</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Invalid order details" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Invalid order details</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Equipment malfunction" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Equipment malfunction</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Out of stock" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Out of stock</span>
-                    </label>
-                    <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
-                        <input type="radio" name="declineReason" value="Other" onchange="handleDeclineReasonChange()" style="margin-right: 10px;">
-                        <span>Other</span>
-                    </label>
-                </div>
-                <div id="declineOtherReasonContainer" style="display: none; margin-top: 15px;">
-                    <label for="declineOtherReason" style="display: block; margin-bottom: 5px; font-weight: bold;">Please specify:</label>
-                    <textarea id="declineOtherReason" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical;" placeholder="Enter your reason here..."></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-danger" onclick="confirmDeclinePayment()">
-                    <i class="fas fa-times-circle"></i> Confirm Decline
-                </button>
-                <button class="btn btn-secondary" onclick="closeDeclinePaymentModal()">Cancel</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Driver Selection Modal -->
     <div id="driverSelectionModal" class="modal" style="display: none;">
@@ -415,6 +375,7 @@
             });
         });
     </script>
+    <script src="mobile-menu.js"></script>
 </body>
 </html>
 
