@@ -9,218 +9,578 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    /* Body background - white */
-    body {
-      background: #ffffff !important;
-    }
-    
-    /* Page-level layout for a cleaner, balanced dashboard */
-    .main-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px 16px 32px;
-    }
-
-    .header-banner .banner-content {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 10px 16px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-    }
-
-    /* Lightweight scoped layout helpers for this page only */
-    .driver-grid {
-      display: grid;
-      gap: 20px;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 360px));
-      justify-content: center;
-      margin: 24px auto 0;
-    }
-
-    .driver-card {
-      background: #fff;
-      border: 1.5px solid #e5e7eb;
-      border-radius: 16px;
-      box-shadow: 0 6px 24px rgba(15,23,42,0.08);
-      padding: 18px 16px;
-      display:flex;
-      flex-direction:column;
-      gap:12px;
-      width: 100%;
-      max-width: 360px;
-    }
-
-    .driver-card h3 {
-      font-size: 1.05em;
-      font-weight: 700;
-      margin: 0 0 4px;
-      color: #111827;
-      display:flex;
-      align-items:center;
-      gap:10px;
-    }
-
-    .driver-actions {
-      display:flex;
-      gap:8px;
-      flex-wrap: wrap;
-    }
-    .driver-actions .filter-btn,
-    .driver-actions .size-select {
-      flex: 0 0 auto;
-    }
-    @media (min-width: 1200px) {
-      .driver-actions { justify-content: flex-end; }
-      .driver-actions .filter-btn { padding: 10px 14px; font-size: 0.95em; }
-      .driver-actions .size-select { min-width: 160px; }
-    }
-
-    .driver-quiet {
-      color:#6b7280;
-      font-size:0.9em;
-      margin-top:4px;
-    }
-
-    .orders-list-compact {
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-    .orders-list-compact .review-item {
-      padding:14px 12px;
-      border-radius:12px;
-      border-width:1.5px;
-      background:#fafafa;
-    }
-    .orders-list-compact .review-header { margin-bottom:6px; }
-    .orders-list-compact .review-text {
-      margin: 6px 0 10px 0;
-      font-size:0.9rem;
-      line-height:1.5;
-    }
-    /* Toasts */
-    .toast-container { position: fixed; top: 16px; right: 16px; display: grid; gap: 10px; z-index: 10001; }
-    .toast { display:flex; align-items:center; gap:10px; background:#fff; border:2px solid #e0e0e0; border-left:6px solid #e53935; color:#222; padding:12px 14px; border-radius:12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); min-width: 260px; max-width: 360px; }
-    .toast.success { border-left-color:#4caf50; }
-    .toast.info { border-left-color:#ffc72c; }
-    .toast .icon { color:#e53935; }
-    .toast.success .icon { color: #4caf50; }
-    .toast.info .icon { color: #ffc72c; }
-    .toast button { background:none; border:none; color:#666; cursor:pointer; padding:4px; border-radius:8px; }
-    .toast button:hover { background: rgba(0,0,0,0.05); }
-    /* Driver status visuals */
-    .driver-card .review-item[data-status="new"] { border-color: #e53935; }
-    .driver-card .review-item[data-status="processing"] { border-color: #ffc72c; }
-    .driver-card .review-item[data-status="completed"] { border-color: #4caf50; }
-    .driver-status-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:8px; font-size:0.8em; font-weight:700; }
-    .driver-status-badge.red { background: linear-gradient(135deg, #ff6b6b, #e53935); color:#fff; }
-    .driver-status-badge.yellow { background: linear-gradient(135deg, #ffc72c, #ffd54f); color:#222; }
-    .driver-status-badge.green { background: linear-gradient(135deg, #66bb6a, #43a047); color:#fff; }
-
-    /* Centered notification for Accept action (minimal design) */
-    .center-toast {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: transparent;
-      color: #111;
+    /* Mobile-first base styles */
+    * {
+      margin: 0;
       padding: 0;
-      border: none;
-      border-radius: 0;
-      box-shadow: none;
-      font-weight: 400;
-      letter-spacing: normal;
-      z-index: 10002;
-      opacity: 0;
-      animation: centerToastIn 120ms ease forwards;
+      box-sizing: border-box;
     }
-    .center-toast.hide { animation: centerToastOut 150ms ease forwards; }
-    @keyframes centerToastIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes centerToastOut { to { opacity: 0; } }
 
-    /* Hide decorative icons across the driver page */
-    .driver-tabs .tab-icon,
-    .driver-card h3 i,
-    .reviewer-avatar,
-    .driver-actions i,
-    .driver-status-badge i,
-    .modal-content .modal-header .modal-close i,
-    .modal-content .modal-body i,
-    .toast .icon { display: none !important; }
+    body {
+      background: #f5f5f5;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #1a1a1a;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
 
-    /* Modal refinements for cleaner spacing on this page */
-    .modal-overlay .modal-content {
-      border-radius: 16px;
-      padding: 18px 18px 20px;
-      max-height: 90vh;
-      max-width: 500px;
-      width: 90%;
+    /* Hide navbar toggler on mobile for driver page */
+    @media (max-width: 991px) {
+      .header .navbar-toggler {
+        display: none !important;
+      }
+      /* Make navbar collapse always visible on mobile for driver page */
+      .header .navbar-collapse {
+        display: flex !important;
+        flex-basis: auto !important;
+      }
+    }
+
+    /* Profile icon only styling */
+    .profile-icon .profile-text {
+      display: none;
+    }
+
+    .profile-icon {
+      min-width: 40px;
+      min-height: 40px;
+    }
+
+    /* Main Container */
+    .driver-main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    /* Page Title */
+    .driver-page-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+    }
+
+    /* Tabs - Mobile optimized */
+    .driver-tabs {
       display: flex;
-      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 4px;
+    }
+
+    .driver-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .driver-tab-btn {
+      padding: 10px 16px;
+      background: #ffffff;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #6b7280;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .driver-tab-btn:hover {
+      border-color: #d1d5db;
+      background: #f9fafb;
+    }
+
+    .driver-tab-btn.active {
+      background: #e53935;
+      border-color: #e53935;
+      color: #ffffff;
+    }
+
+    /* Orders Grid - Mobile first */
+    .driver-orders-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    /* Order Section */
+    .driver-order-section {
+      background: #ffffff;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
       overflow: hidden;
     }
 
-    .modal-content .modal-header {
-      margin-bottom: 12px;
-      flex-shrink: 0;
-    }
-
-    .modal-content .modal-body {
-      font-size: 0.95rem;
-      overflow-y: auto;
-      overflow-x: hidden;
-      flex: 1;
-      min-height: 0;
-      padding-right: 4px;
-    }
-
-    .modal-content .modal-body::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .modal-content .modal-body::-webkit-scrollbar-track {
-      background: #f1f1f1;
-      border-radius: 10px;
-    }
-
-    .modal-content .modal-body::-webkit-scrollbar-thumb {
-      background: #c1c1c1;
-      border-radius: 10px;
-    }
-
-    .modal-content .modal-body::-webkit-scrollbar-thumb:hover {
-      background: #a8a8a8;
-    }
-
-    #orderModalActions {
-      flex-shrink: 0;
-      margin-top: 12px;
-    }
-
-    /* Tabs spacing */
-    .driver-tabs {
-      max-width: 1200px;
-      margin: 8px auto 0;
-      padding: 0 16px;
+    .driver-section-header {
+      padding: 16px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      justify-content: center;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    .driver-tabs .tab-btn {
-      padding-inline: 14px;
-      padding-block: 8px;
+    .driver-section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .driver-section-count {
+      background: #e5e7eb;
+      color: #6b7280;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .driver-section-count.new {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .driver-section-count.ongoing {
+      background: #fef3c7;
+      color: #d97706;
+    }
+
+    .driver-section-count.completed {
+      background: #d1fae5;
+      color: #059669;
+    }
+
+    .driver-orders-list {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 100px;
+    }
+
+    .driver-empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 0.9rem;
+    }
+
+    /* Order Card */
+    .driver-order-card {
+      background: #ffffff;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .driver-order-card:active {
+      transform: scale(0.98);
+    }
+
+    .driver-order-card.new {
+      border-left: 4px solid #dc2626;
+    }
+
+    .driver-order-card.ongoing {
+      border-left: 4px solid #f59e0b;
+    }
+
+    .driver-order-card.completed {
+      border-left: 4px solid #059669;
+    }
+
+    .driver-order-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .driver-order-id {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #1a1a1a;
+      margin-bottom: 4px;
+    }
+
+    .driver-order-time {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    .driver-order-status {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .driver-order-status.new {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .driver-order-status.ongoing {
+      background: #fef3c7;
+      color: #d97706;
+    }
+
+    .driver-order-status.completed {
+      background: #d1fae5;
+      color: #059669;
+    }
+
+    .driver-order-info {
+      margin-bottom: 12px;
+    }
+
+    .driver-order-info-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .driver-order-info-label {
+      color: #6b7280;
+      min-width: 70px;
+      flex-shrink: 0;
+    }
+
+    .driver-order-info-value {
+      color: #1a1a1a;
+      font-weight: 500;
+      flex: 1;
+    }
+
+    .driver-order-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 12px;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .driver-order-price {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .driver-order-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .driver-btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .driver-btn:active {
+      transform: scale(0.96);
+    }
+
+    .driver-btn-primary {
+      background: #e53935;
+      color: #ffffff;
+    }
+
+    .driver-btn-primary:hover {
+      background: #c62828;
+    }
+
+    .driver-btn-secondary {
+      background: #f3f4f6;
+      color: #1a1a1a;
+    }
+
+    .driver-btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .driver-btn-success {
+      background: #059669;
+      color: #ffffff;
+    }
+
+    .driver-btn-success:hover {
+      background: #047857;
+    }
+
+    .driver-select {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1.5px solid #e5e7eb;
+      background: #ffffff;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #1a1a1a;
+      cursor: pointer;
+      min-width: 100px;
+    }
+
+    .driver-select:focus {
+      outline: none;
+      border-color: #e53935;
+    }
+
+    /* Modal */
+    .driver-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    .driver-modal-overlay.show {
+      display: flex;
+    }
+
+    .driver-modal {
+      background: #ffffff;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .driver-modal-header {
+      padding: 20px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .driver-modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .driver-modal-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: #6b7280;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .driver-modal-close:hover {
+      background: #f3f4f6;
+      color: #1a1a1a;
+    }
+
+    .driver-modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .driver-modal-section {
+      margin-bottom: 20px;
+    }
+
+    .driver-modal-section-title {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .driver-modal-info {
+      background: #f9fafb;
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .driver-modal-info-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+    }
+
+    .driver-modal-info-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .driver-modal-info-label {
+      color: #6b7280;
+      min-width: 100px;
+      flex-shrink: 0;
+    }
+
+    .driver-modal-info-value {
+      color: #1a1a1a;
+      font-weight: 500;
+      flex: 1;
+    }
+
+    .driver-modal-actions {
+      padding: 20px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      flex-shrink: 0;
+    }
+
+    /* Toast Notifications */
+    .driver-toast-container {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 3000;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: calc(100% - 32px);
+    }
+
+    .driver-toast {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-left: 4px solid #e53935;
+      border-radius: 8px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 280px;
+      max-width: 400px;
+    }
+
+    .driver-toast.success {
+      border-left-color: #059669;
+    }
+
+    .driver-toast.info {
+      border-left-color: #f59e0b;
+    }
+
+    .driver-toast-message {
+      flex: 1;
+      font-size: 0.875rem;
+      color: #1a1a1a;
+    }
+
+    .driver-toast-close {
+      background: none;
+      border: none;
+      color: #6b7280;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .driver-toast-close:hover {
+      background: #f3f4f6;
+    }
+
+    /* Desktop styles */
+    @media (min-width: 768px) {
+      .driver-header {
+        padding: 16px 24px;
+      }
+
+      .driver-logo {
+        height: 40px;
+        width: 40px;
+      }
+
+      .driver-brand {
+        font-size: 1.1rem;
+      }
+
+      .driver-main {
+        padding: 24px;
+      }
+
+      .driver-page-title {
+        font-size: 1.75rem;
+        margin-bottom: 24px;
+      }
+
+      .driver-tabs {
+        margin-bottom: 24px;
+      }
+
+      .driver-tab-btn {
+        padding: 12px 20px;
+        font-size: 0.9rem;
+      }
+
+      .driver-orders-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+      }
+
+      .driver-order-card {
+        padding: 16px;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .driver-main {
+        padding: 32px;
+      }
+
+      .driver-orders-grid {
+        gap: 24px;
+      }
+    }
+
+    /* Hide decorative icons */
+    .driver-tab-btn i,
+    .driver-order-card i,
+    .driver-modal-body i {
+      display: none !important;
     }
   </style>
-  <meta name="theme-color" content="#ffe3a3">
+  <meta name="theme-color" content="#ffffff">
   <meta name="description" content="Driver dashboard to manage new, ongoing, and completed orders.">
   <script type="module" src="firebase-init.js"></script>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
+  
   <header class="header navbar navbar-expand-lg">
     <div class="container-fluid px-3">
       <a class="navbar-brand d-flex align-items-center gap-2" href="index.html">
@@ -229,9 +589,6 @@
           <div class="brand-name">PABLO'S<br>PERI PERI</div>
         </div>
       </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#primaryNav" aria-controls="primaryNav" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
       <div class="collapse navbar-collapse justify-content-end" id="primaryNav">
         <div class="nav-icons d-flex align-items-center gap-2 ms-lg-3">
           <div class="nav-icon profile-icon" title="Profile" id="profileButton">
@@ -270,112 +627,130 @@
     </div>
   </div>
 
-  <main id="main-content" class="main-container">
-    <div class="category-tabs driver-tabs" role="tablist" aria-label="Orders filter" style="padding-left:20px; padding-right:20px;">
-      <button class="tab-btn active" role="tab" aria-selected="true" data-view="all">
-        <i class="fas fa-layer-group tab-icon"></i>
-        <span class="tab-text">All</span>
+  <!-- Main Content -->
+  <main id="main-content" class="driver-main">
+    <h1 class="driver-page-title">Driver Dashboard</h1>
+
+    <!-- Tabs -->
+    <div class="driver-tabs" role="tablist" aria-label="Orders filter">
+      <button class="driver-tab-btn active" role="tab" aria-selected="true" data-view="all">
+        <span>All</span>
       </button>
-      <button class="tab-btn" role="tab" aria-selected="false" data-view="new">
-        <i class="fas fa-bell tab-icon"></i>
-        <span class="tab-text">New orders</span>
+      <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="new">
+        <span>New Orders</span>
       </button>
-      <button class="tab-btn" role="tab" aria-selected="false" data-view="ongoing">
-        <i class="fas fa-route tab-icon"></i>
-        <span class="tab-text">Ongoing</span>
+      <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="ongoing">
+        <span>Ongoing</span>
       </button>
-      <button class="tab-btn" role="tab" aria-selected="false" data-view="completed">
-        <i class="fas fa-check-circle tab-icon"></i>
-        <span class="tab-text">Completed</span>
+      <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="completed">
+        <span>Completed</span>
       </button>
     </div>
-    <div class="content-wrapper driver-grid">
+
+    <!-- Orders Grid -->
+    <div class="driver-orders-grid">
       <!-- New Orders -->
-      <section class="driver-card" aria-label="New orders" id="newSection">
-        <h3><i class="fas fa-bell"></i> New Orders</h3>
-        <div id="newOrdersList" class="orders-list-compact"></div>
-        <div id="newOrdersEmpty" class="driver-quiet">No new orders right now.</div>
+      <section class="driver-order-section" id="newSection" aria-label="New orders">
+        <div class="driver-section-header">
+          <div class="driver-section-title">New Orders</div>
+          <div class="driver-section-count new" id="newCount">0</div>
+        </div>
+        <div class="driver-orders-list" id="newOrdersList"></div>
+        <div class="driver-empty-state" id="newOrdersEmpty" style="display: none;">No new orders right now.</div>
       </section>
 
       <!-- Ongoing Orders -->
-      <section class="driver-card" aria-label="Ongoing orders" id="ongoingSection">
-        <h3><i class="fas fa-route"></i> Ongoing</h3>
-        <div id="ongoingOrdersList" class="orders-list-compact"></div>
-        <div id="ongoingOrdersEmpty" class="driver-quiet">No ongoing deliveries.</div>
+      <section class="driver-order-section" id="ongoingSection" aria-label="Ongoing orders">
+        <div class="driver-section-header">
+          <div class="driver-section-title">Ongoing</div>
+          <div class="driver-section-count ongoing" id="ongoingCount">0</div>
+        </div>
+        <div class="driver-orders-list" id="ongoingOrdersList"></div>
+        <div class="driver-empty-state" id="ongoingOrdersEmpty" style="display: none;">No ongoing deliveries.</div>
       </section>
 
       <!-- Completed Orders -->
-      <section class="driver-card" aria-label="Completed orders" id="completedSection">
-        <h3><i class="fas fa-check-circle"></i> Completed</h3>
-        <div id="completedOrdersList" class="orders-list-compact"></div>
-        <div id="completedOrdersEmpty" class="driver-quiet">No completed orders yet.</div>
+      <section class="driver-order-section" id="completedSection" aria-label="Completed orders">
+        <div class="driver-section-header">
+          <div class="driver-section-title">Completed</div>
+          <div class="driver-section-count completed" id="completedCount">0</div>
+        </div>
+        <div class="driver-orders-list" id="completedOrdersList"></div>
+        <div class="driver-empty-state" id="completedOrdersEmpty" style="display: none;">No completed orders yet.</div>
       </section>
     </div>
   </main>
 
-  <!-- Toasts -->
-  <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+  <!-- Toast Container -->
+  <div class="driver-toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
   <!-- Order Details Modal -->
-  <div class="modal-overlay" id="orderModal" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
-    <div class="modal-content">
-          <div class="modal-header">
-        <h3 id="orderModalTitle">Order Details</h3>
-        <button class="modal-close" aria-label="Close" onclick="closeOrderModal()" style="background:none; border:none; font-size:1.2em; cursor:pointer; color:#777; padding:4px 8px; border-radius:8px;">
-          ✕
-        </button>
+  <div class="driver-modal-overlay" id="orderModal" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+    <div class="driver-modal">
+      <div class="driver-modal-header">
+        <h2 class="driver-modal-title" id="orderModalTitle">Order Details</h2>
+        <button class="driver-modal-close" aria-label="Close" onclick="closeOrderModal()">×</button>
       </div>
-      <div id="orderModalBody" class="modal-body" style="display:grid; gap:12px;">
-        <!-- Filled by JS -->
-      </div>
-      <div class="driver-actions" id="orderModalActions" style="margin-top:12px; justify-content:flex-end;"></div>
+      <div class="driver-modal-body" id="orderModalBody"></div>
+      <div class="driver-modal-actions" id="orderModalActions"></div>
     </div>
   </div>
 
-  <!-- Driver Account  -->
-  <div class="modal-overlay" id="driverAccountModal" role="dialog" aria-modal="true" aria-labelledby="driverAccountTitle" style="display:none;">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="driverAccountTitle">Driver Account</h3>
-        <button
-          class="modal-close"
-          aria-label="Close"
-          onclick="closeDriverAccount()"
-          style="background:none; border:none; font-size:1.2em; cursor:pointer; color:#777; padding:4px 8px; border-radius:8px;"
-        >
-          ✕
-        </button>
+  <!-- Driver Account Modal -->
+  <div class="driver-modal-overlay" id="driverAccountModal" role="dialog" aria-modal="true" aria-labelledby="driverAccountTitle" style="display: none;">
+    <div class="driver-modal">
+      <div class="driver-modal-header">
+        <h2 class="driver-modal-title" id="driverAccountTitle">Driver Account</h2>
+        <button class="driver-modal-close" aria-label="Close" onclick="closeDriverAccount()">×</button>
       </div>
-      <div class="modal-body" style="display:grid; gap:16px;">
-        <div style="display:flex; align-items:center; gap:16px;">
-          <div class="reviewer-avatar" style="width:64px; height:64px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #e0e0e0; font-size:28px; color:#888;"><i class="fas fa-user"></i></div>
-          <div style="font-weight:800; font-size:1.4em;" id="daName">Driver</div>
+      <div class="driver-modal-body">
+        <div class="driver-modal-section">
+          <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
+            <div style="width: 64px; height: 64px; border-radius: 50%; background: #e53935; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem; font-weight: 700;" id="daAvatar">D</div>
+            <div style="font-weight: 700; font-size: 1.25rem;" id="daName">Driver</div>
+          </div>
         </div>
 
-        <div class="driver-card" style="margin:0;">
-          <h3 style="margin-bottom:6px;">Driver ID #<span id="daId">—</span></h3>
-          <div><strong>Status:</strong> <span id="daStatus">—</span></div>
-          <div id="daVehicle">Yamaha NMAX Plate: 123 ABC</div>
-          <div id="daBranch">Pablo’s Peri-Peri Zabarte Branch</div>
-        </div>
-
-        <div class="driver-card" style="margin:0;">
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; align-items:center; text-align:center;">
-            <div>
-              <div style="font-size:2.2em; font-weight:800;" id="daCompletedToday">0</div>
-              <div style="color:#555;">Completed Today</div>
+        <div class="driver-modal-section">
+          <div class="driver-modal-section-title">Driver Information</div>
+          <div class="driver-modal-info">
+            <div class="driver-modal-info-row">
+              <span class="driver-modal-info-label">Driver ID:</span>
+              <span class="driver-modal-info-value" id="daId">—</span>
             </div>
-            <div>
-              <div style="font-size:2.2em; font-weight:800;" id="daCompletedTotal">0</div>
-              <div style="color:#555;">Completed Deliveries</div>
+            <div class="driver-modal-info-row">
+              <span class="driver-modal-info-label">Status:</span>
+              <span class="driver-modal-info-value" id="daStatus">—</span>
+            </div>
+            <div class="driver-modal-info-row">
+              <span class="driver-modal-info-label">Vehicle:</span>
+              <span class="driver-modal-info-value" id="daVehicle">—</span>
+            </div>
+            <div class="driver-modal-info-row">
+              <span class="driver-modal-info-label">Branch:</span>
+              <span class="driver-modal-info-value" id="daBranch">—</span>
             </div>
           </div>
         </div>
 
-        <div class="driver-card" style="margin:0;">
-          <h3 style="margin-bottom:12px;">Assigned Orders</h3>
-          <div id="assignedOrdersList" style="display:grid; gap:8px;">
-            <div style="color:#666; font-size:0.9em;">Loading orders...</div>
+        <div class="driver-modal-section">
+          <div class="driver-modal-section-title">Statistics</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div style="background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
+              <div style="font-size: 2rem; font-weight: 700; color: #1a1a1a; margin-bottom: 4px;" id="daCompletedToday">0</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">Completed Today</div>
+            </div>
+            <div style="background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb; text-align: center;">
+              <div style="font-size: 2rem; font-weight: 700; color: #1a1a1a; margin-bottom: 4px;" id="daCompletedTotal">0</div>
+              <div style="font-size: 0.875rem; color: #6b7280;">Total Deliveries</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="driver-modal-section">
+          <div class="driver-modal-section-title">Assigned Orders</div>
+          <div id="assignedOrdersList" style="display: grid; gap: 8px;">
+            <div style="color: #6b7280; font-size: 0.9rem; text-align: center; padding: 20px;">Loading orders...</div>
           </div>
         </div>
       </div>
@@ -383,7 +758,6 @@
   </div>
 
   <script>
-
     const DRIVER_STORAGE_KEY = 'ppp_driver';
 
     function getCurrentDriver() {
@@ -411,9 +785,17 @@
       return 'Driver';
     }
 
+    function getInitials(name) {
+      if (!name) return 'D';
+      const parts = name.trim().split(' ');
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return name.charAt(0).toUpperCase();
+    }
+
     let currentDriver = getCurrentDriver();
     if (!currentDriver || currentDriver.role !== 'Driver') {
-      // Not logged in as driver – send back to login
       window.location.href = 'login.html';
     }
 
@@ -426,14 +808,15 @@
       const profileEmail = document.getElementById('profileEmail');
       const profileIcon = document.getElementById('profileIcon');
 
-      if (!btn || !dropdown || !profileText || !profileIcon) return;
+      if (!btn || !dropdown || !profileIcon) return;
 
-      // Mark as logged in and show driver info
       const displayName = getDriverDisplayName(currentDriver);
       btn.classList.add('logged-in');
       profileIcon.style.display = '';
-      profileText.style.display = '';
-      profileText.textContent = displayName;
+      if (profileText) {
+        profileText.style.display = 'none'; // Hide text, icon only
+        profileText.textContent = displayName;
+      }
       if (profileName) profileName.textContent = displayName;
       if (profileEmail) profileEmail.textContent = currentDriver.email || '';
 
@@ -456,7 +839,6 @@
         logoutBtn.addEventListener('click', async function(){
           dropdown.classList.remove('show');
           
-          // Update driver availability to "off" in Firestore
           if (currentDriver && currentDriver.id) {
             try {
               const db = window.firebaseDb;
@@ -465,7 +847,6 @@
               const serverTimestampFn = window.serverTimestamp;
               
               if (db && updateDocFn && docFn && serverTimestampFn) {
-                // Try to update in 'drivers' collection first
                 try {
                   const driverRef = docFn(db, 'drivers', currentDriver.id);
                   await updateDocFn(driverRef, {
@@ -474,7 +855,6 @@
                     updatedAt: serverTimestampFn()
                   });
                 } catch (driverError) {
-                  // If drivers collection doesn't exist, update in staff collection
                   const staffRef = docFn(db, 'staff', currentDriver.id);
                   await updateDocFn(staffRef, {
                     availability: 'off',
@@ -485,7 +865,6 @@
               }
             } catch (e) {
               console.error('Error updating driver availability on logout:', e);
-              // Don't block logout if update fails
             }
           }
           
@@ -516,7 +895,6 @@
       currentShiftId: null
     };
 
-    // Load current shift status
     async function loadShiftStatus() {
       if (!currentDriver || !currentDriver.id) return;
       
@@ -525,19 +903,12 @@
         const collectionFn = window.collection;
         const queryFn = window.query;
         const whereFn = window.where;
-        const orderByFn = window.orderBy;
         const getDocsFn = window.getDocs;
-        const docFn = window.doc;
-        const getDocFn = window.getDoc;
         
         if (!db || !collectionFn || !queryFn || !whereFn) return;
         
         const driverId = currentDriver.staffId || currentDriver.id;
-        
-        // Check for active shift (no endTime)
         const logsRef = collectionFn(db, 'logsStaff');
-        
-        // Get all shifts for this driver (without orderBy to avoid index requirement)
         const allShiftsQuery = queryFn(
           logsRef,
           whereFn('driverId', '==', driverId)
@@ -546,18 +917,15 @@
         const snapshot = await getDocsFn(allShiftsQuery);
         
         if (!snapshot.empty) {
-          // Sort shifts by startTime in JavaScript to find the most recent
           const shifts = snapshot.docs.map(doc => ({
             id: doc.id,
             data: doc.data()
           }));
           
-          // Sort by startTime descending (most recent first)
           shifts.sort((a, b) => {
             const aTime = a.data.startTime;
             const bTime = b.data.startTime;
             
-            // Handle Firestore Timestamp objects
             let aDate, bDate;
             if (aTime && typeof aTime.toDate === 'function') {
               aDate = aTime.toDate();
@@ -568,7 +936,7 @@
             } else if (typeof aTime === 'number') {
               aDate = new Date(aTime);
             } else {
-              aDate = new Date(0); // Fallback to epoch
+              aDate = new Date(0);
             }
             
             if (bTime && typeof bTime.toDate === 'function') {
@@ -580,34 +948,28 @@
             } else if (typeof bTime === 'number') {
               bDate = new Date(bTime);
             } else {
-              bDate = new Date(0); // Fallback to epoch
+              bDate = new Date(0);
             }
             
-            return bDate.getTime() - aDate.getTime(); // Descending order
+            return bDate.getTime() - aDate.getTime();
           });
           
-          // Find the most recent shift
           const mostRecentShift = shifts[0];
           const shiftData = mostRecentShift.data;
-          
-          // Check if it's an active shift (no endTime or endTime is null)
           const hasEndTime = shiftData.endTime !== null && shiftData.endTime !== undefined;
           
           if (!hasEndTime) {
-            // Active shift found
             shiftState.isActive = true;
             shiftState.currentShiftId = mostRecentShift.id;
             shiftState.startTime = shiftData.startTime;
             shiftState.endTime = null;
           } else {
-            // Most recent shift is completed, show it for reference
             shiftState.isActive = false;
             shiftState.currentShiftId = null;
             shiftState.startTime = shiftData.startTime;
             shiftState.endTime = shiftData.endTime;
           }
         } else {
-          // No shifts found
           shiftState.isActive = false;
           shiftState.currentShiftId = null;
           shiftState.startTime = null;
@@ -620,7 +982,6 @@
       }
     }
 
-    // Update shift UI
     function updateShiftUI() {
       const shiftToggleBtn = document.getElementById('shiftToggleBtn');
       const shiftToggleText = document.getElementById('shiftToggleText');
@@ -634,38 +995,28 @@
         shiftToggleText.textContent = 'End Shift';
         shiftToggleBtn.style.color = '#e53935';
         
-        if (shiftInfo) shiftInfo.style.display = 'block';
+        if (shiftInfo) {
+          shiftInfo.style.display = 'block';
+        }
         if (shiftStartTime && shiftState.startTime) {
           try {
             let startDate;
-            // Handle Firestore Timestamp object
             if (shiftState.startTime && typeof shiftState.startTime.toDate === 'function') {
               startDate = shiftState.startTime.toDate();
-            } 
-            // Handle Firestore Timestamp-like object with seconds/nanoseconds
-            else if (shiftState.startTime && (shiftState.startTime.seconds || shiftState.startTime._seconds)) {
+            } else if (shiftState.startTime && (shiftState.startTime.seconds || shiftState.startTime._seconds)) {
               const seconds = shiftState.startTime.seconds || shiftState.startTime._seconds || 0;
               const nanoseconds = shiftState.startTime.nanoseconds || shiftState.startTime._nanoseconds || 0;
               startDate = new Date(seconds * 1000 + nanoseconds / 1000000);
-            }
-            // Handle Date object or timestamp number
-            else if (shiftState.startTime instanceof Date) {
+            } else if (shiftState.startTime instanceof Date) {
               startDate = shiftState.startTime;
-            }
-            // Handle number (milliseconds since epoch)
-            else if (typeof shiftState.startTime === 'number') {
+            } else if (typeof shiftState.startTime === 'number') {
               startDate = new Date(shiftState.startTime);
-            }
-            // Handle string
-            else if (typeof shiftState.startTime === 'string') {
+            } else if (typeof shiftState.startTime === 'string') {
               startDate = new Date(shiftState.startTime);
-            }
-            // Fallback
-            else {
+            } else {
               startDate = new Date(shiftState.startTime);
             }
             
-            // Validate date
             if (isNaN(startDate.getTime())) {
               shiftStartTime.textContent = 'Started: Loading...';
             } else {
@@ -751,7 +1102,6 @@
       }
     }
 
-    // Start shift
     async function startShift() {
       if (!currentDriver || !currentDriver.id) {
         notify('Driver information not available', 'error');
@@ -772,13 +1122,6 @@
         const driverId = currentDriver.staffId || currentDriver.id;
         const driverName = getDriverDisplayName(currentDriver);
         
-        console.log('Starting shift with driver info:', {
-          staffId: currentDriver.staffId,
-          id: currentDriver.id,
-          driverId: driverId,
-          email: currentDriver.email
-        });
-        
         const logsRef = collectionFn(db, 'logsStaff');
         const shiftData = {
           driverId: driverId,
@@ -789,25 +1132,20 @@
         };
         
         const docRef = await addDocFn(logsRef, shiftData);
-        console.log('Shift created in logsStaff with ID:', docRef.id, 'driverId:', driverId);
-        
-        // Use current date for immediate display (server timestamp will be set by Firestore)
         const currentTime = new Date();
         
         shiftState.isActive = true;
         shiftState.currentShiftId = docRef.id;
-        shiftState.startTime = currentTime; // Use current time for immediate display
+        shiftState.startTime = currentTime;
         shiftState.endTime = null;
         
         updateShiftUI();
         notify('Shift started successfully', 'success');
         
-        // Reload shift status after a short delay to get the actual server timestamp
         setTimeout(() => {
           loadShiftStatus();
         }, 1000);
         
-        // Close dropdown
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
@@ -816,7 +1154,6 @@
       }
     }
 
-    // End shift
     async function endShift() {
       if (!shiftState.isActive || !shiftState.currentShiftId) {
         notify('No active shift to end', 'error');
@@ -840,7 +1177,6 @@
           updatedAt: serverTimestampFn()
         });
         
-        // Get the updated document to get the actual endTime
         const getDocFn = window.getDoc;
         if (getDocFn) {
           const shiftDoc = await getDocFn(shiftRef);
@@ -854,7 +1190,6 @@
         updateShiftUI();
         notify('Shift ended successfully', 'success');
         
-        // Close dropdown
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
@@ -863,7 +1198,6 @@
       }
     }
 
-    // Toggle shift
     function toggleShift() {
       if (shiftState.isActive) {
         endShift();
@@ -872,7 +1206,6 @@
       }
     }
 
-    // Initialize shift button
     (function initShiftButton() {
       const shiftToggleBtn = document.getElementById('shiftToggleBtn');
       if (shiftToggleBtn) {
@@ -882,7 +1215,6 @@
         });
       }
       
-      // Load shift status on page load
       setTimeout(() => {
         loadShiftStatus();
       }, 1000);
@@ -891,9 +1223,12 @@
     // Tabs - filter view
     let currentView = 'all';
     document.addEventListener('DOMContentLoaded', function(){
-      document.querySelectorAll('.driver-tabs .tab-btn').forEach(btn => {
+      document.querySelectorAll('.driver-tab-btn').forEach(btn => {
         btn.addEventListener('click', function(){
-          document.querySelectorAll('.driver-tabs .tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
+          document.querySelectorAll('.driver-tab-btn').forEach(b => { 
+            b.classList.remove('active'); 
+            b.setAttribute('aria-selected','false'); 
+          });
           this.classList.add('active');
           this.setAttribute('aria-selected','true');
           currentView = this.dataset.view;
@@ -917,14 +1252,13 @@
       });
     }
 
-    // ---------- Data ----------
-    const statusSteps = [ 'Transit' ];
+    // Data
+    const statusSteps = ['Transit'];
     let driverAvailability = 'available';
     let newOrders = [];
     let ongoingOrders = [];
     let completedOrders = [];
     
-    // Load orders from Firebase
     async function loadDriverOrders() {
       if (!currentDriver || !currentDriver.id) {
         console.error('No driver ID available');
@@ -937,8 +1271,6 @@
       const whereFn = window.where;
       const getDocsFn = window.getDocs;
       const onSnapshotFn = window.onSnapshot;
-      const docFn = window.doc;
-      const getDocFn = window.getDoc;
       
       if (!db || !collectionFn || !queryFn || !whereFn) {
         console.error('Firebase not ready');
@@ -950,14 +1282,11 @@
         const driverDocId = currentDriver.id;
         const ordersRef = collectionFn(db, 'orders');
         
-        // Query orders assigned to this driver (check both driverId and document ID)
-        // First try with staffId/driverId
         const ordersQuery = queryFn(
           ordersRef,
           whereFn('driverId', '==', driverId)
         );
         
-        // Set up real-time listener
         if (onSnapshotFn) {
           onSnapshotFn(ordersQuery, (snapshot) => {
             newOrders = [];
@@ -969,14 +1298,12 @@
               const orderDriverId = orderData.driverId || '';
               const orderStatus = (orderData.status || '').toLowerCase().trim();
               
-              // Only process orders that match this driver (by staffId or document ID)
               const matchesDriver = orderDriverId === driverId || orderDriverId === driverDocId;
               if (!matchesDriver) return;
               
-              // Format order for display
               const order = {
                 id: docSnap.id,
-                trackingId: orderData.trackingId || `#${docSnap.id.slice(-6).toUpperCase()}`,
+                trackingId: orderData.trackingId || docSnap.id,
                 createdAt: orderData.createdAt ? (orderData.createdAt.toDate ? new Date(orderData.createdAt.toDate()) : new Date(orderData.createdAt)).toLocaleString() : new Date().toLocaleString(),
                 pickup: {
                   name: "Pablo's Peri Peri",
@@ -1007,7 +1334,6 @@
                 completedAtTs: orderData.deliveredAt ? (orderData.deliveredAt.toDate ? orderData.deliveredAt.toDate().getTime() : new Date(orderData.deliveredAt).getTime()) : null
               };
               
-              // Categorize orders
               if (orderStatus === 'delivered' || orderStatus === 'completed') {
                 completedOrders.push(order);
               } else if (orderStatus === 'out for delivery' || orderStatus === 'out_for_delivery' || 
@@ -1016,7 +1342,7 @@
                 ongoingOrders.push(order);
               } else if (orderStatus === 'ready for delivery' || orderStatus === 'ready_for_delivery' ||
                          orderStatus === 'for delivery' || orderStatus === 'for_delivery') {
-                newOrders.push(order); // Ready for delivery orders appear as "new" for driver to accept
+                newOrders.push(order);
               }
             });
             
@@ -1024,23 +1350,29 @@
           }, (error) => {
             console.error('Error loading orders:', error);
           });
-        } else {
-          // Fallback to one-time load
-          const snapshot = await getDocsFn(ordersQuery);
-          // Process snapshot same as above
         }
       } catch (error) {
         console.error('Error setting up orders listener:', error);
       }
     }
 
-    // Rendering aggregator: refresh all sections and apply current view filter
-    function renderAll(){ renderNew(); renderOngoing(); renderCompleted(); applyView(); }
+    function renderAll(){ 
+      renderNew(); 
+      renderOngoing(); 
+      renderCompleted(); 
+      applyView(); 
+    }
 
     function renderNew(){
       const container = document.getElementById('newOrdersList');
       const empty = document.getElementById('newOrdersEmpty');
-      if (!newOrders.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+      const count = document.getElementById('newCount');
+      if (count) count.textContent = newOrders.length;
+      if (!newOrders.length){ 
+        container.innerHTML = ''; 
+        empty.style.display = 'block'; 
+        return; 
+      }
       empty.style.display = 'none';
       container.innerHTML = newOrders.map(order => cardTemplate(order, 'new')).join('');
     }
@@ -1048,7 +1380,13 @@
     function renderOngoing(){
       const container = document.getElementById('ongoingOrdersList');
       const empty = document.getElementById('ongoingOrdersEmpty');
-      if (!ongoingOrders.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+      const count = document.getElementById('ongoingCount');
+      if (count) count.textContent = ongoingOrders.length;
+      if (!ongoingOrders.length){ 
+        container.innerHTML = ''; 
+        empty.style.display = 'block'; 
+        return; 
+      }
       empty.style.display = 'none';
       container.innerHTML = ongoingOrders.map(order => cardTemplate(order, 'ongoing')).join('');
     }
@@ -1056,49 +1394,56 @@
     function renderCompleted(){
       const container = document.getElementById('completedOrdersList');
       const empty = document.getElementById('completedOrdersEmpty');
-      if (!completedOrders.length){ container.innerHTML = ''; empty.style.display = 'block'; return; }
+      const count = document.getElementById('completedCount');
+      if (count) count.textContent = completedOrders.length;
+      if (!completedOrders.length){ 
+        container.innerHTML = ''; 
+        empty.style.display = 'block'; 
+        return; 
+      }
       empty.style.display = 'none';
       container.innerHTML = completedOrders.map(order => cardTemplate(order, 'completed')).join('');
     }
 
     function cardTemplate(order, list){
-      const itemsLine = order.items ? order.items.map(i=>`<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`).join('') : '';
-      const statusBadge = list === 'completed' ? 'completed' : (list === 'ongoing' ? 'processing' : 'new');
-      const progressLabel = list==='completed' ? 'Completed' : (list==='ongoing' ? (typeof order.stepIndex === 'number' ? statusSteps[order.stepIndex] : 'Transit') : 'New');
+      const statusClass = list === 'completed' ? 'completed' : (list === 'ongoing' ? 'ongoing' : 'new');
+      const statusText = list==='completed' ? 'Completed' : (list==='ongoing' ? 'Transit' : 'New');
       return `
-        <div class="review-item" data-status="${statusBadge}">
-          <div class="review-header">
-            <div class="reviewer-info">
-              <div class="reviewer-avatar"><i class="fas ${list==='completed' ? 'fa-check' : list==='ongoing' ? 'fa-route' : 'fa-bell'}"></i></div>
-              <div class="reviewer-details">
-                <div class="reviewer-name">Order ${order.id}</div>
-                <div class="review-date">${order.createdAt}${list==='completed' && order.completedAt ? ` • Completed ${order.completedAt}`:''}</div>
-              </div>
+        <div class="driver-order-card ${statusClass}" onclick="viewDetails('${order.id}','${list}')" style="cursor: pointer;">
+          <div class="driver-order-header">
+            <div>
+              <div class="driver-order-id">${order.trackingId || order.id}</div>
+              <div class="driver-order-time">${order.createdAt}${list==='completed' && order.completedAt ? ` • Completed ${order.completedAt}`:''}</div>
             </div>
-            <span class="driver-status-badge ${list==='completed' ? 'green' : (list==='ongoing' ? 'yellow' : 'red')}" style="text-transform:none;">${progressLabel}</span>
+            <div class="driver-order-status ${statusClass}">${statusText}</div>
           </div>
-          <div class="review-text" style="font-style:normal;">
-            <div>Pickup: <strong>${order.pickup.name}</strong> — ${order.pickup.address}</div>
-            <div>Dropoff: <strong>${order.dropoff.name}</strong> — ${order.dropoff.address}</div>
-            ${order.notes ? `<div>Note: ${order.notes}</div>`: ''}
-            ${itemsLine}
+          <div class="driver-order-info">
+            <div class="driver-order-info-row">
+              <span class="driver-order-info-label">Pickup:</span>
+              <span class="driver-order-info-value">${order.pickup.name}</span>
+            </div>
+            <div class="driver-order-info-row">
+              <span class="driver-order-info-label">Dropoff:</span>
+              <span class="driver-order-info-value">${order.dropoff.name}</span>
+            </div>
+            ${order.notes ? `<div class="driver-order-info-row"><span class="driver-order-info-label">Note:</span><span class="driver-order-info-value">${order.notes}</span></div>`: ''}
           </div>
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <div class="card-price">₱${order.total}.00</div>
-            <div class="driver-actions">
+          <div class="driver-order-footer">
+            <div class="driver-order-price">₱${order.total}.00</div>
+            <div class="driver-order-actions" onclick="event.stopPropagation();">
               ${list==='new' ? `
-                <button class="filter-btn" onclick="viewDetails('${order.id}','new')"><span>Details</span></button>
-                <button class="filter-btn" onclick="acceptOrder('${order.id}')"><i class="fas fa-check"></i><span>Confirm</span></button>
+                <button class="driver-btn driver-btn-secondary" onclick="viewDetails('${order.id}','new')">Details</button>
+                <button class="driver-btn driver-btn-primary" onclick="acceptOrder('${order.id}')">Accept</button>
               `: ''}
               ${list==='ongoing' ? `
-                <button class="filter-btn" onclick="viewDetails('${order.id}','ongoing')"><span>Details</span></button>
-                <select class="size-select" aria-label="Update status" onchange="handleDropdownChange('${order.id}', this.value)">
+                <button class="driver-btn driver-btn-secondary" onclick="viewDetails('${order.id}','ongoing')">Details</button>
+                <select class="driver-select" onchange="handleDropdownChange('${order.id}', this.value)">
                   <option value="transit" ${typeof order.stepIndex==='number' && order.stepIndex===0 ? 'selected' : ''}>Transit</option>
                   <option value="done">Done</option>
                 </select>
               `: ''}
               ${list==='completed' ? `
-                <button class="filter-btn" onclick="viewDetails('${order.id}','completed')"><span>Details</span></button>
+                <button class="driver-btn driver-btn-secondary" onclick="viewDetails('${order.id}','completed')">Details</button>
               `: ''}
             </div>
           </div>
@@ -1106,13 +1451,11 @@
       `;
     }
 
-    // ---------- Actions ----------
     async function acceptOrder(id){
       const idx = newOrders.findIndex(o=>o.id===id);
       if (idx === -1) return;
       const order = newOrders[idx];
       
-      // Update order status in Firestore to "out for delivery"
       try {
         const db = window.firebaseDb;
         const updateDocFn = window.updateDoc;
@@ -1127,7 +1470,6 @@
             updatedAt: serverTimestampFn()
           });
           
-          // Update driver availability to busy
           if (currentDriver && currentDriver.id) {
             try {
               const driverRef = docFn(db, 'drivers', currentDriver.id);
@@ -1150,33 +1492,21 @@
         return;
       }
       
-      // Update local state
       const acceptedOrder = newOrders.splice(idx,1)[0];
       acceptedOrder.stepIndex = 0;
       ongoingOrders.unshift(acceptedOrder);
       showCenterNotification('Accepted');
       driverAvailability = 'busy';
-      updateStatusDisplay(); // Update status display if modal is open
+      updateStatusDisplay();
       renderAll();
     }
 
-    function declineOrder(id){
-      const idx = newOrders.findIndex(o=>o.id===id);
-      if (idx === -1) return;
-      const order = newOrders.splice(idx,1)[0];
-      notify('Order ' + order.id + ' declined.', 'info');
-      renderAll();
-    }
-
-    function progressOrder(id){
-      const order = ongoingOrders.find(o=>o.id===id);
-      if (!order) return;
-      if (typeof order.stepIndex !== 'number') order.stepIndex = 0;
-      if (order.stepIndex < statusSteps.length - 1){
-        order.stepIndex += 1;
-        notify('Status updated: ' + statusSteps[order.stepIndex], 'info');
+    function handleDropdownChange(id, value){
+      if (value === 'transit') {
+        setOrderStatus(id, 0);
+      } else if (value === 'done') {
+        completeOrder(id);
       }
-      renderAll();
     }
 
     function setOrderStatus(id, value){
@@ -1189,20 +1519,11 @@
       renderAll();
     }
 
-    function handleDropdownChange(id, value){
-      if (value === 'transit') {
-        setOrderStatus(id, 0);
-      } else if (value === 'done') {
-        completeOrder(id);
-      }
-    }
-
     async function completeOrder(id){
       const idx = ongoingOrders.findIndex(o=>o.id===id);
       if (idx === -1) return;
       const order = ongoingOrders[idx];
       
-      // Update order status in Firestore
       try {
         const db = window.firebaseDb;
         const updateDocFn = window.updateDoc;
@@ -1219,7 +1540,6 @@
             updatedAt: serverTimestampFn()
           });
           
-          // Also update for_delivery document if it exists
           try {
             if (getDocFn) {
               const deliveryRef = docFn(db, 'for_delivery', id);
@@ -1233,7 +1553,6 @@
             }
           } catch (deliveryError) {
             console.error('Error updating for_delivery:', deliveryError);
-            // Don't fail if for_delivery update fails
           }
         }
       } catch (error) {
@@ -1242,7 +1561,6 @@
         return;
       }
       
-      // Update local state
       const completedOrder = ongoingOrders.splice(idx,1)[0];
       completedOrder.completedAt = new Date().toLocaleString();
       completedOrder.completedAtTs = Date.now();
@@ -1251,9 +1569,8 @@
       notify('Delivery completed for ' + (order.trackingId || order.id), 'success');
       if (ongoingOrders.length === 0) { 
         driverAvailability = 'available'; 
-        updateStatusDisplay(); // Update status display if modal is open
+        updateStatusDisplay();
         
-        // Update availability in Firestore
         try {
           const db = window.firebaseDb;
           const updateDocFn = window.updateDoc;
@@ -1282,7 +1599,6 @@
       renderAll();
     }
 
-    // ---------- Modal ----------
     function viewDetails(id, list){
       const source = list==='new' ? newOrders : list==='ongoing' ? ongoingOrders : completedOrders;
       const order = source.find(o=>o.id===id);
@@ -1290,94 +1606,86 @@
       const modal = document.getElementById('orderModal');
       const body = document.getElementById('orderModalBody');
       const actions = document.getElementById('orderModalActions');
-      document.getElementById('orderModalTitle').textContent = 'Order ' + order.id;
+      document.getElementById('orderModalTitle').textContent = 'Order ' + (order.trackingId || order.id);
+      
       body.innerHTML = `
-        <div style="display:grid; gap:16px;">
-          <!-- Order Status & Info -->
-          <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; border-bottom:1px solid #e5e7eb;">
-            <div style="display:grid; gap:4px;">
-              <div style="font-weight:600; color:#111827;">Order ${order.trackingId || order.id}</div>
-              <div style="color:#6b7280; font-size:0.9em;">Created: ${order.createdAt}</div>
-              ${order.completedAt ? `<div style="color:#6b7280; font-size:0.9em;">Completed: ${order.completedAt}</div>` : ''}
-            </div>
-            <span class="driver-status-badge ${order.completedAt ? 'green' : (typeof order.stepIndex==='number' ? 'yellow' : 'red')}">${order.completedAt ? 'Completed' : (typeof order.stepIndex==='number' ? statusSteps[order.stepIndex] : 'New')}</span>
-          </div>
-          
-          <!-- Customer Information - Most Important for Contact -->
-          <div style="padding:14px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb;">
-            <div style="font-weight:700; margin-bottom:12px; color:#111827; font-size:1.05em;">Customer Information</div>
-            <div style="display:grid; gap:8px;">
-              <div style="display:flex; gap:8px; align-items:center;">
-                <i class="fas fa-user" style="color:#6b7280; width:18px; text-align:center;"></i>
-                <div><strong>Name:</strong> ${order.customer.name}</div>
+        <div style="display: grid; gap: 20px;">
+          <div class="driver-modal-section">
+            <div class="driver-modal-section-title">Order Information</div>
+            <div class="driver-modal-info">
+              <div class="driver-modal-info-row">
+                <span class="driver-modal-info-label">Order ID:</span>
+                <span class="driver-modal-info-value">${order.trackingId || order.id}</span>
               </div>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <i class="fas fa-phone" style="color:#6b7280; width:18px; text-align:center;"></i>
-                <div><strong>Phone:</strong> ${order.customer.phone}</div>
+              <div class="driver-modal-info-row">
+                <span class="driver-modal-info-label">Created:</span>
+                <span class="driver-modal-info-value">${order.createdAt}</span>
               </div>
+              ${order.completedAt ? `<div class="driver-modal-info-row"><span class="driver-modal-info-label">Completed:</span><span class="driver-modal-info-value">${order.completedAt}</span></div>` : ''}
             </div>
           </div>
-          
-          <!-- Delivery Route - Core Task -->
-          <div style="padding:14px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb;">
-            <div style="font-weight:700; margin-bottom:12px; color:#111827; font-size:1.05em;">Delivery Route</div>
-            <div style="display:grid; gap:12px;">
-              <div>
-                <div style="font-weight:600; margin-bottom:6px; color:#111827; display:flex; align-items:center; gap:6px;">
-                  <i class="fas fa-store" style="color:#6b7280; font-size:0.9em;"></i>
-                  <span>Pickup</span>
-                </div>
-                <div style="color:#555; margin-bottom:4px; font-weight:500;">${order.pickup.name}</div>
-                <div style="color:#6b7280; font-size:0.9em;">${order.pickup.address}</div>
+
+          <div class="driver-modal-section">
+            <div class="driver-modal-section-title">Customer Information</div>
+            <div class="driver-modal-info">
+              <div class="driver-modal-info-row">
+                <span class="driver-modal-info-label">Name:</span>
+                <span class="driver-modal-info-value">${order.customer.name}</span>
               </div>
-              <div style="display:flex; align-items:center; justify-content:center; color:#9ca3af; padding:4px 0;">
-                <i class="fas fa-arrow-down" style="font-size:1.2em;"></i>
+              <div class="driver-modal-info-row">
+                <span class="driver-modal-info-label">Phone:</span>
+                <span class="driver-modal-info-value">${order.customer.phone}</span>
               </div>
-              <div>
-                <div style="font-weight:600; margin-bottom:6px; color:#111827; display:flex; align-items:center; gap:6px;">
-                  <i class="fas fa-map-marker-alt" style="color:#6b7280; font-size:0.9em;"></i>
-                  <span>Delivery</span>
-                </div>
-                <div style="color:#555; margin-bottom:4px; font-weight:500;">${order.dropoff.name}</div>
-                <div style="color:#6b7280; font-size:0.9em;">${order.dropoff.address}</div>
-              </div>
-              ${order.distanceKm ? `<div style="margin-top:4px; padding-top:8px; border-top:1px solid #e5e7eb; color:#6b7280; font-size:0.9em;"><i class="fas fa-road" style="margin-right:6px;"></i>Distance: ${order.distanceKm}</div>` : ''}
             </div>
           </div>
-          
-          <!-- Order Items - What to Deliver -->
-          <div>
-            <div style="font-weight:700; margin-bottom:8px; color:#111827;">Order Items</div>
-            <div style="display:grid; gap:6px; padding:12px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb;">
-              ${order.items.map(i=>`<div style="color:#374151;">• ${i}</div>`).join('')}
+
+          <div class="driver-modal-section">
+            <div class="driver-modal-section-title">Delivery Route</div>
+            <div class="driver-modal-info">
+              <div class="driver-modal-info-row">
+                <span class="driver-modal-info-label">Pickup:</span>
+                <span class="driver-modal-info-value">${order.pickup.name}<br><span style="color: #6b7280; font-size: 0.9em;">${order.pickup.address}</span></span>
+              </div>
+              <div class="driver-modal-info-row">
+                <span class="driver-modal-info-label">Delivery:</span>
+                <span class="driver-modal-info-value">${order.dropoff.name}<br><span style="color: #6b7280; font-size: 0.9em;">${order.dropoff.address}</span></span>
+              </div>
             </div>
           </div>
-          
-          <!-- Additional Notes - Special Instructions -->
+
+          <div class="driver-modal-section">
+            <div class="driver-modal-section-title">Order Items</div>
+            <div class="driver-modal-info">
+              ${order.items.map(i=>`<div class="driver-modal-info-row"><span class="driver-modal-info-value">• ${i}</span></div>`).join('')}
+            </div>
+          </div>
+
           ${order.notes ? `
-          <div style="padding:14px; background:#fff7ed; border-radius:8px; border:1px solid #fed7aa;">
-            <div style="font-weight:700; margin-bottom:8px; color:#111827; display:flex; align-items:center; gap:6px;">
-              <i class="fas fa-sticky-note" style="color:#f59e0b;"></i>
-              <span>Special Instructions</span>
+          <div class="driver-modal-section">
+            <div class="driver-modal-section-title">Special Instructions</div>
+            <div class="driver-modal-info" style="background: #fff7ed; border-color: #fed7aa;">
+              <div class="driver-modal-info-row">
+                <span class="driver-modal-info-value">${order.notes}</span>
+              </div>
             </div>
-            <div style="color:#374151; line-height:1.5;">${order.notes}</div>
           </div>
           ` : ''}
-          
-          <!-- Payment Information -->
-          <div style="padding:14px; background:#f9fafb; border-radius:8px; border:1px solid #e5e7eb;">
-            <div style="font-weight:700; margin-bottom:12px; color:#111827; font-size:1.05em;">Payment Information</div>
-            <div style="display:grid; gap:8px;">
-              <div><strong>Payment Method:</strong> ${(order.payment?.method || 'Cash').toUpperCase()}</div>
-              ${order.payment?.gcashRefNo ? `<div><strong>GCash Reference No:</strong> ${order.payment.gcashRefNo}</div>` : ''}
-              ${order.payment?.gcashProofUrl ? `<div style="margin-top:4px;"><a href="${order.payment.gcashProofUrl}" target="_blank" style="color:#e53935; text-decoration:underline; font-weight:500;">View Payment Proof</a></div>` : ''}
+
+          <div class="driver-modal-section">
+            <div class="driver-modal-section-title">Payment Information</div>
+            <div class="driver-modal-info">
+              <div class="driver-modal-info-row">
+                <span class="driver-modal-info-label">Method:</span>
+                <span class="driver-modal-info-value">${(order.payment?.method || 'Cash').toUpperCase()}</span>
+              </div>
+              ${order.payment?.gcashRefNo ? `<div class="driver-modal-info-row"><span class="driver-modal-info-label">GCash Ref:</span><span class="driver-modal-info-value">${order.payment.gcashRefNo}</span></div>` : ''}
+              ${order.payment?.gcashProofUrl ? `<div class="driver-modal-info-row"><span class="driver-modal-info-value"><a href="${order.payment.gcashProofUrl}" target="_blank" style="color: #e53935; text-decoration: underline;">View Payment Proof</a></span></div>` : ''}
             </div>
           </div>
-          
-          <!-- Total Amount -->
-          <div style="display:flex; align-items:center; justify-content:space-between; padding-top:12px; border-top:2px solid #e5e7eb;">
-            <div style="font-weight:600; color:#6b7280;">Total Amount:</div>
-            <div class="card-price" style="font-size:1.3em; font-weight:700;">₱${order.total}.00</div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 2px solid #e5e7eb;">
+            <div style="font-weight: 600; color: #6b7280;">Total Amount:</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #1a1a1a;">₱${order.total}.00</div>
           </div>
         </div>
       `;
@@ -1385,48 +1693,45 @@
       actions.innerHTML = '';
       if (list==='new'){
         actions.innerHTML = `
-          <button class="filter-btn" onclick="acceptOrder('${order.id}')"><i class="fas fa-check"></i><span>Confirm</span></button>
+          <button class="driver-btn driver-btn-primary" onclick="acceptOrder('${order.id}')">Accept Order</button>
         `;
       } else if (list==='ongoing'){
         actions.innerHTML = `
-          <select class="size-select" aria-label="Update status" onchange="handleDropdownChange('${order.id}', this.value)">
-            <option value="transit" ${typeof order.stepIndex==='number' && order.stepIndex===0 ? 'selected' : ''}>Transit</option>
-            <option value="done">Done</option>
+          <select class="driver-select" style="width: 100%;" onchange="handleDropdownChange('${order.id}', this.value)">
+            <option value="transit" ${typeof order.stepIndex==='number' && order.stepIndex===0 ? 'selected' : ''}>In Transit</option>
+            <option value="done">Mark as Delivered</option>
           </select>
         `;
       }
-      modal.style.display = 'flex';
+      modal.classList.add('show');
     }
 
-    function closeOrderModal(){ document.getElementById('orderModal').style.display = 'none'; }
+    function closeOrderModal(){ 
+      document.getElementById('orderModal').classList.remove('show'); 
+    }
 
-    // ---------- Notifications ----------
     function notify(message, type){
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
-      toast.className = 'toast ' + (type || '');
+      toast.className = 'driver-toast ' + (type || '');
       toast.innerHTML = `
-        <i class="icon fas ${type==='success' ? 'fa-check-circle' : type==='info' ? 'fa-bell' : 'fa-circle-info'}"></i>
-        <div style="flex:1;">${message}</div>
-        <button aria-label="Dismiss" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+        <div class="driver-toast-message">${message}</div>
+        <button class="driver-toast-close" aria-label="Dismiss" onclick="this.parentElement.remove()">×</button>
       `;
       container.appendChild(toast);
       setTimeout(()=>{ if (toast && toast.parentElement) toast.remove(); }, 4000);
     }
 
-    // Center notification helper (used for Accept)
     function showCenterNotification(text){
       const el = document.createElement('div');
-      el.className = 'center-toast';
+      el.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 16px 24px; border-radius: 8px; font-weight: 600; z-index: 3001; pointer-events: none;';
       el.textContent = text || 'Accepted';
       document.body.appendChild(el);
-      setTimeout(()=>{ el.classList.add('hide'); }, 1200);
-      setTimeout(()=>{ if (el && el.parentElement) el.remove(); }, 1600);
+      setTimeout(()=>{ el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; }, 800);
+      setTimeout(()=>{ if (el && el.parentElement) el.remove(); }, 1200);
     }
 
-    // ---- Driver Account Modal & Availability ----
     function openDriverAccount(){
-      // Stats
       const total = completedOrders.length;
       const todayCount = completedOrders.filter(o => isSameDay(o.completedAtTs || Date.parse(o.completedAt), Date.now())).length;
       const daCompletedToday = document.getElementById('daCompletedToday');
@@ -1434,53 +1739,51 @@
       const daName = document.getElementById('daName');
       const daId = document.getElementById('daId');
       const daStatus = document.getElementById('daStatus');
+      const daAvatar = document.getElementById('daAvatar');
       if (daCompletedToday) daCompletedToday.textContent = String(todayCount);
       if (daCompletedTotal) daCompletedTotal.textContent = String(total);
 
-      // Basic driver identity from local storage
       const displayName = getDriverDisplayName(currentDriver);
+      const initials = getInitials(displayName);
       if (daName) daName.textContent = displayName;
+      if (daAvatar) daAvatar.textContent = initials;
       if (daId) {
         const idToShow = currentDriver && (currentDriver.staffId || currentDriver.id);
         daId.textContent = idToShow || '—';
       }
-      // Status will be updated after loading availability from database
 
-      // Show assigned orders
       const assignedOrdersList = document.getElementById('assignedOrdersList');
       if (assignedOrdersList) {
         const allAssigned = [...newOrders, ...ongoingOrders];
         if (allAssigned.length === 0) {
-          assignedOrdersList.innerHTML = '<div style="color:#666; font-size:0.9em;">No assigned orders at the moment.</div>';
+          assignedOrdersList.innerHTML = '<div style="color: #6b7280; font-size: 0.9rem; text-align: center; padding: 20px;">No assigned orders at the moment.</div>';
         } else {
           assignedOrdersList.innerHTML = allAssigned.map(order => {
             const status = ongoingOrders.find(o => o.id === order.id) ? 'Ongoing' : 'New';
             return `
-              <div style="padding:12px; background:#f5f5f5; border-radius:8px; border-left:4px solid ${status === 'Ongoing' ? '#ffc72c' : '#e53935'};">
-                <div style="font-weight:700; margin-bottom:4px;">${order.trackingId || order.id}</div>
-                <div style="font-size:0.9em; color:#666;">${order.dropoff.name} - ${order.dropoff.address}</div>
-                <div style="font-size:0.85em; color:#888; margin-top:4px;">Status: ${status}</div>
+              <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 4px solid ${status === 'Ongoing' ? '#f59e0b' : '#dc2626'};">
+                <div style="font-weight: 700; margin-bottom: 4px;">${order.trackingId || order.id}</div>
+                <div style="font-size: 0.9rem; color: #6b7280;">${order.dropoff.name} - ${order.dropoff.address}</div>
+                <div style="font-size: 0.85rem; color: #9ca3af; margin-top: 4px;">Status: ${status}</div>
               </div>
             `;
           }).join('');
         }
       }
 
-      // Load availability from database and update status
       loadDriverAvailability().then(() => {
         updateStatusDisplay();
       });
       
       const modal = document.getElementById('driverAccountModal');
-      if (modal) modal.style.display = 'flex';
+      if (modal) modal.classList.add('show');
     }
 
     function closeDriverAccount(){
       const modal = document.getElementById('driverAccountModal');
-      if (modal) modal.style.display = 'none';
+      if (modal) modal.classList.remove('show');
     }
 
-    // Load driver availability from database
     async function loadDriverAvailability() {
       if (!currentDriver || !currentDriver.id) return;
       
@@ -1492,7 +1795,6 @@
         
         if (!db || !docFn || !getDocFn) return;
         
-        // Try to set up real-time listener on drivers collection first, then staff collection
         try {
           const driverRef = docFn(db, 'drivers', currentDriver.id);
           const driverDoc = await getDocFn(driverRef);
@@ -1501,7 +1803,6 @@
             driverAvailability = data.availability || 'available';
             updateStatusDisplay();
             
-            // Set up real-time listener
             if (onSnapshotFn) {
               onSnapshotFn(driverRef, (doc) => {
                 if (doc.exists()) {
@@ -1514,7 +1815,6 @@
             return;
           }
         } catch (driverError) {
-          // Try staff collection
         }
         
         const staffRef = docFn(db, 'staff', currentDriver.id);
@@ -1524,7 +1824,6 @@
           driverAvailability = data.availability || 'available';
           updateStatusDisplay();
           
-          // Set up real-time listener
           if (onSnapshotFn) {
             onSnapshotFn(staffRef, (doc) => {
               if (doc.exists()) {
@@ -1537,12 +1836,11 @@
         }
       } catch (error) {
         console.error('Error loading driver availability:', error);
-        driverAvailability = 'available'; // Default fallback
+        driverAvailability = 'available';
         updateStatusDisplay();
       }
     }
 
-    // Update status display in driver account modal
     function updateStatusDisplay() {
       const daStatus = document.getElementById('daStatus');
       if (daStatus) {
@@ -1558,7 +1856,6 @@
       return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
     }
 
-    // Wait for Firebase to be ready
     function waitForFirebase(maxAttempts = 20, attempt = 0) {
       return new Promise((resolve) => {
         if (window.firebaseDb && window.firebaseReady && 
@@ -1576,13 +1873,11 @@
       });
     }
 
-    // Load orders from Firebase on page load
     async function initDriverDashboard() {
-      // Wait for Firebase to be ready
       const firebaseReady = await waitForFirebase();
       
       if (firebaseReady && currentDriver && currentDriver.id) {
-        loadDriverAvailability(); // Load availability from database
+        loadDriverAvailability();
         loadDriverOrders();
       } else {
         if (!firebaseReady) {
@@ -1592,7 +1887,6 @@
       }
     }
     
-    // Initialize when page loads
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initDriverDashboard);
     } else {
@@ -1602,5 +1896,3 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 </body>
 </html>
-
-
