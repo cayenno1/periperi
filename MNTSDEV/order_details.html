@@ -22,7 +22,10 @@
       <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
       <div class="brand-name">PABLO'S<br>PERI PERI</div>
     </div>
-    <div class="nav-icons">
+    <button class="navbar-toggler mobile-menu-toggle d-lg-none ms-auto" type="button" aria-label="Toggle navigation" style="border: none; background: none; padding: 8px;">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="nav-icons d-none d-lg-flex">
       <div class="nav-icon home-icon" title="Home" onclick="goHome()">
         <i class="fas fa-home"></i>
       </div>
@@ -153,6 +156,65 @@
   <script src="js/utils.js"></script>
   <script src="js/firestore.js"></script>
   <script src="js/order_details.js"></script>
+  <script src="js/mobile-menu.js"></script>
+
+  <!-- Mobile Menu Tray -->
+  <div class="mobile-menu-overlay"></div>
+  <div class="mobile-menu-tray">
+    <div class="mobile-menu-header">
+      <div class="logo-container">
+        <img src="logo.jpg" alt="Pablo's Peri Peri Logo" class="logo">
+        <div class="brand-name">PABLO'S<br>PERI PERI</div>
+      </div>
+      <button class="mobile-menu-close" aria-label="Close menu">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="mobile-menu-content">
+      <ul class="mobile-menu-nav">
+        <li class="mobile-menu-nav-item">
+          <a href="index.html" class="mobile-menu-nav-link">
+            <i class="fas fa-home"></i>
+            <span style="margin-left: 12px;">Home</span>
+          </a>
+        </li>
+        <li class="mobile-menu-nav-item">
+          <a href="menu.html" class="mobile-menu-nav-link">
+            <i class="fas fa-utensils"></i>
+            <span style="margin-left: 12px;">Menu</span>
+          </a>
+        </li>
+        <li class="mobile-menu-nav-item">
+          <a href="account.html" class="mobile-menu-nav-link">
+            <i class="fas fa-user-circle"></i>
+            <span style="margin-left: 12px;">Account</span>
+          </a>
+        </li>
+        <li class="mobile-menu-nav-item">
+          <a href="orders.html" class="mobile-menu-nav-link">
+            <i class="fas fa-receipt"></i>
+            <span style="margin-left: 12px;">Orders</span>
+          </a>
+        </li>
+        <li class="mobile-menu-nav-item">
+          <a href="help.html" class="mobile-menu-nav-link">
+            <i class="fas fa-question-circle"></i>
+            <span style="margin-left: 12px;">Help & Support</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+    <div class="mobile-menu-actions">
+      <a href="#" class="mobile-menu-action-btn" onclick="goToCart(); return false;">
+        <i class="fas fa-shopping-bag"></i>
+        <span>View Cart</span>
+      </a>
+      <button class="mobile-menu-action-btn secondary" id="mobileSignInBtn" onclick="window.location.href='login.html';">
+        <i class="fas fa-sign-in-alt"></i>
+        <span>Sign In</span>
+      </button>
+    </div>
+  </div>
 </body>
 </html>
 

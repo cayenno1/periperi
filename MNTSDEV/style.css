@@ -3380,6 +3380,217 @@ body {
   }
 }
 
+/* ============================================
+   MOBILE MENU TRAY
+   ============================================ */
+.mobile-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  backdrop-filter: blur(2px);
+}
+
+.mobile-menu-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.mobile-menu-tray {
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: 85%;
+  max-width: 320px;
+  height: 100vh;
+  background: #fff;
+  z-index: 1041;
+  box-shadow: -2px 0 20px rgba(0, 0, 0, 0.15);
+  transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-menu-tray.active {
+  right: 0;
+}
+
+.mobile-menu-header {
+  padding: 20px;
+  border-bottom: 2px solid #e53935;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.mobile-menu-header .logo-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-menu-header .logo {
+  height: 40px;
+  width: 40px;
+  border-radius: 12px;
+}
+
+.mobile-menu-header .brand-name {
+  font-size: 1.1em;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.2;
+}
+
+.mobile-menu-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #333;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+  width: 40px;
+  height: 40px;
+}
+
+.mobile-menu-close:hover {
+  background: #f5f5f5;
+  color: #e53935;
+}
+
+.mobile-menu-content {
+  flex: 1;
+  padding: 20px 0;
+  overflow-y: auto;
+}
+
+.mobile-menu-nav {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.mobile-menu-nav-item {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.mobile-menu-nav-link {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  color: #333;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.mobile-menu-nav-link i {
+  width: 20px;
+  text-align: center;
+  margin-right: 12px;
+  font-size: 1.1rem;
+}
+
+.mobile-menu-nav-link:hover,
+.mobile-menu-nav-link:focus {
+  background: #f8f8f8;
+  color: #e53935;
+  padding-left: 24px;
+}
+
+.mobile-menu-nav-link.active {
+  background: #fff5f5;
+  color: #e53935;
+  font-weight: 600;
+}
+
+.mobile-menu-nav-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #e53935;
+}
+
+.mobile-menu-actions {
+  padding: 20px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #fff;
+  position: sticky;
+  bottom: 0;
+}
+
+.mobile-menu-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  color: #fff;
+  background: #e53935;
+}
+
+.mobile-menu-action-btn:hover {
+  background: #c62828;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.3);
+}
+
+.mobile-menu-action-btn.secondary {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.mobile-menu-action-btn.secondary:hover {
+  background: #e0e0e0;
+}
+
+.mobile-menu-action-btn i {
+  font-size: 1.1rem;
+}
+
+/* Prevent body scroll when menu is open */
+body.mobile-menu-open {
+  overflow: hidden;
+}
+
+@media (min-width: 992px) {
+  .mobile-menu-overlay,
+  .mobile-menu-tray {
+    display: none !important;
+  }
+}
+
 /* LANDSCAPE MOBILE ORIENTATION */
 @media (max-height: 500px) and (orientation: landscape) {
   .header {
@@ -8137,11 +8348,16 @@ body.index-page .price-section {
   }
   
   .sidebar-nav {
-    flex-direction: row;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
     overflow-x: auto;
-    padding: 0 var(--spacing-md);
+    overflow-y: hidden;
+    padding: var(--spacing-md);
     gap: var(--spacing-sm);
     scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
   }
   
   .sidebar-nav::-webkit-scrollbar {
@@ -8156,10 +8372,21 @@ body.index-page .price-section {
   .sidebar-category {
     white-space: nowrap;
     padding: var(--spacing-sm) var(--spacing-md);
+    width: auto !important;
+    min-width: fit-content;
+    flex-shrink: 0;
   }
   
   .sidebar-category::before {
     display: none;
+  }
+  
+  .sidebar-category:hover {
+    padding-left: var(--spacing-md);
+  }
+  
+  .sidebar-category.active {
+    padding-left: var(--spacing-md);
   }
   
   .menu-main-content {
@@ -8173,6 +8400,60 @@ body.index-page .price-section {
 }
 
 @media (max-width: 768px) {
+  .menu-sidebar {
+    width: 100%;
+    border-radius: 0;
+    padding: var(--spacing-md) 0;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border-light);
+    position: relative;
+    top: 0;
+    max-height: none;
+    overflow-y: visible;
+  }
+  
+  .sidebar-nav {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--spacing-md);
+    gap: var(--spacing-sm);
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  .sidebar-nav::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  .sidebar-nav::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+  
+  .sidebar-category {
+    white-space: nowrap;
+    padding: var(--spacing-sm) var(--spacing-md);
+    width: auto !important;
+    min-width: fit-content;
+    flex-shrink: 0;
+  }
+  
+  .sidebar-category::before {
+    display: none;
+  }
+  
+  .sidebar-category:hover {
+    padding-left: var(--spacing-md);
+  }
+  
+  .sidebar-category.active {
+    padding-left: var(--spacing-md);
+  }
+  
   .section-category-title {
     font-size: 1.5rem;
     letter-spacing: 1.5px;
