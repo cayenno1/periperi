@@ -1072,8 +1072,10 @@ function normalizeOrderDoc(docSnap) {
                             paymentInfo.gcashProofURL || paymentInfo.gcash_proof_URL || '';
     const paymentReferenceNumber = paymentInfo.referenceNumber || paymentInfo.reference_number || 
                                    paymentInfo.gcashReference || paymentInfo.gcash_reference || 
+                                   paymentInfo.gcashRefNo || paymentInfo.gcash_ref_no || 
                                    paymentInfo.transactionRef || paymentInfo.transaction_ref || 
-                                   data.paymentReference || data.payment_reference || '';
+                                   data.paymentReference || data.payment_reference || 
+                                   data.gcashRefNo || data.gcash_ref_no || '';
     const paymentTimestamp = paymentInfo.paymentTimestamp || paymentInfo.payment_timestamp || 
                             paymentInfo.timestamp || data.paymentTimestamp || data.payment_timestamp || null;
     
@@ -1289,8 +1291,11 @@ function renderOrdersTable(orders) {
                                  orderStatusLower === 'ready for pickup';
         const isOutForDelivery = orderStatusLower === 'out_for_delivery' || 
                                 orderStatusLower === 'out-for-delivery' || 
+                                orderStatusLower === 'out for delivery' ||
                                 orderStatusLower === 'in-transit' ||
-                                orderStatusLower === 'in_transit';
+                                orderStatusLower === 'in_transit' ||
+                                orderStatusLower === 'on the way' ||
+                                orderStatusLower === 'on-the-way';
         const isDelivered = orderStatusLower === 'delivered' || orderStatusLower === 'completed';
         const isCancelled = orderStatusLower === 'cancelled' || orderStatusLower === 'canceled' || orderStatusLower === 'failed';
         const isDeclined = orderStatusLower === 'declined';
@@ -1397,8 +1402,16 @@ function renderOrdersTable(orders) {
                 }
             }
             
-            // Show Change Status button if status can be changed (not for declined orders)
-            if (availableStatuses.length > 0 && !isDelivered && !isCancelled && !isDeclined) {
+            // Show Assign Driver button for delivery orders that are "out for delivery" (on the way) and have no driver assigned
+            const hasDriver = !!(order.driverId && (typeof order.driverId === 'string' ? order.driverId.trim() : order.driverId));
+            if (isOutForDelivery && isDeliveryOrder && !hasDriver) {
+                buttons.push(`<button class="order-action-btn btn-assign-driver" onclick="event.stopPropagation(); openDriverSelectionForOrder('${escapedOrderId}')" title="Assign Driver">
+                    <i class="fas fa-user-tie"></i> Assign Driver
+                </button>`);
+            }
+            
+            // Show Change Status button if status can be changed (not for declined orders, not for out for delivery)
+            if (availableStatuses.length > 0 && !isDelivered && !isCancelled && !isDeclined && !isOutForDelivery) {
                 const canChangeStatus = !isPending || !isGCashOrder || isPaymentVerified;
                 if (canChangeStatus) {
                     // Create dropdown for status change
@@ -2100,6 +2113,27 @@ async function updateOrderStatus(orderId, newStatus) {
                 console.error('Error creating/updating for_delivery document:', deliveryError);
                 // Don't fail the whole operation
             }
+            
+            // Automatically open driver selection modal if no driver is assigned
+            if (!order.driverId) {
+                // Update local state first
+                const orderIndex = ordersState.findIndex(o => o.id === orderId);
+                if (orderIndex !== -1) {
+                    ordersState[orderIndex].status = normalizedNewStatus;
+                }
+                
+                // Refresh the orders table
+                renderOrdersTable(ordersState);
+                
+                // Show notification
+                showNotification(`Order ${order.trackingId || orderId} marked as "${statusLabel}"! Please assign a driver.`, 'success');
+                
+                // Automatically open driver selection modal
+                setTimeout(async () => {
+                    await openDriverSelectionForOrder(orderId);
+                }, 500); // Small delay to ensure UI updates
+                return; // Exit early, don't show duplicate notification
+            }
         }
         
         // Update local state
@@ -2675,7 +2709,7 @@ async function verifyPayment(orderId) {
         const { ref, getDownloadURL, listAll } = window.storageFunctions;
         const storage = window.storage;
         
-        // First, check if the order has a paymentProofPath field
+        // First, check if the order has a paymentProofUrl (direct URL) field
         let imageUrl = null;
         let lastError = null;
         const attemptedPaths = [];
@@ -2689,11 +2723,17 @@ async function verifyPayment(orderId) {
             trackingId: order.trackingId,
             userId: order.userId,
             isGuest: isGuestOrder,
-            paymentProofPath: order.paymentProofPath
+            paymentProofPath: order.paymentProofPath,
+            paymentProofUrl: order.paymentProofUrl
         });
         
-        // If paymentProofPath is specified in order data, use it first
-        if (order.paymentProofPath) {
+        // First priority: Check if paymentProofUrl (gcashProofUrl) is available - use it directly
+        if (order.paymentProofUrl && order.paymentProofUrl.trim() !== '') {
+            imageUrl = order.paymentProofUrl;
+            console.log(`✓ Using direct payment proof URL: ${imageUrl}`);
+        }
+        // Second priority: If paymentProofPath is specified in order data, use it
+        else if (order.paymentProofPath) {
             const path = order.paymentProofPath.startsWith('paymentProofs/') 
                 ? order.paymentProofPath 
                 : `paymentProofs/${order.paymentProofPath}`;
@@ -2872,6 +2912,19 @@ async function verifyPayment(orderId) {
             imageContainer.style.display = 'block';
             footer.style.display = 'flex';
             
+            // Display reference number if available
+            if (order.paymentReferenceNumber && order.paymentReferenceNumber.trim() !== '') {
+                const refNumberContainer = document.createElement('div');
+                refNumberContainer.setAttribute('data-ref-number-container', 'true');
+                refNumberContainer.style.cssText = 'margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #7E2021;';
+                refNumberContainer.innerHTML = `
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">GCash Reference Number:</div>
+                    <div style="font-size: 16px; color: #333; font-weight: 600; font-family: monospace; letter-spacing: 1px;">${order.paymentReferenceNumber.trim().toUpperCase()}</div>
+                `;
+                // Insert before the image
+                imageContainer.insertBefore(refNumberContainer, receiptImage);
+            }
+            
             // Show payment history if available
             if (order.paymentProofHistory && order.paymentProofHistory.length > 1) {
                 const historyContainer = document.getElementById('paymentHistoryContainer');
@@ -2933,7 +2986,12 @@ function closePaymentReceiptModal() {
         
         if (loadingEl) loadingEl.style.display = 'block';
         if (errorEl) errorEl.style.display = 'none';
-        if (imageContainer) imageContainer.style.display = 'none';
+        if (imageContainer) {
+            imageContainer.style.display = 'none';
+            // Remove any dynamically added reference number containers
+            const refContainers = imageContainer.querySelectorAll('[data-ref-number-container="true"]');
+            refContainers.forEach(container => container.remove());
+        }
         if (receiptImage) receiptImage.src = '';
         if (footer) footer.style.display = 'none';
     }
@@ -13406,9 +13464,9 @@ function handlePromoImageFileSelect(event) {
             const width = img.width;
             const height = img.height;
             
-            // Validate dimensions: must be exactly 1920 x 600
-            if (width !== 1920 || height !== 600) {
-                showNotification(`Image dimensions must be exactly 1920 x 600 pixels. Current dimensions: ${width} x ${height}`, 'error');
+            // Validate dimensions: must be exactly 1920 x 1080
+            if (width !== 1920 || height !== 1080) {
+                showNotification(`Image dimensions must be exactly 1920 x 1080 pixels. Current dimensions: ${width} x ${height}`, 'error');
                 // Reset file input
                 if (fileInput) {
                     fileInput.value = '';
@@ -14636,6 +14694,30 @@ async function assignDriverToOrder(driverId, orderId) {
             console.error('Error creating/updating for_delivery document:', deliveryError);
             // Don't fail the whole operation if for_delivery creation fails
             showNotification('Driver assigned, but failed to create delivery record. Please check console.', 'warning');
+        }
+        
+        // Free up previous driver if one was assigned
+        const previousDriverId = order.driverId;
+        if (previousDriverId && previousDriverId !== (driver.driverId || driver.id)) {
+            const previousDriverIndex = driversState.findIndex(d => 
+                (d.driverId === previousDriverId || d.id === previousDriverId)
+            );
+            if (previousDriverIndex !== -1) {
+                // Check if previous driver has other active deliveries
+                const otherActiveDeliveries = ordersState.filter(o => 
+                    o.driverId === previousDriverId && 
+                    o.id !== orderId &&
+                    (o.status === 'out_for_delivery' || o.status === 'out-for-delivery' || 
+                     o.status === 'in-transit' || o.status === 'in_transit')
+                );
+                
+                // Only free up if no other active deliveries
+                if (otherActiveDeliveries.length === 0) {
+                    driversState[previousDriverIndex].availability = 'available';
+                    driversState[previousDriverIndex].status = 'available';
+                    console.log(`Freed up previous driver: ${driversState[previousDriverIndex].name}`);
+                }
+            }
         }
         
         // Update local state

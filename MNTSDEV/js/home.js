@@ -299,7 +299,7 @@
 
             let currentIndex = 0;
             let autoplayTimer = null;
-            const AUTOPLAY_INTERVAL = 3000;
+            const AUTOPLAY_INTERVAL = 10000;
 
             function setActiveSlide(index) {
                 currentIndex = (index + slides.length) % slides.length;

@@ -17,7 +17,7 @@
     }
 
     body {
-      background: #f5f5f5;
+      background: #ffffff;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: #1a1a1a;
       line-height: 1.5;
@@ -339,6 +339,45 @@
       border-color: #e53935;
     }
 
+    .driver-cash-input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1.5px solid #e5e7eb;
+      background: #ffffff;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+    }
+
+    .driver-cash-input:focus {
+      outline: none;
+      border-color: #e53935;
+    }
+
+    .driver-change-display {
+      padding: 12px;
+      background: #f0fdf4;
+      border: 1.5px solid #86efac;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+    }
+
+    .driver-change-display.negative {
+      background: #fef2f2;
+      border-color: #fca5a5;
+    }
+
+    .driver-cash-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #6b7280;
+      margin-bottom: 8px;
+      display: block;
+    }
+
     /* Modal */
     .driver-modal-overlay {
       position: fixed;
@@ -639,9 +678,6 @@
       <button class="driver-tab-btn active" role="tab" aria-selected="true" data-view="all">
         <span>All</span>
       </button>
-      <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="new">
-        <span>New Orders</span>
-      </button>
       <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="ongoing">
         <span>Ongoing</span>
       </button>
@@ -652,16 +688,6 @@
 
     <!-- Orders Grid -->
     <div class="driver-orders-grid">
-      <!-- New Orders -->
-      <section class="driver-order-section" id="newSection" aria-label="New orders">
-        <div class="driver-section-header">
-          <div class="driver-section-title">New Orders</div>
-          <div class="driver-section-count new" id="newCount">0</div>
-        </div>
-        <div class="driver-orders-list" id="newOrdersList"></div>
-        <div class="driver-empty-state" id="newOrdersEmpty" style="display: none;">No new orders right now.</div>
-      </section>
-
       <!-- Ongoing Orders -->
       <section class="driver-order-section" id="ongoingSection" aria-label="Ongoing orders">
         <div class="driver-section-header">
@@ -1242,13 +1268,12 @@
 
     function applyView(){
       const map = {
-        all: ['newSection','ongoingSection','completedSection'],
-        new: ['newSection'],
+        all: ['ongoingSection','completedSection'],
         ongoing: ['ongoingSection'],
         completed: ['completedSection']
       };
       const toShow = new Set(map[currentView] || map.all);
-      ['newSection','ongoingSection','completedSection'].forEach(id => {
+      ['ongoingSection','completedSection'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.style.display = toShow.has(id) ? '' : 'none';
@@ -1258,7 +1283,6 @@
     // Data
     const statusSteps = ['Transit'];
     let driverAvailability = 'available';
-    let newOrders = [];
     let ongoingOrders = [];
     let completedOrders = [];
     
@@ -1292,7 +1316,6 @@
         
         if (onSnapshotFn) {
           onSnapshotFn(ordersQuery, (snapshot) => {
-            newOrders = [];
             ongoingOrders = [];
             completedOrders = [];
             
@@ -1323,7 +1346,9 @@
                 payment: {
                   method: orderData.payment?.method || 'Cash',
                   gcashRefNo: orderData.payment?.gcashRefNo || null,
-                  gcashProofUrl: orderData.payment?.gcashProofUrl || null
+                  gcashProofUrl: orderData.payment?.gcashProofUrl || null,
+                  cashReceived: orderData.payment?.cashReceived !== undefined ? orderData.payment.cashReceived : null,
+                  change: orderData.payment?.change !== undefined ? orderData.payment.change : null
                 },
                 items: Array.isArray(orderData.items) ? orderData.items.map(item => {
                   const name = item.name || item.itemName || 'Item';
@@ -1343,9 +1368,6 @@
                          orderStatus === 'out-for-delivery' || orderStatus === 'in-transit' || 
                          orderStatus === 'in_transit') {
                 ongoingOrders.push(order);
-              } else if (orderStatus === 'ready for delivery' || orderStatus === 'ready_for_delivery' ||
-                         orderStatus === 'for delivery' || orderStatus === 'for_delivery') {
-                newOrders.push(order);
               }
             });
             
@@ -1360,24 +1382,9 @@
     }
 
     function renderAll(){ 
-      renderNew(); 
       renderOngoing(); 
       renderCompleted(); 
       applyView(); 
-    }
-
-    function renderNew(){
-      const container = document.getElementById('newOrdersList');
-      const empty = document.getElementById('newOrdersEmpty');
-      const count = document.getElementById('newCount');
-      if (count) count.textContent = newOrders.length;
-      if (!newOrders.length){ 
-        container.innerHTML = ''; 
-        empty.style.display = 'block'; 
-        return; 
-      }
-      empty.style.display = 'none';
-      container.innerHTML = newOrders.map(order => cardTemplate(order, 'new')).join('');
     }
 
     function renderOngoing(){
@@ -1409,8 +1416,8 @@
     }
 
     function cardTemplate(order, list){
-      const statusClass = list === 'completed' ? 'completed' : (list === 'ongoing' ? 'ongoing' : 'new');
-      const statusText = list==='completed' ? 'Completed' : (list==='ongoing' ? 'Transit' : 'New');
+      const statusClass = list === 'completed' ? 'completed' : 'ongoing';
+      const statusText = list==='completed' ? 'Completed' : 'Transit';
       return `
         <div class="driver-order-card ${statusClass}" onclick="viewDetails('${order.id}','${list}')" style="cursor: pointer;">
           <div class="driver-order-header">
@@ -1434,16 +1441,9 @@
           <div class="driver-order-footer">
             <div class="driver-order-price">₱${order.total}.00</div>
             <div class="driver-order-actions" onclick="event.stopPropagation();">
-              ${list==='new' ? `
-                <button class="driver-btn driver-btn-secondary" onclick="viewDetails('${order.id}','new')">Details</button>
-                <button class="driver-btn driver-btn-primary" onclick="acceptOrder('${order.id}')">Accept</button>
-              `: ''}
               ${list==='ongoing' ? `
                 <button class="driver-btn driver-btn-secondary" onclick="viewDetails('${order.id}','ongoing')">Details</button>
-                <select class="driver-select" onchange="handleDropdownChange('${order.id}', this.value)">
-                  <option value="transit" ${typeof order.stepIndex==='number' && order.stepIndex===0 ? 'selected' : ''}>Transit</option>
-                  <option value="done">Done</option>
-                </select>
+                <button class="driver-btn driver-btn-success" onclick="event.stopPropagation(); handleMarkAsDone('${order.id}')">Mark as Done</button>
               `: ''}
               ${list==='completed' ? `
                 <button class="driver-btn driver-btn-secondary" onclick="viewDetails('${order.id}','completed')">Details</button>
@@ -1454,61 +1454,26 @@
       `;
     }
 
-    async function acceptOrder(id){
-      const idx = newOrders.findIndex(o=>o.id===id);
-      if (idx === -1) return;
-      const order = newOrders[idx];
-      
-      try {
-        const db = window.firebaseDb;
-        const updateDocFn = window.updateDoc;
-        const docFn = window.doc;
-        const serverTimestampFn = window.serverTimestamp;
-        
-        if (db && updateDocFn && docFn && serverTimestampFn) {
-          const orderRef = docFn(db, 'orders', id);
-          await updateDocFn(orderRef, {
-            status: 'out for delivery',
-            outForDeliveryAt: serverTimestampFn(),
-            updatedAt: serverTimestampFn()
-          });
-          
-          if (currentDriver && currentDriver.id) {
-            try {
-              const driverRef = docFn(db, 'drivers', currentDriver.id);
-              await updateDocFn(driverRef, {
-                availability: 'busy',
-                updatedAt: serverTimestampFn()
-              });
-            } catch (driverError) {
-              const staffRef = docFn(db, 'staff', currentDriver.id);
-              await updateDocFn(staffRef, {
-                availability: 'busy',
-                updatedAt: serverTimestampFn()
-              });
-            }
-          }
+    function handleMarkAsDone(id) {
+      // Check payment method - if cash, open modal; if GCash, complete directly
+      const order = ongoingOrders.find(o => o.id === id);
+      if (order) {
+        const paymentMethod = (order.payment?.method || 'Cash').toLowerCase();
+        if (paymentMethod === 'cash') {
+          // Open modal to enter cash amount
+          viewDetails(id, 'ongoing');
+        } else {
+          // GCash - complete directly
+          completeOrder(id);
         }
-      } catch (error) {
-        console.error('Error accepting order:', error);
-        notify('Error accepting order. Please try again.', 'error');
-        return;
       }
-      
-      const acceptedOrder = newOrders.splice(idx,1)[0];
-      acceptedOrder.stepIndex = 0;
-      ongoingOrders.unshift(acceptedOrder);
-      showCenterNotification('Accepted');
-      driverAvailability = 'busy';
-      updateStatusDisplay();
-      renderAll();
     }
 
     function handleDropdownChange(id, value){
       if (value === 'transit') {
         setOrderStatus(id, 0);
       } else if (value === 'done') {
-        completeOrder(id);
+        handleMarkAsDone(id);
       }
     }
 
@@ -1603,7 +1568,7 @@
     }
 
     function viewDetails(id, list){
-      const source = list==='new' ? newOrders : list==='ongoing' ? ongoingOrders : completedOrders;
+      const source = list==='ongoing' ? ongoingOrders : completedOrders;
       const order = source.find(o=>o.id===id);
       if (!order) return;
       const modal = document.getElementById('orderModal');
@@ -1683,6 +1648,18 @@
               </div>
               ${order.payment?.gcashRefNo ? `<div class="driver-modal-info-row"><span class="driver-modal-info-label">GCash Ref:</span><span class="driver-modal-info-value">${order.payment.gcashRefNo}</span></div>` : ''}
               ${order.payment?.gcashProofUrl ? `<div class="driver-modal-info-row"><span class="driver-modal-info-value"><a href="${order.payment.gcashProofUrl}" target="_blank" style="color: #e53935; text-decoration: underline;">View Payment Proof</a></span></div>` : ''}
+              ${order.payment?.cashReceived !== null && order.payment?.cashReceived !== undefined ? `
+                <div class="driver-modal-info-row">
+                  <span class="driver-modal-info-label">Cash Received:</span>
+                  <span class="driver-modal-info-value">₱${Math.round(order.payment.cashReceived)}.00</span>
+                </div>
+              ` : ''}
+              ${order.payment?.change !== null && order.payment?.change !== undefined ? `
+                <div class="driver-modal-info-row">
+                  <span class="driver-modal-info-label">Change:</span>
+                  <span class="driver-modal-info-value">₱${Math.round(order.payment.change)}.00</span>
+                </div>
+              ` : ''}
             </div>
           </div>
 
@@ -1694,19 +1671,202 @@
       `;
 
       actions.innerHTML = '';
-      if (list==='new'){
-        actions.innerHTML = `
-          <button class="driver-btn driver-btn-primary" onclick="acceptOrder('${order.id}')">Accept Order</button>
-        `;
-      } else if (list==='ongoing'){
-        actions.innerHTML = `
-          <select class="driver-select" style="width: 100%;" onchange="handleDropdownChange('${order.id}', this.value)">
-            <option value="transit" ${typeof order.stepIndex==='number' && order.stepIndex===0 ? 'selected' : ''}>In Transit</option>
-            <option value="done">Mark as Delivered</option>
-          </select>
-        `;
+      if (list==='ongoing'){
+        const paymentMethod = (order.payment?.method || 'Cash').toLowerCase();
+        const isCash = paymentMethod === 'cash';
+        
+        if (isCash) {
+          actions.innerHTML = `
+            <div style="width: 100%;">
+              <label class="driver-cash-label">Amount Received (₱)</label>
+              <input type="number" 
+                     id="cashReceivedInput" 
+                     class="driver-cash-input" 
+                     placeholder="Enter amount received"
+                     min="${order.total}"
+                     step="1"
+                     oninput="updateCashChange('${order.id}', ${order.total})">
+              <div id="cashChangeDisplay_${order.id}" class="driver-change-display" style="display: none;"></div>
+              <div style="display: flex; gap: 12px; margin-top: 12px;">
+                <button class="driver-btn driver-btn-secondary" style="flex: 1;" onclick="closeOrderModal()">Cancel</button>
+                <button id="completeCashBtn_${order.id}" 
+                        class="driver-btn driver-btn-success" 
+                        style="flex: 1;"
+                        disabled
+                        onclick="completeOrderWithCash('${order.id}', ${order.total})">
+                  Mark as Delivered
+                </button>
+              </div>
+            </div>
+          `;
+        } else {
+          actions.innerHTML = `
+            <div style="display: flex; gap: 12px;">
+              <button class="driver-btn driver-btn-secondary" style="flex: 1;" onclick="closeOrderModal()">Cancel</button>
+              <button class="driver-btn driver-btn-success" style="flex: 1;" onclick="completeOrder('${order.id}')">
+                Mark as Delivered
+              </button>
+            </div>
+          `;
+        }
       }
       modal.classList.add('show');
+    }
+
+    function updateCashChange(orderId, orderTotal) {
+      const input = document.getElementById('cashReceivedInput');
+      const changeDisplay = document.getElementById(`cashChangeDisplay_${orderId}`);
+      const completeBtn = document.getElementById(`completeCashBtn_${orderId}`);
+      
+      if (!input || !changeDisplay || !completeBtn) return;
+      
+      const received = parseFloat(input.value) || 0;
+      const change = received - orderTotal;
+      
+      if (received >= orderTotal) {
+        changeDisplay.style.display = 'block';
+        changeDisplay.className = 'driver-change-display';
+        changeDisplay.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600; color: #059669;">Change:</span>
+            <span style="font-size: 1.1rem; font-weight: 700; color: #059669;">₱${Math.round(change)}.00</span>
+          </div>
+        `;
+        completeBtn.disabled = false;
+      } else if (received > 0) {
+        changeDisplay.style.display = 'block';
+        changeDisplay.className = 'driver-change-display negative';
+        changeDisplay.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600; color: #dc2626;">Insufficient:</span>
+            <span style="font-size: 1.1rem; font-weight: 700; color: #dc2626;">₱${Math.round(Math.abs(change))}.00</span>
+          </div>
+        `;
+        completeBtn.disabled = true;
+      } else {
+        changeDisplay.style.display = 'none';
+        completeBtn.disabled = true;
+      }
+    }
+
+    async function completeOrderWithCash(orderId, orderTotal) {
+      const input = document.getElementById('cashReceivedInput');
+      if (!input) return;
+      
+      const cashReceived = Math.round(parseFloat(input.value) || 0);
+      const change = cashReceived - orderTotal;
+      
+      if (cashReceived < orderTotal) {
+        notify('Amount received must be at least equal to order total', 'error');
+        return;
+      }
+      
+      const idx = ongoingOrders.findIndex(o=>o.id===orderId);
+      if (idx === -1) return;
+      const order = ongoingOrders[idx];
+      
+      try {
+        const db = window.firebaseDb;
+        const updateDocFn = window.updateDoc;
+        const docFn = window.doc;
+        const serverTimestampFn = window.serverTimestamp;
+        const getDocFn = window.getDoc;
+        
+        if (db && updateDocFn && docFn && serverTimestampFn) {
+          const orderRef = docFn(db, 'orders', orderId);
+          
+          // Get current payment data to preserve other fields
+          let currentPayment = {};
+          if (order.payment) {
+            currentPayment = {
+              method: order.payment.method || 'Cash',
+              gcashRefNo: order.payment.gcashRefNo || null,
+              gcashProofUrl: order.payment.gcashProofUrl || null
+            };
+          } else {
+            currentPayment = {
+              method: 'Cash'
+            };
+          }
+          
+          // Update payment with cash received and change
+          const updatedPayment = {
+            ...currentPayment,
+            cashReceived: cashReceived,
+            change: change
+          };
+          
+          await updateDocFn(orderRef, {
+            status: 'delivered',
+            deliveredAt: serverTimestampFn(),
+            completedAt: serverTimestampFn(),
+            payment: updatedPayment,
+            updatedAt: serverTimestampFn()
+          });
+          
+          try {
+            if (getDocFn) {
+              const deliveryRef = docFn(db, 'for_delivery', orderId);
+              const deliveryDoc = await getDocFn(deliveryRef);
+              if (deliveryDoc.exists()) {
+                await updateDocFn(deliveryRef, {
+                  timeDelivered: serverTimestampFn(),
+                  updatedAt: serverTimestampFn()
+                });
+              }
+            }
+          } catch (deliveryError) {
+            console.error('Error updating for_delivery:', deliveryError);
+          }
+        }
+      } catch (error) {
+        console.error('Error updating order status:', error);
+        notify('Error updating order status. Please try again.', 'error');
+        return;
+      }
+      
+      // Update local order object
+      const completedOrder = ongoingOrders.splice(idx,1)[0];
+      completedOrder.completedAt = new Date().toLocaleString();
+      completedOrder.completedAtTs = Date.now();
+      if (!completedOrder.payment) completedOrder.payment = {};
+      completedOrder.payment.cashReceived = cashReceived;
+      completedOrder.payment.change = change;
+      completedOrders.unshift(completedOrder);
+      
+      notify('Delivery completed for ' + (order.trackingId || order.id), 'success');
+      closeOrderModal();
+      
+      if (ongoingOrders.length === 0) { 
+        driverAvailability = 'available'; 
+        updateStatusDisplay();
+        
+        try {
+          const db = window.firebaseDb;
+          const updateDocFn = window.updateDoc;
+          const docFn = window.doc;
+          const serverTimestampFn = window.serverTimestamp;
+          
+          if (db && updateDocFn && docFn && serverTimestampFn && currentDriver && currentDriver.id) {
+            try {
+              const driverRef = docFn(db, 'drivers', currentDriver.id);
+              await updateDocFn(driverRef, {
+                availability: 'available',
+                updatedAt: serverTimestampFn()
+              });
+            } catch (driverError) {
+              const staffRef = docFn(db, 'staff', currentDriver.id);
+              await updateDocFn(staffRef, {
+                availability: 'available',
+                updatedAt: serverTimestampFn()
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Error updating availability:', e);
+        }
+      }
+      renderAll();
     }
 
     function closeOrderModal(){ 
@@ -1757,17 +1917,16 @@
 
       const assignedOrdersList = document.getElementById('assignedOrdersList');
       if (assignedOrdersList) {
-        const allAssigned = [...newOrders, ...ongoingOrders];
+        const allAssigned = [...ongoingOrders];
         if (allAssigned.length === 0) {
           assignedOrdersList.innerHTML = '<div style="color: #6b7280; font-size: 0.9rem; text-align: center; padding: 20px;">No assigned orders at the moment.</div>';
         } else {
           assignedOrdersList.innerHTML = allAssigned.map(order => {
-            const status = ongoingOrders.find(o => o.id === order.id) ? 'Ongoing' : 'New';
             return `
-              <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 4px solid ${status === 'Ongoing' ? '#f59e0b' : '#dc2626'};">
+              <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 4px solid #f59e0b;">
                 <div style="font-weight: 700; margin-bottom: 4px;">${order.trackingId || order.id}</div>
                 <div style="font-size: 0.9rem; color: #6b7280;">${order.dropoff.name} - ${order.dropoff.address}</div>
-                <div style="font-size: 0.85rem; color: #9ca3af; margin-top: 4px;">Status: ${status}</div>
+                <div style="font-size: 0.85rem; color: #9ca3af; margin-top: 4px;">Status: Ongoing</div>
               </div>
             `;
           }).join('');

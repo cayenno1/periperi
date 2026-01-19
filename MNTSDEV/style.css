@@ -4749,7 +4749,7 @@ select.restaurant-form-input {
   position: relative;
   width: 100%;
   max-width: 1920px;
-  height: 600px;
+  height: 1080px;
   margin: 0 auto 32px auto;
   display: flex;
   align-items: stretch;
@@ -4763,7 +4763,7 @@ select.restaurant-form-input {
 .hero-slider {
   position: relative;
   width: 100%;
-  height: 600px;
+  height: 1080px;
   overflow: hidden;
 }
 
@@ -4784,7 +4784,7 @@ select.restaurant-form-input {
 
 .hero-slide img {
   width: 100%;
-  height: 600px;
+  height: 1080px;
   object-fit: cover;
   display: block;
 }

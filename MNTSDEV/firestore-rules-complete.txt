@@ -12,8 +12,14 @@ service cloud.firestore {
       return status in ['active', 'suspended', 'inactive', 'deleted'];
     }
 
-    // Removed: isValidUnitType, isValidBaseUnit, isValidStockDocument, isValidStockUpdate
-    // These were only used for inventory validation which is no longer needed in recipe-based system
+    function isValidUnitType(unitType) {
+      return unitType in ['weight', 'count'];
+    }
+
+    function isValidBaseUnit(unitType, baseUnit) {
+      return (unitType == 'count' && baseUnit == 'pcs') ||
+             (unitType == 'weight' && baseUnit in ['g', 'kg']);
+    }
 
     function isNonNegativeNumber(value) {
       return value is number && value >= 0;
@@ -24,8 +30,26 @@ service cloud.firestore {
              (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
-    // ----- Order Counters (for sequential order numbering) -----
-    match /order_counters/{counterId} {
+    function isValidStockDocument(data) {
+      return data.keys().hasAll(['name', 'unitType', 'baseUnit', 'quantity', 'reorderLevel']) &&
+             data.name is string && data.name.size() > 0 &&
+             isValidUnitType(data.unitType) &&
+             isValidBaseUnit(data.unitType, data.baseUnit) &&
+             isNonNegativeNumber(data.quantity) &&
+             isNonNegativeNumber(data.reorderLevel) &&
+             hasValidTimestamps(data);
+    }
+
+    function isValidStockUpdate(newData, existingData) {
+      return isValidStockDocument(newData) &&
+             newData.name == existingData.name &&
+             newData.unitType == existingData.unitType &&
+             newData.baseUnit == existingData.baseUnit &&
+             newData.quantity >= 0;
+    }
+
+    // ----- Order Counter (for sequential order numbering) -----
+    match /order_counter/{counterId} {
       // Allow read and write for order counter generation
       // This is needed for the sequential order ID system (POS)
       allow read, write: if true;
@@ -37,8 +61,41 @@ service cloud.firestore {
       // Allow read for customers themselves and for admin dashboard (open read for now)
       // TODO: Implement Firebase Auth for staff to restrict this properly
       allow read: if true;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow updates: customers can update their own data OR allow ID verification updates
+      // Simple rule: allow customer updates OR allow updates that include ID verification fields
+      allow update: if 
+        // Customer updating their own data
+        (request.auth != null && request.auth.uid == userId) ||
+        // Allow ID verification updates - check if ID verification fields are being updated
+        request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'discountInfo.IDverification',
+          'discountInfo.idVerifiedAt',
+          'discountInfo.idVerifiedBy',
+          'discountInfo.idVerificationReason',
+          'discountInfo.proofUrl',
+          'discountInfo.proofPath',
+          'discountInfo.selfieUrl',
+          'discountInfo.selfiePath',
+          'idVerificationStatus',
+          'idVerifiedAt',
+          'idVerifiedBy',
+          'idVerificationReason'
+        ]);
+      
       allow delete: if request.auth != null && request.auth.uid == userId;
+
+      // ----- Reviews Subcollection (under customers) -----
+      match /reviews/{reviewId} {
+        // Allow reading reviews (for admin dashboard to view customer reviews)
+        allow read: if true;
+        // Allow creating reviews (customers can create their own reviews)
+        allow create: if true;
+        // Allow updating reviews (customers can update their own reviews)
+        allow update: if true;
+        // Allow deleting reviews (customers can delete their own reviews)
+        allow delete: if true;
+      }
 
       // ----- Cart Items (subcollection under customers) -----
       match /cartItems/{cartItemId} {
@@ -72,11 +129,11 @@ service cloud.firestore {
          (request.resource.data.firstName is string && request.resource.data.firstName.size() > 0)) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastName']) || 
          (request.resource.data.lastName is string && request.resource.data.lastName.size() > 0)) &&
-        (!('email' in request.resource.data.diff(resource.data).affectedKeys()) || 
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']) || 
          (request.resource.data.email is string && request.resource.data.email.matches('.*@.*\\..*'))) &&
-        (!('role' in request.resource.data.diff(resource.data).affectedKeys()) || 
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) || 
          (request.resource.data.role is string && isValidRole(request.resource.data.role))) &&
-        (!('status' in request.resource.data.diff(resource.data).affectedKeys()) || 
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) || 
          (request.resource.data.status is string && isValidStatus(request.resource.data.status)))
       );
 
@@ -84,7 +141,7 @@ service cloud.firestore {
     }
 
     // ----- Stocks (Inventory) - REMOVED: System is now recipe-based -----
-    // Stocks collection is no longer used, but kept commented for reference
+    // Stocks collection is no longer used, but kept in rules for backward compatibility
     // match /stocks/{stockId} {
     //   allow read: if true;
     //   allow create: if isValidStockDocument(request.resource.data);
@@ -115,44 +172,6 @@ service cloud.firestore {
       allow create: if isValidMenuItem(request.resource.data);
       allow update: if isValidMenuItemUpdate(request.resource.data, resource.data);
       allow delete: if true; // Allow deletes to move items to menuArchives
-    }
-
-    // ----- Review validation helper -----
-    function isValidReview(data) {
-      return data.keys().hasAll(['userId', 'rating']) &&
-             data.userId is string &&
-             data.userId.size() > 0 &&
-             data.rating is number &&
-             data.rating >= 1 &&
-             data.rating <= 5 &&
-             (!('text' in data) || data.text is string) &&
-             (!('anonymous' in data) || data.anonymous is bool) &&
-             (!('displayName' in data) || data.displayName is string || data.displayName == null) &&
-             (!('itemId' in data) || data.itemId is string) &&
-             (!('itemName' in data) || data.itemName is string || data.itemName == null) &&
-             hasValidTimestamps(data);
-    }
-
-    // ----- Reviews (subcollection under menu items) -----
-    match /menu/{menuId}/reviews/{reviewId} {
-      allow read: if true;
-
-      function isReviewOwner() {
-        return request.auth != null && resource.data.userId == request.auth.uid;
-      }
-
-      function isReviewOwnerOnCreate() {
-        return request.auth != null && request.resource.data.userId == request.auth.uid;
-      }
-
-      allow create: if isReviewOwnerOnCreate() && isValidReview(request.resource.data);
-
-      allow update: if isReviewOwner() &&
-                    isValidReview(request.resource.data) &&
-                    request.resource.data.userId == resource.data.userId &&
-                    request.resource.data.createdAt == resource.data.createdAt;
-
-      allow delete: if isReviewOwner();
     }
 
     // ----- Menu Archives -----
@@ -482,3 +501,6 @@ service cloud.firestore {
     }
   }
 }
+
+
+

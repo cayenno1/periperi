@@ -507,10 +507,13 @@
                 paymentProof = await uploadPaymentProof(gcashFile);
             } catch (error) {
                 console.error('Payment proof upload failed:', error);
+                console.error('Error code:', error.code);
+                console.error('Error message:', error.message);
+                const errorMsg = error.message || 'Unknown error';
                 if (window.showAlert) {
-                    window.showAlert('Failed to upload your GCash payment screenshot. Please check your connection and try again.', 'error');
+                    window.showAlert(`Failed to upload your GCash payment screenshot: ${errorMsg}. Please check your connection and try again.`, 'error');
                 } else {
-                    alert('Failed to upload your GCash payment screenshot. Please check your connection and try again.');
+                    alert(`Failed to upload your GCash payment screenshot: ${errorMsg}. Please check your connection and try again.`);
                 }
                 if (btn) {
                     btn.disabled = false;

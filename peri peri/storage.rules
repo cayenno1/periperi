@@ -43,6 +43,34 @@ service firebase.storage {
       allow write: if false;  // Only admins can write via Firebase Console
     }
     
+    // Allow read access to promotion/banner images (public read for displaying banners)
+    match /promotionImages/{fileName} {
+      // Allow public read: banners need to be visible to all users
+      allow read: if true;
+      
+      // Allow write (upload): Since app uses custom session auth (not Firebase Auth),
+      // allow writes with file size and content type restrictions
+      allow write: if request.resource.size < 5 * 1024 * 1024  // Max 5MB
+                   && (
+                     // Allow if content type is an image (if set)
+                     !('contentType' in request.resource) ||
+                     request.resource.contentType.matches('image/.*')
+                   );
+    }
+    
+    // Allow read access to menu images (public read)
+    match /menuImages/{allPaths=**} {
+      allow read: if true;
+      // Allow write: Since app uses custom session auth (not Firebase Auth),
+      // allow writes with file size and content type restrictions
+      allow write: if request.resource.size < 5 * 1024 * 1024  // Max 5MB
+                   && (
+                     // Allow if content type is an image (if set)
+                     !('contentType' in request.resource) ||
+                     request.resource.contentType.matches('image/.*')
+                   );
+    }
+    
     // Default: deny all other access
     match /{allPaths=**} {
       allow read, write: if false;
