@@ -11115,6 +11115,19 @@ body.account-page {
   font-weight: 500;
 }
 
+.gcash-account-name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.gcash-account-name .label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
 .gcash-ref {
   display: flex;
   flex-direction: column;

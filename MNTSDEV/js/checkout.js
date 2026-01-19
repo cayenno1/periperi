@@ -344,13 +344,15 @@
             return;
         }
 
-        // If GCash is selected, require both screenshot and reference number
+        // If GCash is selected, require screenshot, account name, and reference number
         // Cash payment doesn't require any proof
         let gcashFile = null;
+        let gcashAccountName = '';
         let gcashRefNo = '';
         if (paymentMethod === 'gcash') {
             const fileInput = document.getElementById('payment-proof');
             const file = fileInput && fileInput.files && fileInput.files[0];
+            const accountNameInput = document.getElementById('gcash-account-name');
             const refInput = document.getElementById('gcash-ref');
 
             if (!file) {
@@ -363,6 +365,17 @@
                 return;
             }
             gcashFile = file;
+
+            gcashAccountName = (accountNameInput?.value || '').trim();
+            if (!gcashAccountName) {
+                flagCheckoutError(accountNameInput);
+                if (window.showAlert) {
+                    window.showAlert('Please enter your GCash account name.', 'warning');
+                } else {
+                    alert('Please enter your GCash account name.');
+                }
+                return;
+            }
 
             gcashRefNo = (refInput?.value || '').trim();
             if (!gcashRefNo) {
@@ -535,6 +548,7 @@
                 method: paymentType,
                 gcashProofUrl: (paymentMethod === 'gcash' && paymentProof) ? paymentProof.url : null,
                 gcashProofPath: (paymentMethod === 'gcash' && paymentProof) ? paymentProof.path : null,
+                gcashAccountName: (paymentMethod === 'gcash' && gcashAccountName) ? gcashAccountName : null,
                 gcashRefNo: (paymentMethod === 'gcash' && gcashRefNo) ? gcashRefNo : null
             };
 
@@ -1144,6 +1158,7 @@
                     method: paymentInfo && paymentInfo.method ? paymentInfo.method : null,
                     gcashProofUrl: paymentInfo && paymentInfo.gcashProofUrl ? paymentInfo.gcashProofUrl : null,
                     gcashProofPath: paymentInfo && paymentInfo.gcashProofPath ? paymentInfo.gcashProofPath : null,
+                    gcashAccountName: paymentInfo && paymentInfo.gcashAccountName ? paymentInfo.gcashAccountName : null,
                     gcashRefNo: paymentInfo && paymentInfo.gcashRefNo ? paymentInfo.gcashRefNo : null
                 },
                 timestamp: dateOnly,
@@ -1340,6 +1355,7 @@
                     method: paymentInfo && paymentInfo.method ? paymentInfo.method : null,
                     gcashProofUrl: paymentInfo && paymentInfo.gcashProofUrl ? paymentInfo.gcashProofUrl : null,
                     gcashProofPath: paymentInfo && paymentInfo.gcashProofPath ? paymentInfo.gcashProofPath : null,
+                    gcashAccountName: paymentInfo && paymentInfo.gcashAccountName ? paymentInfo.gcashAccountName : null,
                     gcashRefNo: paymentInfo && paymentInfo.gcashRefNo ? paymentInfo.gcashRefNo : null
                 },
                 timestamp: dateOnly,

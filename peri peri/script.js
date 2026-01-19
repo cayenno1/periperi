@@ -1076,6 +1076,9 @@ function normalizeOrderDoc(docSnap) {
                                    paymentInfo.transactionRef || paymentInfo.transaction_ref || 
                                    data.paymentReference || data.payment_reference || 
                                    data.gcashRefNo || data.gcash_ref_no || '';
+    const gcashAccountName = paymentInfo.gcashAccountName || paymentInfo.gcash_account_name || 
+                             paymentInfo.accountName || paymentInfo.account_name || 
+                             data.gcashAccountName || data.gcash_account_name || '';
     const paymentTimestamp = paymentInfo.paymentTimestamp || paymentInfo.payment_timestamp || 
                             paymentInfo.timestamp || data.paymentTimestamp || data.payment_timestamp || null;
     
@@ -1111,6 +1114,7 @@ function normalizeOrderDoc(docSnap) {
         paymentProofPath: paymentProofPath,
         paymentProofUrl: paymentProofUrl,
         paymentReferenceNumber: paymentReferenceNumber,
+        gcashAccountName: gcashAccountName,
         paymentTimestamp: paymentTimestamp ? (paymentTimestamp instanceof Date ? paymentTimestamp : new Date(paymentTimestamp)) : null,
         paymentVerified: data.paymentVerified || false,
         paymentVerifiedAt: data.paymentVerifiedAt || null,
@@ -2912,17 +2916,34 @@ async function verifyPayment(orderId) {
             imageContainer.style.display = 'block';
             footer.style.display = 'flex';
             
-            // Display reference number if available
-            if (order.paymentReferenceNumber && order.paymentReferenceNumber.trim() !== '') {
-                const refNumberContainer = document.createElement('div');
-                refNumberContainer.setAttribute('data-ref-number-container', 'true');
-                refNumberContainer.style.cssText = 'margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #7E2021;';
-                refNumberContainer.innerHTML = `
-                    <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">GCash Reference Number:</div>
-                    <div style="font-size: 16px; color: #333; font-weight: 600; font-family: monospace; letter-spacing: 1px;">${order.paymentReferenceNumber.trim().toUpperCase()}</div>
-                `;
+            // Display GCash account name and reference number if available
+            if ((order.gcashAccountName && order.gcashAccountName.trim() !== '') || 
+                (order.paymentReferenceNumber && order.paymentReferenceNumber.trim() !== '')) {
+                const paymentInfoContainer = document.createElement('div');
+                paymentInfoContainer.setAttribute('data-ref-number-container', 'true');
+                paymentInfoContainer.style.cssText = 'margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #7E2021;';
+                
+                let paymentInfoHtml = '';
+                
+                // Display GCash Account Name if available
+                if (order.gcashAccountName && order.gcashAccountName.trim() !== '') {
+                    paymentInfoHtml += `
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">GCash Account Name:</div>
+                        <div style="font-size: 16px; color: #333; font-weight: 600; margin-bottom: 12px;">${order.gcashAccountName.trim()}</div>
+                    `;
+                }
+                
+                // Display Reference Number if available
+                if (order.paymentReferenceNumber && order.paymentReferenceNumber.trim() !== '') {
+                    paymentInfoHtml += `
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-weight: 500;">GCash Reference Number:</div>
+                        <div style="font-size: 16px; color: #333; font-weight: 600; font-family: monospace; letter-spacing: 1px;">${order.paymentReferenceNumber.trim().toUpperCase()}</div>
+                    `;
+                }
+                
+                paymentInfoContainer.innerHTML = paymentInfoHtml;
                 // Insert before the image
-                imageContainer.insertBefore(refNumberContainer, receiptImage);
+                imageContainer.insertBefore(paymentInfoContainer, receiptImage);
             }
             
             // Show payment history if available
