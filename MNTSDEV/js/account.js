@@ -16,6 +16,192 @@
     let closeAddressModal = null;
     let editingAddressId = null;
 
+    // ============================================
+    // PSGC ADDRESS HELPERS (QC + North Caloocan only)
+    // ============================================
+    // Prefer a CORS-friendly source first; fallback to PSGC Cloud if available.
+    const PSGC_SOURCES = [
+        {
+            name: 'psgc-gitlab',
+            buildBarangaysUrl: (cityCode) => `https://psgc.gitlab.io/api/cities/${encodeURIComponent(cityCode)}/barangays/`
+        },
+        {
+            name: 'psgc-cloud',
+            buildBarangaysUrl: (cityCode) => `https://psgc.cloud/api/v1/cities-municipalities/${encodeURIComponent(cityCode)}/barangays`
+        }
+    ];
+    const psgcBarangayCache = new Map(); // cityCode -> [{code,name,...}]
+
+    function getAddressCityEl() {
+        return document.getElementById('addressCity');
+    }
+
+    function getAddressBarangayEl() {
+        return document.getElementById('addressBarangay');
+    }
+
+    function getAddressBarangayListEl() {
+        return document.getElementById('addressBarangayList');
+    }
+
+    function getSelectedCityPsgcCode() {
+        const cityEl = getAddressCityEl();
+        if (!cityEl) return null;
+        const opt = cityEl.options?.[cityEl.selectedIndex];
+        return opt?.dataset?.psgcCityCode || null;
+    }
+
+    function parseBarangayNumber(name) {
+        const raw = String(name || '');
+        const match = raw.match(/(\d{1,3})/);
+        if (!match) return null;
+        const n = Number(match[1]);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    // Heuristic: Caloocan barangays are numbered 1..188; North is typically 77..188.
+    function isNorthCaloocanBarangayName(name) {
+        const n = parseBarangayNumber(name);
+        if (n !== null) return n >= 77;
+
+        // Fallback for non-numbered names (defensive)
+        const upper = String(name || '').toUpperCase();
+        const northHints = ['BAGONG SILANG', 'TALA', 'CAMARIN', 'DEPARO', 'LLANO'];
+        return northHints.some((hint) => upper.includes(hint));
+    }
+
+    function setSelectOptions(selectEl, { placeholder, values }) {
+        if (!selectEl) return;
+        selectEl.innerHTML = '';
+
+        const placeholderOpt = document.createElement('option');
+        placeholderOpt.value = '';
+        placeholderOpt.textContent = placeholder;
+        selectEl.appendChild(placeholderOpt);
+
+        values.forEach(({ value, label, dataset }) => {
+            const opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = label ?? value;
+            if (dataset) {
+                Object.entries(dataset).forEach(([key, val]) => {
+                    if (val !== undefined && val !== null) {
+                        opt.dataset[key] = String(val);
+                    }
+                });
+            }
+            selectEl.appendChild(opt);
+        });
+    }
+
+    function resetBarangaySelect() {
+        const barangayEl = getAddressBarangayEl();
+        const listEl = getAddressBarangayListEl();
+        if (!barangayEl) return;
+        // Barangay is an <input list="..."> (searchable). We clear the datalist.
+        if (listEl) listEl.innerHTML = '';
+        barangayEl.value = '';
+        barangayEl.placeholder = 'Select a city first';
+        barangayEl.disabled = true;
+    }
+
+    async function fetchPsgcBarangays(cityCode) {
+        if (psgcBarangayCache.has(cityCode)) return psgcBarangayCache.get(cityCode);
+
+        let lastError = null;
+
+        for (const source of PSGC_SOURCES) {
+            const url = source.buildBarangaysUrl(cityCode);
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                if (!res.ok) {
+                    lastError = new Error(`[${source.name}] PSGC request failed (${res.status})`);
+                    continue;
+                }
+
+                const json = await res.json();
+                // Handle a few common shapes:
+                // - Array of barangays
+                // - { data: [...] }
+                // - { barangays: [...] }
+                const list =
+                    Array.isArray(json) ? json :
+                    (Array.isArray(json?.data) ? json.data :
+                    (Array.isArray(json?.barangays) ? json.barangays : []));
+
+                if (Array.isArray(list) && list.length > 0) {
+                    psgcBarangayCache.set(cityCode, list);
+                    return list;
+                }
+
+                lastError = new Error(`[${source.name}] Unexpected PSGC response shape`);
+            } catch (error) {
+                lastError = error;
+                continue;
+            }
+        }
+
+        throw lastError || new Error('PSGC request failed');
+    }
+
+    async function refreshBarangayOptions(desiredBarangayValue = null) {
+        const cityEl = getAddressCityEl();
+        const barangayEl = getAddressBarangayEl();
+        const listEl = getAddressBarangayListEl();
+        if (!cityEl || !barangayEl) return;
+
+        const cityValue = cityEl.value;
+        const cityCode = getSelectedCityPsgcCode();
+
+        if (!cityValue || !cityCode) {
+            resetBarangaySelect();
+            return;
+        }
+
+        if (listEl) listEl.innerHTML = '';
+        barangayEl.value = '';
+        barangayEl.placeholder = 'Loading barangays...';
+        barangayEl.disabled = true;
+
+        try {
+            let barangays = await fetchPsgcBarangays(cityCode);
+            barangays = barangays
+                .map((b) => ({ code: b?.code, name: String(b?.name || '').trim() }))
+                .filter((b) => b.name);
+
+            if (cityValue === 'Caloocan City') {
+                barangays = barangays.filter((b) => isNorthCaloocanBarangayName(b.name));
+            }
+
+            barangays.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
+
+            if (listEl) {
+                listEl.innerHTML = '';
+                barangays.forEach((b) => {
+                    const opt = document.createElement('option');
+                    opt.value = b.name;
+                    if (b.code) opt.dataset.psgcCode = String(b.code);
+                    listEl.appendChild(opt);
+                });
+            }
+            barangayEl.placeholder = 'Search barangay';
+            barangayEl.disabled = false;
+
+            if (desiredBarangayValue) {
+                const hasOption = listEl ? Array.from(listEl.options).some((opt) => opt.value === desiredBarangayValue) : true;
+                barangayEl.value = hasOption ? desiredBarangayValue : '';
+                if (!hasOption) showToast('Please reselect barangay (previous selection is outside the supported area).', 'warning');
+            }
+        } catch (error) {
+            console.warn('[PSGC] Failed to load barangays:', error);
+            if (listEl) listEl.innerHTML = '';
+            barangayEl.value = '';
+            barangayEl.placeholder = 'Failed to load barangays. Try again.';
+            barangayEl.disabled = true;
+            showToast('Failed to load barangays. Please check your connection and try again.', 'error');
+        }
+    }
+
     // Add address modal
     function openAddAddressModal() {
         const user = window.firebaseAuth?.currentUser;
@@ -27,6 +213,7 @@
         if (addressModalTitle) addressModalTitle.textContent = 'Add Address';
         if (addressSubmitText) addressSubmitText.textContent = 'Save Address';
         if (addressForm) addressForm.reset();
+        resetBarangaySelect();
         
         // Clear all error messages
         document.querySelectorAll('#addressForm .error-message').forEach(el => {
@@ -37,7 +224,7 @@
     }
 
     // Edit address modal
-    function openEditAddressModal(addressId) {
+    async function openEditAddressModal(addressId) {
         const user = window.firebaseAuth?.currentUser;
         if (!user) return;
 
@@ -63,13 +250,22 @@
         const addressStreetField = document.getElementById('addressStreet');
         const addressCityField = document.getElementById('addressCity');
         const addressBarangayField = document.getElementById('addressBarangay');
-        const addressPostalField = document.getElementById('addressPostal');
+        const addressPostalField = document.getElementById('addressPostal'); // legacy (removed from UI)
 
         if (addressLabelField) addressLabelField.value = addressData.label;
         if (addressStreetField) addressStreetField.value = addressData.street;
-        if (addressCityField) addressCityField.value = addressData.city;
-        if (addressBarangayField) addressBarangayField.value = addressData.barangay;
+        if (addressCityField) {
+            const hasCity = Array.from(addressCityField.options || []).some(opt => opt.value === addressData.city);
+            addressCityField.value = hasCity ? addressData.city : '';
+            if (!hasCity && addressData.city) {
+                showToast('Only Quezon City and North Caloocan are supported for addresses. Please select a supported city.', 'warning');
+            }
+        }
         if (addressPostalField) addressPostalField.value = addressData.postal;
+
+        // Load barangays for selected city, then select saved barangay if available
+        resetBarangaySelect();
+        await refreshBarangayOptions(addressData.barangay);
 
         // Clear error messages
         document.querySelectorAll('#addressForm .error-message').forEach(el => {
@@ -84,6 +280,7 @@
         if (addressModal) addressModal.style.display = 'none';
         editingAddressId = null;
         if (addressForm) addressForm.reset();
+        resetBarangaySelect();
         
         // Clear error messages
         document.querySelectorAll('#addressForm .error-message').forEach(el => {
@@ -102,15 +299,15 @@
         const streetField = document.getElementById('addressStreet');
         const cityField = document.getElementById('addressCity');
         const barangayField = document.getElementById('addressBarangay');
-        const postalField = document.getElementById('addressPostal');
+        const postalField = document.getElementById('addressPostal'); // legacy (removed from UI)
 
-        if (!labelField || !streetField || !cityField || !barangayField || !postalField) return;
+        if (!labelField || !streetField || !cityField || !barangayField) return;
 
         const label = labelField.value.trim();
         const street = streetField.value.trim();
         const city = cityField.value.trim();
         const barangay = barangayField.value.trim();
-        const postal = postalField.value.trim();
+        const postal = postalField ? postalField.value.trim() : '';
 
         // Check inputs
         let hasError = false;
@@ -134,9 +331,27 @@
             if (errorEl) errorEl.textContent = 'Barangay is required';
             hasError = true;
         }
-        if (!postal) {
-            const errorEl = document.getElementById('addressPostalError');
-            if (errorEl) errorEl.textContent = 'Postal code is required';
+
+        // Delivery area validation
+        const allowedCities = new Set(['Quezon City', 'Caloocan City']);
+        if (city && !allowedCities.has(city)) {
+            const errorEl = document.getElementById('addressCityError');
+            if (errorEl) errorEl.textContent = 'We only deliver to Quezon City and North Caloocan';
+            hasError = true;
+        }
+        // Ensure barangay matches the loaded PSGC list for the selected city (searchable input can be typed).
+        const listEl = getAddressBarangayListEl();
+        if (city && barangay && listEl) {
+            const isInList = Array.from(listEl.options).some((opt) => opt.value === barangay);
+            if (!isInList) {
+                const errorEl = document.getElementById('addressBarangayError');
+                if (errorEl) errorEl.textContent = 'Please select a barangay from the list';
+                hasError = true;
+            }
+        }
+        if (city === 'Caloocan City' && barangay && !isNorthCaloocanBarangayName(barangay)) {
+            const errorEl = document.getElementById('addressBarangayError');
+            if (errorEl) errorEl.textContent = 'We only deliver to North Caloocan barangays';
             hasError = true;
         }
 
@@ -160,8 +375,8 @@
                 street: street,
                 city: city,
                 barangay: barangay,
-                postal: postal,
-                fullAddress: `${street}, ${city}, ${barangay} ${postal}`,
+                ...(postal ? { postal } : {}),
+                fullAddress: `${street}, ${city}, ${barangay}${postal ? ` ${postal}` : ''}`,
                 updatedAt: new Date().toISOString()
             };
             
@@ -2273,15 +2488,27 @@
             });
         }
 
-        ['addressLabel', 'addressStreet', 'addressCity', 'addressBarangay', 'addressPostal'].forEach(id => {
+        ['addressLabel', 'addressStreet', 'addressCity', 'addressBarangay'].forEach(id => {
             const field = document.getElementById(id);
             if (field) {
-                field.addEventListener('input', () => {
+                const clearError = () => {
                     const errorEl = document.getElementById(id + 'Error');
                     if (errorEl) errorEl.textContent = '';
-                });
+                };
+                field.addEventListener('input', clearError);
+                field.addEventListener('change', clearError);
             }
         });
+
+        // PSGC address dropdown events
+        const cityEl = getAddressCityEl();
+        if (cityEl) {
+            cityEl.addEventListener('change', () => {
+                const barangayEl = getAddressBarangayEl();
+                if (barangayEl) barangayEl.value = '';
+                refreshBarangayOptions();
+            });
+        }
 
         // Confirmation modal event listeners
         if (confirmModalYes) {

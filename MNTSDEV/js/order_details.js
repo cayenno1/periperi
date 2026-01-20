@@ -505,8 +505,11 @@
     const isCompleted = statusInfo.isCompleted;
     
     if (itemsContainer) {
-      itemsContainer.innerHTML = items
-        .map((it, index) => {
+      if (!items.length) {
+        itemsContainer.innerHTML = '<div class="od-empty">No items found for this order.</div>';
+      } else {
+        itemsContainer.innerHTML = items
+          .map((it, index) => {
           const name = it.name || 'Item';
           const qty =
             typeof it.quantity === 'number'
@@ -520,22 +523,39 @@
           
           // Show review button only for completed orders and authenticated users
           const reviewButton = (isCompleted && user && itemId) ? `
-            <button class="od-item-review-btn" onclick="orderDetails.toggleItemReview('${itemId}', ${index})" data-item-id="${itemId}">
-              Write a Review
+            <button class="od-item-review-btn" onclick="orderDetails.toggleItemReview('${itemId}', ${index})" data-item-id="${itemId}" data-item-index="${index}">
+              <i class="fas fa-pen-to-square" aria-hidden="true"></i>
+              <span>Write a Review</span>
             </button>
+          ` : '';
+          
+          const inlineReview = (isCompleted && user && itemId) ? `
+            <div class="od-review-item od-review-item--inline" data-item-id="${itemId}" data-item-index="${index}" style="display:none;">
+              <div class="od-review-loading">Loading review…</div>
+            </div>
           ` : '';
           
           return `
               <div class="od-item-row" data-item-index="${index}">
-                <div class="od-item-info">
-                  <span>${name} x ${qty}</span>
-                  <span>₱${lineTotal.toFixed(2)}</span>
+                <div class="od-item-top">
+                  <div class="od-item-title">${name}</div>
+                  <div class="od-item-amount">₱${lineTotal.toFixed(2)}</div>
                 </div>
-                ${reviewButton}
+                <div class="od-item-bottom">
+                  <div class="od-item-meta">Qty: <strong>${qty}</strong></div>
+                  ${reviewButton}
+                </div>
+                ${inlineReview}
               </div>
             `;
-        })
-        .join('');
+          })
+          .join('');
+      }
+    }
+
+    // Render inline review UIs under each item (completed orders only)
+    if (isCompleted && user && itemsContainer) {
+      renderInlineItemReviews(items, itemsContainer);
     }
 
     // Service info from deliveryInfo
@@ -554,18 +574,38 @@
       }
 
       if (serviceDetailsEl) {
-        const lines = [];
-        lines.push(`<div>Service: ${subtitle}</div>`);
+        const rows = [];
+        rows.push(`
+          <div class="od-kv-row">
+            <div class="od-kv-key"><i class="fas fa-truck-fast" aria-hidden="true"></i><span>Service</span></div>
+            <div class="od-kv-val">${subtitle}</div>
+          </div>
+        `);
         if (type === 'delivery' && di.address) {
-          lines.push(`<div>Address: ${di.address}</div>`);
+          rows.push(`
+            <div class="od-kv-row">
+              <div class="od-kv-key"><i class="fas fa-location-dot" aria-hidden="true"></i><span>Address</span></div>
+              <div class="od-kv-val">${di.address}</div>
+            </div>
+          `);
         }
         if ((type === 'dinein' || type === 'dine-in') && di.tableNumber) {
-          lines.push(`<div>Table: ${di.tableNumber}</div>`);
+          rows.push(`
+            <div class="od-kv-row">
+              <div class="od-kv-key"><i class="fas fa-chair" aria-hidden="true"></i><span>Table</span></div>
+              <div class="od-kv-val">${di.tableNumber}</div>
+            </div>
+          `);
         }
         if (type === 'pickup' && di.storeLocation) {
-          lines.push(`<div>Store: ${di.storeLocation}</div>`);
+          rows.push(`
+            <div class="od-kv-row">
+              <div class="od-kv-key"><i class="fas fa-store" aria-hidden="true"></i><span>Store</span></div>
+              <div class="od-kv-val">${di.storeLocation}</div>
+            </div>
+          `);
         }
-        serviceDetailsEl.innerHTML = lines.join('');
+        serviceDetailsEl.innerHTML = `<div class="od-kv">${rows.join('')}</div>`;
       }
       if (serviceSegment) serviceSegment.style.display = 'block';
 
@@ -711,40 +751,137 @@
     currentOrderForReceipt = order;
     currentOrderIdForReceipt = orderId || order.id || null;
 
-    // Show reviews section ONLY for completed orders (not cancelled/declined)
-    // Reviews are synced with Firebase for the specific account
-    if (statusInfo.isCompleted && !statusInfo.isCancelled && reviewsSegment && orderItemReviews) {
-      const auth = window.firebaseAuth;
-      const user = auth?.currentUser;
-      
-      if (user) {
-        reviewsSegment.style.display = 'block';
-        // Render reviews - fetches fresh from Firebase and filters by current user's account
-        renderItemReviews(items, orderItemReviews);
-      } else {
-        reviewsSegment.style.display = 'none';
-      }
-    } else if (reviewsSegment) {
-      reviewsSegment.style.display = 'none';
+    // Reviews are now shown inline under each item row.
+    if (reviewsSegment) reviewsSegment.style.display = 'none';
+  }
+
+  function cssEscapeSafe(value) {
+    try {
+      if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
+    } catch (e) {}
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  function ratingKey(itemId, itemIndex) {
+    return `${String(itemId)}__${String(itemIndex)}`;
+  }
+
+  async function renderInlineItemReviews(items, itemsContainer) {
+    if (!itemsContainer || !Array.isArray(items) || items.length === 0) return;
+
+    const auth = window.firebaseAuth;
+    const user = auth?.currentUser;
+    if (!user) return;
+
+    if (!window.firestore?.fetchReviewsForItem) {
+      // Replace placeholders with an error message
+      items.forEach((item, index) => {
+        const itemId = item?.itemId;
+        if (!itemId) return;
+        const el = itemsContainer.querySelector(`.od-review-item[data-item-id="${cssEscapeSafe(itemId)}"][data-item-index="${index}"]`);
+        if (el) el.innerHTML = '<div class="od-empty">Reviews are not available right now.</div>';
+      });
+      return;
     }
+
+    await Promise.all(
+      items.map(async (item, index) => {
+        const itemId = item?.itemId;
+        if (!itemId) return;
+
+        const container = itemsContainer.querySelector(`.od-review-item[data-item-id="${cssEscapeSafe(itemId)}"][data-item-index="${index}"]`);
+        if (!container) return;
+
+        let existingReview = null;
+        try {
+          const reviews = await window.firestore.fetchReviewsForItem(itemId);
+          existingReview = reviews.find((r) => r.userId && user.uid && r.userId === user.uid) || null;
+        } catch (e) {
+          console.warn('Failed to load reviews for item:', itemId, e);
+        }
+
+        const safeItemName = (item?.name || 'Item').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeItemId = String(itemId).replace(/"/g, '&quot;');
+        const safeReviewId = existingReview ? String(existingReview.id || '').replace(/"/g, '&quot;') : '';
+        const safeReviewText = existingReview
+          ? (existingReview.text || 'No comment')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;')
+          : '';
+
+        if (existingReview) {
+          container.innerHTML = `
+            <div class="od-review-item-header">
+              <h4>${safeItemName}</h4>
+              <span class="review-badge">Reviewed</span>
+            </div>
+            <div class="od-review-existing">
+              <div class="od-review-rating">
+                ${'★'.repeat(Math.floor(existingReview.rating || 0))}${'☆'.repeat(5 - Math.floor(existingReview.rating || 0))}
+                <span>${(existingReview.rating || 0).toFixed(1)}</span>
+              </div>
+              <p class="od-review-text">${safeReviewText}</p>
+              <button class="od-review-edit-btn" onclick="orderDetails.editReview('${safeItemId}', '${safeReviewId}', ${index})">
+                Edit Review
+              </button>
+            </div>
+          `;
+        } else {
+          container.innerHTML = `
+            <div class="od-review-item-header">
+              <h4>${safeItemName}</h4>
+            </div>
+            <div class="od-review-form-container">
+              <div class="od-review-stars" data-item-id="${safeItemId}" data-item-index="${index}">
+                ${[1, 2, 3, 4, 5]
+                  .map(
+                    (i) => `
+                  <span class="od-review-star" data-rating="${i}" onclick="orderDetails.setItemRating('${safeItemId}', ${index}, ${i})">
+                    <i class="far fa-star"></i>
+                  </span>
+                `
+                  )
+                  .join('')}
+              </div>
+              <textarea 
+                class="od-review-textarea" 
+                id="review-text-${safeItemId}-${index}"
+                placeholder="Share your experience with this item..."
+                rows="3"
+              ></textarea>
+              <button 
+                class="od-review-submit-btn" 
+                onclick="orderDetails.submitItemReview('${safeItemId}', ${index})"
+                data-item-id="${safeItemId}"
+                data-item-index="${index}"
+              >
+                Submit Review
+              </button>
+            </div>
+          `;
+        }
+      })
+    );
   }
 
   async function renderItemReviews(items, container) {
     if (!container || !Array.isArray(items) || items.length === 0) {
-      container.innerHTML = '';
+      if (container) container.innerHTML = '<div class="od-empty">No items to review for this order.</div>';
       return;
     }
 
     const auth = window.firebaseAuth;
     const user = auth?.currentUser;
     if (!user) {
-      container.innerHTML = '<p>Please sign in to review items.</p>';
+      container.innerHTML = '<div class="od-empty">Sign in to review items.</div>';
       return;
     }
 
     // Ensure firestore is available
     if (!window.firestore?.fetchReviewsForItem) {
-      container.innerHTML = '<p>Reviews are not available right now. Please try again later.</p>';
+      container.innerHTML = '<div class="od-empty">Reviews are not available right now. Please try again later.</div>';
       return;
     }
 
@@ -833,8 +970,9 @@
   }
 
   function toggleItemReview(itemId, itemIndex) {
-    const reviewItem = document.querySelector(`.od-review-item[data-item-id="${itemId}"]`);
-    const reviewBtn = document.querySelector(`.od-item-review-btn[data-item-id="${itemId}"]`);
+    const esc = cssEscapeSafe(itemId);
+    const reviewItem = document.querySelector(`.od-review-item[data-item-id="${esc}"][data-item-index="${itemIndex}"]`);
+    const reviewBtn = document.querySelector(`.od-item-review-btn[data-item-id="${esc}"][data-item-index="${itemIndex}"]`);
     
     if (!reviewItem || !reviewBtn) return;
     
@@ -842,20 +980,26 @@
     
     if (isVisible) {
       reviewItem.style.display = 'none';
-      reviewBtn.textContent = 'Write a Review';
+      reviewBtn.innerHTML = '<i class="fas fa-pen-to-square" aria-hidden="true"></i><span>Write a Review</span>';
       reviewBtn.classList.remove('active');
     } else {
       reviewItem.style.display = 'block';
-      reviewBtn.textContent = 'Close';
+      reviewBtn.innerHTML = '<i class="fas fa-xmark" aria-hidden="true"></i><span>Close</span>';
       reviewBtn.classList.add('active');
     }
   }
 
   let currentItemRatings = {};
 
-  function setItemRating(itemId, rating) {
-    currentItemRatings[itemId] = rating;
-    const stars = document.querySelectorAll(`.od-review-stars[data-item-id="${itemId}"] .od-review-star`);
+  function setItemRating(itemId, itemIndexOrRating, maybeRating) {
+    const hasIndex = typeof maybeRating === 'number';
+    const itemIndex = hasIndex ? itemIndexOrRating : 0;
+    const rating = hasIndex ? maybeRating : itemIndexOrRating;
+
+    currentItemRatings[ratingKey(itemId, itemIndex)] = rating;
+    const stars = document.querySelectorAll(
+      `.od-review-stars[data-item-id="${cssEscapeSafe(itemId)}"][data-item-index="${itemIndex}"] .od-review-star`
+    );
     stars.forEach((star, index) => {
       const icon = star.querySelector('i');
       if (index < rating) {
@@ -941,7 +1085,7 @@
     }
   }
 
-  async function submitItemReview(itemId) {
+  async function submitItemReview(itemId, itemIndex = 0) {
     const auth = window.firebaseAuth;
     const user = auth?.currentUser;
     if (!user) {
@@ -955,13 +1099,15 @@
       return;
     }
 
-    const rating = currentItemRatings[itemId] || 0;
+    const rating = currentItemRatings[ratingKey(itemId, itemIndex)] || currentItemRatings[itemId] || 0;
     if (rating === 0) {
       showNotification('Please select a rating.', 'error');
       return;
     }
 
-    const textarea = document.getElementById(`review-text-${itemId}`);
+    const textarea =
+      document.getElementById(`review-text-${itemId}-${itemIndex}`) ||
+      document.getElementById(`review-text-${itemId}`);
     const text = textarea ? textarea.value.trim() : '';
 
     try {
@@ -973,17 +1119,15 @@
         anonymous: false
       });
 
-      // Reload reviews from Firebase to ensure sync with account
-      const orderItemReviews = document.getElementById('orderItemReviews');
+      // Reload inline reviews from Firebase to ensure sync with account
+      const itemsContainer = document.getElementById('orderItems');
       const order = currentOrderForReceipt;
-      if (order && orderItemReviews) {
-        // Re-render reviews to show the newly submitted review
-        await renderItemReviews(order.items || [], orderItemReviews);
-        // Show the review item after reload
-        const reviewItem = document.querySelector(`.od-review-item[data-item-id="${itemId}"]`);
-        if (reviewItem) {
-          reviewItem.style.display = 'block';
-        }
+      if (order && itemsContainer) {
+        await renderInlineItemReviews(order.items || [], itemsContainer);
+        const reviewItem = document.querySelector(
+          `.od-review-item[data-item-id="${cssEscapeSafe(itemId)}"][data-item-index="${itemIndex}"]`
+        );
+        if (reviewItem) reviewItem.style.display = 'block';
       }
       
       // Show success notification with option to view item
@@ -1001,7 +1145,7 @@
     }
   }
 
-  async function editReview(itemId, reviewId) {
+  async function editReview(itemId, reviewId, itemIndex = 0) {
     const auth = window.firebaseAuth;
     const user = auth?.currentUser;
     
@@ -1032,13 +1176,15 @@
         return;
       }
 
-      const container = document.querySelector(`.od-review-item[data-item-id="${itemId}"]`);
+      const container = document.querySelector(
+        `.od-review-item[data-item-id="${cssEscapeSafe(itemId)}"][data-item-index="${itemIndex}"]`
+      );
       if (!container) {
         showNotification('Review container not found.', 'error');
         return;
       }
 
-      currentItemRatings[itemId] = review.rating;
+      currentItemRatings[ratingKey(itemId, itemIndex)] = review.rating;
       
       // Escape HTML for safety
       const safeItemName = (review.itemName || 'Item').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1051,23 +1197,24 @@
           <h4>${safeItemName}</h4>
         </div>
         <div class="od-review-form-container">
-          <div class="od-review-stars" data-item-id="${safeItemId}">
+          <div class="od-review-stars" data-item-id="${safeItemId}" data-item-index="${itemIndex}">
             ${[1, 2, 3, 4, 5].map(i => `
-              <span class="od-review-star" data-rating="${i}" onclick="orderDetails.setItemRating('${safeItemId}', ${i})">
+              <span class="od-review-star" data-rating="${i}" onclick="orderDetails.setItemRating('${safeItemId}', ${itemIndex}, ${i})">
                 <i class="${i <= review.rating ? 'fas' : 'far'} fa-star" style="color: ${i <= review.rating ? '#ffc107' : '#ddd'}"></i>
               </span>
             `).join('')}
           </div>
           <textarea 
             class="od-review-textarea" 
-            id="review-text-${safeItemId}"
+            id="review-text-${safeItemId}-${itemIndex}"
             placeholder="Share your experience with this item..."
             rows="3"
           >${safeReviewText}</textarea>
           <button 
             class="od-review-submit-btn" 
-            onclick="orderDetails.updateItemReview('${safeItemId}', '${safeReviewId}')"
+            onclick="orderDetails.updateItemReview('${safeItemId}', '${safeReviewId}', ${itemIndex})"
             data-item-id="${safeItemId}"
+            data-item-index="${itemIndex}"
           >
             Update Review
           </button>
@@ -1079,7 +1226,7 @@
     }
   }
 
-  async function updateItemReview(itemId, reviewId) {
+  async function updateItemReview(itemId, reviewId, itemIndex = 0) {
     const auth = window.firebaseAuth;
     const user = auth?.currentUser;
     if (!user) {
@@ -1112,13 +1259,15 @@
       console.warn('Could not verify review ownership, proceeding anyway:', e);
     }
 
-    const rating = currentItemRatings[itemId] || 0;
+    const rating = currentItemRatings[ratingKey(itemId, itemIndex)] || currentItemRatings[itemId] || 0;
     if (rating === 0) {
       showNotification('Please select a rating.', 'error');
       return;
     }
 
-    const textarea = document.getElementById(`review-text-${itemId}`);
+    const textarea =
+      document.getElementById(`review-text-${itemId}-${itemIndex}`) ||
+      document.getElementById(`review-text-${itemId}`);
     const text = textarea ? textarea.value.trim() : '';
 
     try {
@@ -1131,17 +1280,15 @@
         reviewId
       });
 
-      // Reload reviews from Firebase to ensure sync with account
-      const orderItemReviews = document.getElementById('orderItemReviews');
+      // Reload inline reviews from Firebase to ensure sync with account
+      const itemsContainer = document.getElementById('orderItems');
       const order = currentOrderForReceipt;
-      if (order && orderItemReviews) {
-        // Re-render reviews to show the updated review
-        await renderItemReviews(order.items || [], orderItemReviews);
-        // Show the review item after reload
-        const reviewItem = document.querySelector(`.od-review-item[data-item-id="${itemId}"]`);
-        if (reviewItem) {
-          reviewItem.style.display = 'block';
-        }
+      if (order && itemsContainer) {
+        await renderInlineItemReviews(order.items || [], itemsContainer);
+        const reviewItem = document.querySelector(
+          `.od-review-item[data-item-id="${cssEscapeSafe(itemId)}"][data-item-index="${itemIndex}"]`
+        );
+        if (reviewItem) reviewItem.style.display = 'block';
       }
       
       showNotification('Review updated successfully!', 'success');

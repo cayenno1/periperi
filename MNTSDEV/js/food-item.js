@@ -440,8 +440,6 @@
         }
 
         try {
-            const user = window.firebaseAuth?.currentUser || null;
-            
             let displayName = currentItemName;
             if (selectedVariation && (selectedVariation.name || selectedVariation.title)) {
                 const variationName = selectedVariation.name || selectedVariation.title;
@@ -466,6 +464,7 @@
                 } : null
             };
 
+            const user = window.firebaseAuth?.currentUser || null;
             if (user) {
                 await window.cart.saveCartItemToFirestore(payload);
             } else {

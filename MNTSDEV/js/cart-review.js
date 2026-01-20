@@ -8,6 +8,20 @@
 
     const GUEST_CART_KEY = 'ppp_guest_cart';
     let availableSauces = []; // Cache for sauces
+    const MAX_QTY = 99;
+
+    function setCartReviewLoading(isLoading) {
+        const container = document.querySelector('.cart-review-container');
+        if (!container) return;
+
+        if (isLoading) {
+            container.classList.add('is-loading');
+            container.setAttribute('aria-busy', 'true');
+        } else {
+            container.classList.remove('is-loading');
+            container.setAttribute('aria-busy', 'false');
+        }
+    }
 
     // Load available sauces
     async function loadSauces() {
@@ -187,7 +201,7 @@
                 // Update cart item price based on variation
                 const unitPrice = variationPrice;
                 const qtyDisplay = cartItem.querySelector('.qty-display');
-                const quantity = qtyDisplay ? parseInt(qtyDisplay.textContent, 10) || 1 : 1;
+                const quantity = qtyDisplay ? clampQty(qtyDisplay.value) : 1;
                 const newLineTotal = unitPrice * quantity;
                 
                 // Update price display
@@ -237,7 +251,7 @@
                 // Update price if variation changed
                 if (variationData && variationData.price) {
                     const qtyDisplay = cartItem.querySelector('.qty-display');
-                    const quantity = qtyDisplay ? parseInt(qtyDisplay.textContent, 10) || 1 : 1;
+                    const quantity = qtyDisplay ? clampQty(qtyDisplay.value) : 1;
                     updateData.price = variationData.price * quantity;
                 }
                 
@@ -339,13 +353,77 @@
         if (idx === -1) return;
 
         const item = cart[idx] || {};
-        const safeQty = Math.max(1, Number(newQty) || 1);
+        const safeQty = clampQty(newQty);
         const numericUnit = typeof unitPrice === 'number' ? unitPrice : Number(unitPrice) || 0;
 
         item.quantity = safeQty;
         item.price = numericUnit * safeQty;
         cart[idx] = item;
         setGuestCart(cart);
+    }
+
+    function clampQty(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 1;
+        return Math.max(1, Math.min(MAX_QTY, Math.floor(n)));
+    }
+
+    function sanitizeQtyInput(raw) {
+        const digits = String(raw ?? '').replace(/[^\d]/g, '').slice(0, 2);
+        return digits;
+    }
+
+    async function commitQuantityForCartItem(cartItem, newQty) {
+        if (!cartItem) return;
+
+        const safeQty = clampQty(newQty);
+        const qtyInput = cartItem.querySelector('.qty-display');
+        if (qtyInput) qtyInput.value = String(safeQty);
+
+        updateCartSummary();
+
+        const docId = cartItem.dataset.cartDocId;
+        const guestId = cartItem.dataset.guestId;
+        const unitPrice = parseFloat(cartItem.dataset.unitPrice || '0') || 0;
+        const source = cartItem.dataset.source || (guestId ? 'guest' : 'user');
+
+        // Guest cart: update localStorage only
+        if (source === 'guest') {
+            updateGuestCartItemQuantity(guestId, safeQty, unitPrice);
+            return;
+        }
+
+        if (!docId || !unitPrice) return;
+
+        try {
+            await window.utils.waitForFirebaseReady();
+
+            const db = window.firebaseDb;
+            const auth = window.firebaseAuth;
+
+            if (!db || !auth || !window.doc || !window.updateDoc) {
+                console.warn('Firebase not fully initialized for cart update');
+                return;
+            }
+
+            const user = auth.currentUser;
+            if (!user) {
+                console.warn('No authenticated user; skipping Firestore cart update');
+                return;
+            }
+
+            const customerRef = window.doc(db, 'customers', user.uid);
+            const cartItemRef = window.doc(customerRef, 'cartItems', docId);
+            const newTotalPrice = unitPrice * safeQty;
+
+            await window.updateDoc(cartItemRef, {
+                quantity: safeQty,
+                price: newTotalPrice,
+                updatedAt: new Date()
+            });
+        } catch (error) {
+            console.error('Error updating cart item quantity:', error);
+        }
     }
 
     function removeGuestCartItem(guestId) {
@@ -429,7 +507,17 @@
                         <button class="qty-btn minus-btn" onclick="cartReview.updateQuantity(this, -1)">
                             <i class="fas fa-minus"></i>
                         </button>
-                        <span class="qty-display">${quantity}</span>
+                        <input
+                            class="qty-display qty-input"
+                            type="text"
+                            inputmode="numeric"
+                            pattern="\\d{1,2}"
+                            maxlength="2"
+                            aria-label="Quantity"
+                            value="${quantity}"
+                            oninput="cartReview.onQtyInput(this)"
+                            onblur="cartReview.onQtyBlur(this)"
+                        />
                         <button class="qty-btn plus-btn" onclick="cartReview.updateQuantity(this, 1)">
                             <i class="fas fa-plus"></i>
                         </button>
@@ -510,7 +598,17 @@
                     <button class="qty-btn minus-btn" onclick="cartReview.updateQuantity(this, -1)">
                         <i class="fas fa-minus"></i>
                     </button>
-                    <span class="qty-display">${quantity}</span>
+                    <input
+                        class="qty-display qty-input"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="\\d{1,2}"
+                        maxlength="2"
+                        aria-label="Quantity"
+                        value="${quantity}"
+                        oninput="cartReview.onQtyInput(this)"
+                        onblur="cartReview.onQtyBlur(this)"
+                    />
                     <button class="qty-btn plus-btn" onclick="cartReview.updateQuantity(this, 1)">
                         <i class="fas fa-plus"></i>
                     </button>
@@ -538,60 +636,42 @@
         const cartItem = btn.closest('.cart-item');
         if (!cartItem) return;
 
-        const qtyDisplay = cartItem.querySelector('.qty-display');
-        if (!qtyDisplay) return;
+        const qtyInput = cartItem.querySelector('.qty-display');
+        const currentQty = clampQty(qtyInput?.value ?? 1);
+        const newQty = clampQty(currentQty + change);
+        await commitQuantityForCartItem(cartItem, newQty);
+    }
 
-        let currentQty = parseInt(qtyDisplay.textContent, 10) || 0;
-        let newQty = currentQty + change;
+    function onQtyInput(inputEl) {
+        if (!inputEl) return;
+        const sanitized = sanitizeQtyInput(inputEl.value);
+        inputEl.value = sanitized;
+        // Update summary live when there's a usable number; don't force-save yet.
+        const cartItem = inputEl.closest('.cart-item');
+        if (!cartItem) return;
+        const liveQty = sanitized === '' ? 0 : clampQty(sanitized);
+        // Temporarily treat empty as 0 for display; blur will commit min 1.
+        updateCartSummaryWithOverrides(cartItem, liveQty);
+    }
 
-        if (newQty < 1) {
-            newQty = 1;
+    async function onQtyBlur(inputEl) {
+        if (!inputEl) return;
+        const cartItem = inputEl.closest('.cart-item');
+        if (!cartItem) return;
+
+        const sanitized = sanitizeQtyInput(inputEl.value);
+        const committed = sanitized === '' ? 1 : clampQty(sanitized);
+        await commitQuantityForCartItem(cartItem, committed);
+    }
+
+    function updateCartSummaryWithOverrides(overrideItem, overrideQty) {
+        // Lightweight wrapper: set a temporary data attr used by updateCartSummary()
+        if (overrideItem) {
+            overrideItem.dataset._tempQtyOverride = String(overrideQty ?? '');
         }
-
-        qtyDisplay.textContent = newQty;
         updateCartSummary();
-
-        const docId = cartItem.dataset.cartDocId;
-        const guestId = cartItem.dataset.guestId;
-        const unitPrice = parseFloat(cartItem.dataset.unitPrice || '0') || 0;
-        const source = cartItem.dataset.source || (guestId ? 'guest' : 'user');
-
-        // Guest cart: update localStorage only
-        if (source === 'guest') {
-            updateGuestCartItemQuantity(guestId, newQty, unitPrice);
-            return;
-        }
-
-        if (!docId || !unitPrice) return;
-
-        try {
-            await window.utils.waitForFirebaseReady();
-
-            const db = window.firebaseDb;
-            const auth = window.firebaseAuth;
-
-            if (!db || !auth || !window.doc || !window.updateDoc) {
-                console.warn('Firebase not fully initialized for cart update');
-                return;
-            }
-
-            const user = auth.currentUser;
-            if (!user) {
-                console.warn('No authenticated user; skipping Firestore cart update');
-                return;
-            }
-
-            const customerRef = window.doc(db, 'customers', user.uid);
-            const cartItemRef = window.doc(customerRef, 'cartItems', docId);
-            const newTotalPrice = unitPrice * newQty;
-
-            await window.updateDoc(cartItemRef, {
-                quantity: newQty,
-                price: newTotalPrice,
-                updatedAt: new Date()
-            });
-        } catch (error) {
-            console.error('Error updating cart item quantity:', error);
+        if (overrideItem) {
+            delete overrideItem.dataset._tempQtyOverride;
         }
     }
 
@@ -709,7 +789,12 @@
 
             const title = titleEl ? titleEl.textContent.trim() : 'Item';
             const priceText = priceEl ? priceEl.textContent : '₱0';
-            const qty = qtyEl ? parseInt(qtyEl.textContent, 10) || 1 : 1;
+            const overrideRaw = item.dataset._tempQtyOverride;
+            const qtyRaw =
+                overrideRaw !== undefined
+                    ? overrideRaw
+                    : (qtyEl ? qtyEl.value : '1');
+            const qty = Number(qtyRaw) > 0 ? clampQty(qtyRaw) : 0;
 
             const numericPrice = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
             const lineTotal = numericPrice * qty;
@@ -760,6 +845,18 @@
     }
 
     function proceedToCheckout() {
+        const user = window.firebaseAuth?.currentUser || null;
+        if (!user) {
+            if (typeof window.showAuthGate === 'function') {
+                window.showAuthGate('You need to be logged in to proceed to checkout.', 'checkout.html');
+            } else if (window.showAlert) {
+                window.showAlert('You need to be logged in to proceed to checkout.', 'info');
+            } else {
+                alert('You need to be logged in to proceed to checkout.');
+            }
+            return;
+        }
+
         // Go to unified checkout; service type will be chosen there
         window.location.href = 'checkout.html';
     }
@@ -771,7 +868,9 @@
         addMoreItems,
         proceedToCheckout,
         changeSauce,
-        changeVariation
+        changeVariation,
+        onQtyInput,
+        onQtyBlur
     };
 
     // Global functions for onclick handlers
@@ -794,19 +893,56 @@
 
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', () => {
+        setCartReviewLoading(true);
+        const clearGuestCartIfReload = () => {
+            // Requirement: guest can view cart temporarily, but if they refresh the cart page,
+            // the guest cart should be cleared.
+            try {
+                let isReload = false;
+                const navEntries = performance && performance.getEntriesByType ? performance.getEntriesByType('navigation') : [];
+                if (navEntries && navEntries.length && navEntries[0] && navEntries[0].type) {
+                    isReload = navEntries[0].type === 'reload';
+                } else if (performance && performance.navigation) {
+                    // Legacy fallback: 1 = TYPE_RELOAD
+                    isReload = performance.navigation.type === 1;
+                }
+
+                if (!isReload) return;
+
+                window.localStorage?.removeItem(GUEST_CART_KEY);
+                window.localStorage?.setItem('ppp_cart_count', '0');
+                document.dispatchEvent(new CustomEvent('cart:count-changed', {
+                    detail: { count: 0 }
+                }));
+            } catch (e) {
+                console.warn('Failed to clear guest cart on reload:', e);
+            }
+        };
+
         // Wait for auth state so we get the correct current user before reading cart
         if (window.firebaseAuth && window.onAuthStateChanged) {
-            window.onAuthStateChanged(window.firebaseAuth, (user) => {
-                if (user) {
-                    loadCartFromFirestore(user);
-                } else {
-                    // Guest cart stored locally
-                    loadCartFromGuestCart();
+            window.onAuthStateChanged(window.firebaseAuth, async (user) => {
+                try {
+                    if (user) {
+                        await loadCartFromFirestore(user);
+                    } else {
+                        clearGuestCartIfReload();
+                        await loadCartFromGuestCart();
+                    }
+                } finally {
+                    setCartReviewLoading(false);
                 }
             });
         } else {
-            // Fallback if auth isn't available for some reason – use guest cart
-            loadCartFromGuestCart();
+            // Fallback if auth isn't available – treat as guest
+            (async () => {
+                try {
+                    clearGuestCartIfReload();
+                    await loadCartFromGuestCart();
+                } finally {
+                    setCartReviewLoading(false);
+                }
+            })();
         }
     });
 })();

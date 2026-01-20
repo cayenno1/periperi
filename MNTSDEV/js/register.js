@@ -7,6 +7,30 @@
 
     let isSubmitting = false;
 
+    function getRedirectParam() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return (params.get('redirect') || '').trim();
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function sanitizeRedirect(value) {
+        const v = String(value || '').trim();
+        if (!v) return '';
+        if (v.includes('://') || v.startsWith('//') || v.includes('\\') || v.includes('..')) return '';
+        const ok = /^[a-zA-Z0-9_\-/]+\.html(\?.*)?$/.test(v);
+        return ok ? v : '';
+    }
+
+    function wireAuthLinks(redirectTarget) {
+        const signInLink = document.querySelector('.restaurant-auth-footer a[href^="login.html"]');
+        if (signInLink && redirectTarget) {
+            signInLink.href = `login.html?redirect=${encodeURIComponent(redirectTarget)}`;
+        }
+    }
+
     // Password strength checker
     function checkPasswordStrength(password) {
         let strength = 0;
@@ -148,7 +172,11 @@
         if (closeBtn) {
             closeBtn.onclick = function() {
                 modal.style.display = 'none';
-                window.location.href = 'login.html';
+                const redirectTarget = sanitizeRedirect(getRedirectParam());
+                const next = redirectTarget
+                    ? `login.html?redirect=${encodeURIComponent(redirectTarget)}`
+                    : 'login.html';
+                window.location.href = next;
             };
         }
     }
@@ -358,6 +386,8 @@
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
+        const redirectTarget = sanitizeRedirect(getRedirectParam());
+        wireAuthLinks(redirectTarget);
         window.auth.setupPasswordToggle('passwordToggle', 'password');
         window.auth.setupPasswordToggle('confirmPasswordToggle', 'confirmPassword');
         initForm();

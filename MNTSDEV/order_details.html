@@ -71,63 +71,79 @@
         </div>
       </div>
 
-      <!-- Single unified box -->
-      <div class="review-item od-card" id="orderBox">
-        <!-- Accent stripe -->
-        <div class="od-stripe"></div>
-        <!-- Image (optional) -->
-        <div id="imgSegment" class="od-image" style="display:none;">
-          <img id="orderImage" src="" alt="Order image" class="od-image-el">
+      <!-- Modern layout (IDs preserved for existing JS) -->
+      <div id="orderBox" class="od-layout">
+        <!-- Progress (full width; first thing customers see) -->
+        <div class="od-card od-card--progress od-span-full">
+          <div class="od-progress-head">
+            <div class="od-progress-title">Order Progress</div>
+            <div class="od-progress-subtitle">Track your order status in real time</div>
+          </div>
+          <div id="tracker" class="od-tracker" style="display:none;"></div>
         </div>
 
-        <!-- Meta row -->
-        <div class="od-meta">
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div class="reviewer-avatar"><i class="fas fa-receipt"></i></div>
-            <div class="reviewer-details">
-              <div class="reviewer-name" id="orderId">Order #</div>
-              <div class="review-date" id="orderDate">Date</div>
+        <!-- Left column -->
+        <div class="od-col od-col-main">
+          <!-- Summary / hero -->
+          <div class="od-card od-card--hero">
+            <div class="od-stripe"></div>
+
+            <div class="od-hero-head">
+              <div class="od-hero-idblock">
+                <div class="od-hero-icon" aria-hidden="true">
+                  <i class="fas fa-receipt"></i>
+                </div>
+                <div class="od-hero-meta">
+                  <div class="od-hero-order-id" id="orderId">Order #</div>
+                  <div class="od-hero-order-date" id="orderDate">Date</div>
+                </div>
+              </div>
+              <div class="od-hero-total" id="orderTotal">₱0.00</div>
+            </div>
+
+            <!-- Image (optional) -->
+            <div id="imgSegment" class="od-image" style="display:none;">
+              <img id="orderImage" src="" alt="Order image" class="od-image-el">
+            </div>
+
+            <!-- Quick chips (service/payment) -->
+            <div id="metaChips" class="od-chips" style="display:none;"></div>
+          </div>
+
+          <!-- Items -->
+          <div id="itemsSegment" class="od-card od-card--section">
+            <div class="od-section-title">Items</div>
+            <div id="orderItems" class="od-items-list"></div>
+          </div>
+
+          <!-- Service -->
+          <div id="serviceSegment" class="od-card od-card--section" style="display:none;">
+            <div class="od-section-title">Service</div>
+            <div id="serviceDetails" class="od-text"></div>
+          </div>
+
+          <!-- Reviews section (only for completed orders) -->
+          <div id="reviewsSegment" class="od-card od-card--section" style="display:none;">
+            <div class="od-section-title">Review Items</div>
+            <div id="orderItemReviews" class="od-reviews-list"></div>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <aside class="od-col od-col-side">
+          <div id="receiptSegment" class="od-card od-card--section od-card--sticky">
+            <div class="od-section-title">Payment</div>
+            <div id="paymentSubtitle" class="od-payment-subtitle"></div>
+            <div id="receipt" class="od-receipt">
+              <!-- Filled by JS -->
+            </div>
+
+            <div class="od-actions">
+              <button class="filter-btn" id="reorderBtn"><span>Reorder</span></button>
+              <button class="filter-btn" id="receiptBtn"><span>View Receipt</span></button>
             </div>
           </div>
-          <div class="card-price" id="orderTotal">₱0.00</div>
-        </div>
-
-        <!-- Quick chips (service/payment) -->
-        <div id="metaChips" class="od-chips" style="display:none;"></div>
-
-        <!-- Items list -->
-        <div id="itemsSegment" class="od-section od-items">
-          <div class="od-section-title">Items</div>
-          <div id="orderItems" class="od-items-list"></div>
-        </div>
-
-        <!-- Reviews section (only for completed orders) -->
-        <div id="reviewsSegment" class="od-section od-reviews" style="display:none;">
-          <div class="od-section-title">Review Items</div>
-          <div id="orderItemReviews" class="od-reviews-list"></div>
-        </div>
-
-        <!-- Service details -->
-        <div id="serviceSegment" class="od-section od-service" style="display:none;">
-          <div class="od-section-title">Service</div>
-          <div id="serviceDetails" class="od-text"></div>
-          <div id="tracker" class="od-tracker" style="display:none; margin-top:8px;"></div>
-        </div>
-
-        <!-- Receipt-like payment -->
-        <div id="receiptSegment" class="od-section od-payment">
-          <div class="od-section-title">Payment</div>
-          <div id="paymentSubtitle" class="od-payment-subtitle"></div>
-          <div id="receipt" class="od-receipt">
-            <!-- Filled by JS -->
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="od-actions">
-          <button class="filter-btn" id="reorderBtn"><span>Reorder</span></button>
-          <button class="filter-btn" id="receiptBtn"><span>View Receipt</span></button>
-        </div>
+        </aside>
       </div>
     </section>
   </main>

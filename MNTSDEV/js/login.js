@@ -6,6 +6,121 @@
     'use strict';
 
     let isSubmitting = false;
+    const GUEST_CART_KEY = 'ppp_guest_cart';
+
+    function getRedirectParam() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return (params.get('redirect') || '').trim();
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function sanitizeRedirect(value) {
+        const v = String(value || '').trim();
+        if (!v) return '';
+        // Disallow absolute URLs / protocol-relative / path traversal
+        if (v.includes('://') || v.startsWith('//') || v.includes('\\') || v.includes('..')) return '';
+        // Only allow local html pages (optionally with a querystring)
+        const ok = /^[a-zA-Z0-9_\-/]+\.html(\?.*)?$/.test(v);
+        return ok ? v : '';
+    }
+
+    function wireAuthLinks(redirectTarget) {
+        const signUpLink = document.querySelector('.restaurant-auth-footer a[href^="register.html"]');
+        if (signUpLink && redirectTarget) {
+            signUpLink.href = `register.html?redirect=${encodeURIComponent(redirectTarget)}`;
+        }
+    }
+
+    function readGuestCart() {
+        try {
+            const raw = window.localStorage?.getItem(GUEST_CART_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function clearGuestCart() {
+        try {
+            window.localStorage?.removeItem(GUEST_CART_KEY);
+        } catch (e) {}
+    }
+
+    async function migrateGuestCartToUserCart() {
+        // When user logs in from guest checkout prompt, move local cart into Firestore cart.
+        try {
+            await window.utils?.waitForFirebaseReady?.();
+
+            const user = window.firebaseAuth?.currentUser || null;
+            if (!user) return;
+
+            const cart = readGuestCart();
+            if (!cart.length) return;
+
+            const db = window.firebaseDb;
+            if (!db || !window.doc || !window.collection || !window.getDocs || !window.query || !window.where || !window.setDoc || !window.updateDoc) {
+                return;
+            }
+
+            const customerRef = window.doc(db, 'customers', user.uid);
+            const cartItemsCol = window.collection(customerRef, 'cartItems');
+
+            for (const item of cart) {
+                const itemId = item?.itemId || null;
+                const name = item?.name || null;
+                const imageUrl = item?.imageUrl || null;
+                const quantity = typeof item?.quantity === 'number' ? item.quantity : Number(item?.quantity) || 1;
+                const lineTotal = typeof item?.price === 'number' ? item.price : Number(item?.price) || 0;
+                const variation = item?.variation || null;
+                const sauce = item?.sauce || null;
+
+                let existingSnap = null;
+                if (itemId) {
+                    const q = window.query(cartItemsCol, window.where('itemId', '==', itemId));
+                    const existingQuerySnap = await window.getDocs(q);
+                    existingQuerySnap.forEach((docSnap) => {
+                        const data = docSnap.data() || {};
+                        const variationMatch = JSON.stringify(data.variation || null) === JSON.stringify(variation || null);
+                        const sauceMatch = JSON.stringify(data.sauce || null) === JSON.stringify(sauce || null);
+                        if (variationMatch && sauceMatch && !existingSnap) existingSnap = docSnap;
+                    });
+                }
+
+                if (existingSnap) {
+                    const data = existingSnap.data() || {};
+                    const currentQty = typeof data.quantity === 'number' ? data.quantity : Number(data.quantity) || 0;
+                    const currentPrice = typeof data.price === 'number' ? data.price : Number(data.price) || 0;
+                    await window.updateDoc(existingSnap.ref, {
+                        quantity: currentQty + quantity,
+                        price: currentPrice + lineTotal,
+                        updatedAt: new Date()
+                    });
+                } else {
+                    const cartItemRef = window.doc(cartItemsCol);
+                    await window.setDoc(cartItemRef, {
+                        itemId,
+                        name,
+                        imageUrl,
+                        price: lineTotal,
+                        quantity,
+                        variation,
+                        sauce,
+                        createdAt: new Date()
+                    });
+                }
+            }
+
+            // Clear guest cart after successful migration
+            clearGuestCart();
+        } catch (e) {
+            console.warn('Guest cart migration failed:', e);
+        }
+    }
 
     // Initialize password toggle
     function initPasswordToggle() {
@@ -105,7 +220,17 @@
             isSubmitting = false;
 
             if (result.success) {
-                window.location.href = result.redirect || 'index.html';
+                // If they had a guest cart, migrate it into the logged-in Firestore cart.
+                if (result.redirect !== 'driver.html') {
+                    await migrateGuestCartToUserCart();
+                }
+                const redirectTarget = sanitizeRedirect(getRedirectParam());
+                // Never override driver login redirect.
+                const finalTarget =
+                    result.redirect === 'driver.html'
+                        ? 'driver.html'
+                        : (redirectTarget || result.redirect || 'index.html');
+                window.location.href = finalTarget;
             } else {
                 window.auth.setFormState(
                     false,
@@ -192,6 +317,8 @@
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
+        const redirectTarget = sanitizeRedirect(getRedirectParam());
+        wireAuthLinks(redirectTarget);
         initPasswordToggle();
         initForgotPasswordModal();
         initLoginForm();

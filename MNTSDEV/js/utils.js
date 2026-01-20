@@ -151,6 +151,7 @@
     // ============================================
     let cartPreviewTimeout = null;
     let cartPreviewElement = null;
+    let cartPreviewHideDelay = 200;
 
     async function loadCartItems() {
         try {
@@ -168,12 +169,57 @@
                 });
                 return items;
             } else {
-                // Load from localStorage
-                return window.cart?.getGuestCart() || [];
+                // Guest: load from localStorage
+                return window.cart?.getGuestCart?.() || [];
             }
         } catch (error) {
             console.error('Error loading cart items:', error);
             return [];
+        }
+    }
+
+    function getCartItemCount(items) {
+        if (!Array.isArray(items) || items.length === 0) return 0;
+        return items.reduce((sum, item) => {
+            const qty = typeof item.quantity === 'number' ? item.quantity : Number(item.quantity) || 1;
+            return sum + Math.max(0, qty);
+        }, 0);
+    }
+
+    function syncCartCountFromItems(items) {
+        const count = getCartItemCount(items);
+        storeCartCount(count);
+        updateCartBadges(count);
+        broadcastCartCount(count);
+        return count;
+    }
+
+    async function removeCartItemFromPreview(cartItemId) {
+        if (!cartItemId) return;
+        try {
+            await waitForFirebaseReady();
+            const user = window.firebaseAuth?.currentUser;
+
+            if (user && window.firebaseDb && window.doc && window.deleteDoc) {
+                // Logged-in: delete the Firestore cart item doc (id is doc id)
+                const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
+                const cartItemRef = window.doc(customerRef, 'cartItems', cartItemId);
+                await window.deleteDoc(cartItemRef);
+            } else {
+                // Guest: remove from localStorage cart by id
+                const cart = (window.cart?.getGuestCart?.() || []).filter((item) => item?.id !== cartItemId);
+                window.cart?.setGuestCart?.(cart);
+            }
+
+            // Refresh preview + count
+            const items = await loadCartItems();
+            syncCartCountFromItems(items);
+            if (cartPreviewElement && cartPreviewElement.classList.contains('show')) {
+                renderCartPreview(items, cartPreviewElement);
+            }
+        } catch (error) {
+            console.error('Error removing cart item from preview:', error);
+            showToast('Could not remove item. Please try again.', 'error');
         }
     }
 
@@ -210,6 +256,17 @@
         document.body.appendChild(preview);
         cartPreviewElement = preview;
         
+        // Keep open while hovered
+        preview.addEventListener('mouseenter', () => {
+            clearTimeout(cartPreviewTimeout);
+        });
+        preview.addEventListener('mouseleave', () => {
+            clearTimeout(cartPreviewTimeout);
+            cartPreviewTimeout = setTimeout(() => {
+                hideCartPreview();
+            }, cartPreviewHideDelay);
+        });
+
         // Close button handler
         const closeBtn = preview.querySelector('.cart-preview-close');
         if (closeBtn) {
@@ -302,16 +359,24 @@
             const unitPrice = price / qty;
             total += price;
             
+            const itemId = item.id || '';
             return `
                 <div class="cart-preview-item">
                     <img src="${item.imageUrl || ''}" alt="${item.name || 'Item'}" class="cart-preview-item-img" onerror="this.style.display='none'">
                     <div class="cart-preview-item-info">
                         <div class="cart-preview-item-name">${item.name || 'Item'}</div>
                         <div class="cart-preview-item-details">
-                            <span class="cart-preview-item-qty">Qty: ${qty}</span>
+                            <div class="cart-preview-qty">
+                                <button class="cart-preview-qty-btn" aria-label="Decrease quantity" onclick="window.utils.changeCartPreviewQty('${itemId}', -1, ${unitPrice})">-</button>
+                                <span class="cart-preview-qty-display">${qty}</span>
+                                <button class="cart-preview-qty-btn" aria-label="Increase quantity" onclick="window.utils.changeCartPreviewQty('${itemId}', 1, ${unitPrice})">+</button>
+                            </div>
                             <span class="cart-preview-item-price">${formatPeso(unitPrice)}</span>
                         </div>
                     </div>
+                    <button class="cart-preview-remove-btn" aria-label="Remove item" onclick="window.utils.removeCartItemFromPreview('${itemId}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
             `;
         }).join('');
@@ -346,7 +411,10 @@
                 });
                 icon.addEventListener('mouseleave', () => {
                     clearTimeout(cartPreviewTimeout);
-                    cartPreviewTimeout = setTimeout(hideCartPreview, 200);
+                    cartPreviewTimeout = setTimeout(() => {
+                        if (cartPreviewElement && cartPreviewElement.matches(':hover')) return;
+                        hideCartPreview();
+                    }, cartPreviewHideDelay);
                 });
             } else {
                 icon.addEventListener('click', (e) => {
@@ -369,6 +437,52 @@
         });
     }
 
+    async function changeCartPreviewQty(cartItemId, delta, unitPrice) {
+        if (!cartItemId || !delta) return;
+        try {
+            await waitForFirebaseReady();
+            const user = window.firebaseAuth?.currentUser;
+
+            if (user && window.firebaseDb && window.doc && window.updateDoc) {
+                const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
+                const cartItemRef = window.doc(customerRef, 'cartItems', cartItemId);
+                // Fetch current to compute new qty
+                if (!window.getDoc) return;
+                const snap = await window.getDoc(cartItemRef);
+                if (!snap.exists()) return;
+                const data = snap.data() || {};
+                const currentQty = typeof data.quantity === 'number' ? data.quantity : Number(data.quantity) || 1;
+                const numericUnit = typeof unitPrice === 'number' ? unitPrice : Number(unitPrice) || 0;
+                const newQty = Math.max(1, currentQty + delta);
+                await window.updateDoc(cartItemRef, {
+                    quantity: newQty,
+                    price: numericUnit * newQty,
+                    updatedAt: new Date()
+                });
+            } else {
+                // Guest cart: update localStorage
+                const cart = window.cart?.getGuestCart?.() || [];
+                const idx = cart.findIndex((item) => item?.id === cartItemId);
+                if (idx === -1) return;
+                const numericUnit = typeof unitPrice === 'number' ? unitPrice : Number(unitPrice) || 0;
+                const currentQty = typeof cart[idx].quantity === 'number' ? cart[idx].quantity : Number(cart[idx].quantity) || 1;
+                const newQty = Math.max(1, currentQty + delta);
+                cart[idx].quantity = newQty;
+                cart[idx].price = numericUnit * newQty;
+                window.cart?.setGuestCart?.(cart);
+            }
+
+            const items = await loadCartItems();
+            syncCartCountFromItems(items);
+            if (cartPreviewElement && cartPreviewElement.classList.contains('show')) {
+                renderCartPreview(items, cartPreviewElement);
+            }
+        } catch (error) {
+            console.error('Error updating quantity from preview:', error);
+            showToast('Could not update quantity. Please try again.', 'error');
+        }
+    }
+
     // Expose to window
     window.utils = {
         safeNumber,
@@ -380,7 +494,9 @@
         formatPeso,
         waitForFirebaseReady,
         showToast,
-        setupCartPreview
+        setupCartPreview,
+        removeCartItemFromPreview,
+        changeCartPreviewQty
     };
 
     // Global navigation functions
@@ -448,6 +564,8 @@
             cancelText = 'Cancel',
             onConfirm = null,
             onCancel = null,
+            onClose = null,
+            closeBehavior = 'cancel', // 'cancel' | 'none'
             autoClose = false,
             duration = 3000
         } = options;
@@ -507,7 +625,13 @@
         // Close button handler
         const closeHandler = () => {
             hideModal();
-            if (onCancel) onCancel();
+            if (typeof onClose === 'function') {
+                onClose();
+                return;
+            }
+            if (closeBehavior === 'cancel' && typeof onCancel === 'function') {
+                onCancel();
+            }
         };
         closeBtn.onclick = closeHandler;
         overlay.onclick = closeHandler;
@@ -552,7 +676,26 @@
             type: 'warning',
             showCancel: true,
             onConfirm: onConfirm || (() => {}),
-            onCancel: onCancel || (() => {})
+            onCancel: onCancel || (() => {}),
+            closeBehavior: 'cancel'
+        });
+    };
+
+    // Auth gate modal (Sign in / Register)
+    window.showAuthGate = function(message, redirectTarget = 'checkout.html') {
+        const safeRedirect = String(redirectTarget || 'checkout.html');
+        showModal(message || 'You need to be signed in to proceed to checkout.', {
+            type: 'info',
+            showCancel: true,
+            confirmText: 'Sign In',
+            cancelText: 'Register',
+            closeBehavior: 'none',
+            onConfirm: () => {
+                window.location.href = `login.html?reason=checkout&redirect=${encodeURIComponent(safeRedirect)}`;
+            },
+            onCancel: () => {
+                window.location.href = `register.html?redirect=${encodeURIComponent(safeRedirect)}`;
+            }
         });
     };
 

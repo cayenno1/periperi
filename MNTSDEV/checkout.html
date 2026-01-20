@@ -48,8 +48,8 @@
       <!-- Header Section -->
       <div class="cart-header">
         <div class="cart-title-section">
-          <h2 class="cart-title">Your Order</h2>
-          <p class="cart-subtitle">Confirm your details and payment</p>
+          <h2 class="cart-title">Checkout</h2>
+          <p class="cart-subtitle">Review details, payment, and confirm</p>
         </div>
         <div class="cart-status">
           <div class="status-indicator completed">
@@ -64,250 +64,288 @@
         </div>
       </div>
 
-      <!-- Service Type Selector -->
-      <section class="service-type-section">
-        <h3 class="section-title">Service Type</h3>
-        <div class="service-type-toggle" role="tablist" aria-label="Service Type">
-          <button class="service-pill" data-service="pickup" type="button">
-            <i class="fas fa-store"></i>
-            <span>Pick-Up</span>
-          </button>
-          <button class="service-pill" data-service="delivery" type="button">
-            <i class="fas fa-motorcycle"></i>
-            <span>Delivery</span>
-          </button>
+      <div class="store-hours-note" role="note">
+        <i class="fas fa-clock"></i>
+        <div>
+          <div class="store-hours-title">Store hours</div>
+          <div class="store-hours-text">Open daily 10:00 AM – 10:00 PM. Orders outside hours will be queued for the next opening.</div>
         </div>
-      </section>
+      </div>
 
-      <!-- Service Details -->
-      <section class="service-panels">
-        <!-- Pick-Up -->
-        <div class="delivery-section service-panel hidden" id="service-pickup">
-          <h3 class="section-title">Pick-Up Details</h3>
-          <div class="form-group">
-            <label class="restaurant-form-label">Store Location</label>
-            <p id="store-location" class="store-location-text">
-              P2RW+RJ4, Zabarte Rd, Novaliches, Quezon City, Metro Manila – Pablo's Peri Peri
-            </p>
-          </div>
-          <div class="store-map-container">
-            <iframe
-              title="Pablo's Peri Peri Store Location"
-              src="https://www.google.com/maps?q=P2RW%2BRJ4,Zabarte+Rd,+Novaliches,+Quezon+City,+Metro+Manila&output=embed"
-              loading="lazy"
-              referrerpolicy="no-referrer-when-downgrade"
-              allowfullscreen
-            ></iframe>
-          </div>
-        </div>
+      <div class="checkout-layout">
+        <div class="checkout-main">
+          <!-- Service Type Selector -->
+          <section class="service-type-section">
+            <h3 class="section-title">Service Type</h3>
+            <div class="service-type-toggle" role="tablist" aria-label="Service Type">
+              <button class="service-pill" data-service="pickup" type="button">
+                <i class="fas fa-store"></i>
+                <span>Pick-Up</span>
+              </button>
+              <button class="service-pill" data-service="delivery" type="button">
+                <i class="fas fa-motorcycle"></i>
+                <span>Delivery</span>
+              </button>
+            </div>
+          </section>
 
-        <!-- Delivery -->
-        <div class="delivery-section service-panel hidden" id="service-delivery">
-          <h3 class="section-title">Delivery Details</h3>
+          <!-- Service Details -->
+          <section class="service-panels">
+            <!-- Pick-Up -->
+            <div class="delivery-section service-panel hidden" id="service-pickup">
+              <h3 class="section-title">Pick-Up Details</h3>
+              <div class="form-group">
+                <label class="restaurant-form-label">Store Location</label>
+                <p id="store-location" class="store-location-text">
+                  P2RW+RJ4, Zabarte Rd, Novaliches, Quezon City, Metro Manila – Pablo's Peri Peri
+                </p>
+              </div>
+              <div class="store-map-container">
+                <iframe
+                  title="Pablo's Peri Peri Store Location"
+                  src="https://www.google.com/maps?q=P2RW%2BRJ4,Zabarte+Rd,+Novaliches,+Quezon+City,+Metro+Manila&output=embed"
+                  loading="lazy"
+                  referrerpolicy="no-referrer-when-downgrade"
+                  allowfullscreen
+                ></iframe>
+              </div>
+            </div>
 
-          <div class="form-group">
+            <!-- Delivery -->
+            <div class="delivery-section service-panel hidden" id="service-delivery">
+              <h3 class="section-title">Delivery Details</h3>
+
+              <div class="form-group">
             <label for="delivery-address">Saved Address</label>
             <select id="delivery-address" onchange="toggleNewAddress()">
-              <option value="">Select saved address</option>
-              <option value="new">+ Add New Address</option>
-            </select>
-          </div>
+                  <option value="">Select saved address</option>
+                  <option value="new">+ Add New Address</option>
+                </select>
+              </div>
 
-          <div class="new-address-form hidden" id="new-address-form">
+              <div class="new-address-form hidden" id="new-address-form">
             <div class="form-group">
+              <div class="address-hint">
+                <i class="fas fa-circle-info"></i>
+                We currently deliver to <strong>Quezon City</strong> and <strong>North Caloocan</strong>.
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="deliveryLabel">Label</label>
+              <select id="deliveryLabel">
+                <option value="">Select a label</option>
+                <option value="Home">Home</option>
+                <option value="Work">Work</option>
+                <option value="Other">Other</option>
+              </select>
+              <span class="error-message" id="deliveryLabelError"></span>
+            </div>
+                <div class="form-group">
               <label for="street-address">Street Address <span class="required">*</span></label>
               <input type="text" id="street-address" placeholder="Enter street address">
+              <span class="error-message" id="streetAddressError"></span>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                <label for="city">City <span class="required">*</span></label>
+                <select id="city">
+                  <option value="">Select city</option>
+                  <option value="Quezon City" data-psgc-city-code="137404000">Quezon City</option>
+                  <option value="Caloocan City" data-psgc-city-code="137501000">Caloocan City (North)</option>
+                </select>
+                <span class="error-message" id="cityError"></span>
+                  </div>
+                  <div class="form-group">
+                    <label for="deliveryBarangay">Barangay <span class="required">*</span></label>
+                <input
+                  type="text"
+                  id="deliveryBarangay"
+                  placeholder="Search barangay"
+                  list="deliveryBarangayList"
+                  disabled
+                >
+                <datalist id="deliveryBarangayList"></datalist>
+                <span class="error-message" id="deliveryBarangayError"></span>
+                  </div>
+                </div>
+              </div>
+
             </div>
+          </section>
+
+          <!-- Contact Details -->
+          <section class="delivery-section">
+            <h3 class="section-title">Contact Details</h3>
             <div class="form-row">
               <div class="form-group">
-                <label for="city">City <span class="required">*</span></label>
-                <input type="text" id="city" placeholder="Enter city">
+                <label for="contactName">Full Name <span class="required">*</span></label>
+                <input type="text" id="contactName" placeholder="Juan Dela Cruz">
               </div>
               <div class="form-group">
-                <label for="deliveryBarangay">Barangay <span class="required">*</span></label>
-                <input type="text" id="deliveryBarangay" placeholder="Enter barangay">
+                <label for="contactPhone">Mobile Number <span class="required">*</span></label>
+                <input type="tel" id="contactPhone" placeholder="09XXXXXXXXX">
               </div>
             </div>
             <div class="form-group">
-              <label for="deliveryPostal">Postal Code <span class="required">*</span></label>
-              <input type="text" id="deliveryPostal" placeholder="Enter postal code">
+              <label for="contactEmail">Email Address</label>
+              <input type="email" id="contactEmail" placeholder="you@example.com">
             </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- Contact Details -->
-      <section class="delivery-section">
-        <h3 class="section-title">Contact Details</h3>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="contactName">Full Name <span class="required">*</span></label>
-            <input type="text" id="contactName" placeholder="Juan Dela Cruz">
-          </div>
-          <div class="form-group">
-            <label for="contactPhone">Mobile Number <span class="required">*</span></label>
-            <input type="tel" id="contactPhone" placeholder="09XXXXXXXXX">
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="contactEmail">Email Address</label>
-          <input type="email" id="contactEmail" placeholder="you@example.com">
-        </div>
-        <div class="form-group">
-          <label for="orderNotes">Additional Notes</label>
-          <textarea id="orderNotes" rows="3" placeholder="Landmarks, special requests, or other notes for the team"></textarea>
-        </div>
-      </section>
-
-      <!-- Payment Method -->
-      <section class="delivery-section">
-        <h3 class="section-title">Payment Method</h3>
-        <div class="delivery-options">
-          <!-- GCash -->
-          <label class="delivery-option">
-            <input type="radio" name="payment" value="gcash" onclick="toggleGCashDetails()">
-            <div class="option-content">
-              <div class="option-icon">
-                <i class="fas fa-mobile-alt"></i>
-              </div>
-              <div class="option-details">
-                <span class="option-title">GCash</span>
-                <span class="option-subtitle">Digital payment</span>
-              </div>
-              <div class="option-arrow">
-                <i class="fas fa-chevron-down"></i>
-              </div>
+            <div class="form-group">
+              <label for="orderNotes">Additional Notes</label>
+              <textarea id="orderNotes" rows="3" placeholder="Landmarks, special requests, or other notes for the team"></textarea>
             </div>
-          </label>
-          <!-- Cash Payment (only for Delivery) -->
-          <label class="delivery-option hidden" id="cash-payment-option">
-            <input type="radio" name="payment" value="cash">
-            <div class="option-content">
-              <div class="option-icon">
-                <i class="fas fa-money-bill-wave"></i>
-              </div>
-              <div class="option-details">
-                <span class="option-title">Cash</span>
-                <span class="option-subtitle">Pay on delivery</span>
-              </div>
-            </div>
-          </label>
-          <div class="gcash-details" id="gcash-details">
-            <div class="gcash-info-card">
-              <div class="gcash-header">
-                <h4>GCash Payment Details</h4>
-                <p>Send payment to our official GCash account</p>
-              </div>
-              <div class="gcash-content">
-                <div class="gcash-number">
-                  <i class="fas fa-phone"></i>
-                  <div>
-                    <span class="label">GCash Number:</span>
-                    <span class="value">0917 123 4567</span>
+          </section>
+
+          <!-- Payment Method -->
+          <section class="delivery-section">
+            <h3 class="section-title">Payment Method</h3>
+            <div class="delivery-options">
+              <!-- GCash -->
+              <label class="delivery-option">
+                <input type="radio" name="payment" value="gcash" onclick="toggleGCashDetails()">
+                <div class="option-content">
+                  <div class="option-icon">
+                    <i class="fas fa-mobile-alt"></i>
+                  </div>
+                  <div class="option-details">
+                    <span class="option-title">GCash</span>
+                    <span class="option-subtitle">Digital payment</span>
+                  </div>
+                  <div class="option-arrow">
+                    <i class="fas fa-chevron-down"></i>
                   </div>
                 </div>
-                <div class="gcash-name">
-                  <i class="fas fa-store"></i>
-                  <div>
-                    <span class="label">Account Name:</span>
-                    <span class="value">PABLO'S PERI PERI</span>
+              </label>
+              <!-- Cash Payment (only for Delivery) -->
+              <label class="delivery-option hidden" id="cash-payment-option">
+                <input type="radio" name="payment" value="cash">
+                <div class="option-content">
+                  <div class="option-icon">
+                    <i class="fas fa-money-bill-wave"></i>
+                  </div>
+                  <div class="option-details">
+                    <span class="option-title">Cash</span>
+                    <span class="option-subtitle">Pay on delivery</span>
                   </div>
                 </div>
-                <div class="gcash-qr">
-                  <span class="label">QR Code:</span>
-                  <div class="qr-container">
-                    <img src="qr-code.png" alt="GCash QR Code" class="qr-image">
-                    <p>Scan to pay instantly</p>
+              </label>
+              <div class="gcash-details" id="gcash-details">
+                <div class="gcash-info-card">
+                  <div class="gcash-header">
+                    <h4>GCash Payment Details</h4>
+                    <p>Send payment to our official GCash account</p>
                   </div>
-                </div>
-                <div class="payment-proof">
-                  <span class="label">Payment Proof:</span>
-                  <div class="proof-upload">
-                    <input type="file" id="payment-proof" accept="image/*" style="display: none;" onchange="checkout.handleFileUpload(this)">
-                    <button type="button" class="upload-btn" onclick="document.getElementById('payment-proof').click()">
-                      <i class="fas fa-upload"></i>
-                      <span>Upload Payment Screenshot</span>
-                    </button>
-                    <div class="upload-preview" id="upload-preview"></div>
+                  <div class="gcash-content">
+                    <div class="gcash-number">
+                      <i class="fas fa-phone"></i>
+                      <div>
+                        <span class="label">GCash Number:</span>
+                        <span class="value">0917 123 4567</span>
+                      </div>
+                    </div>
+                    <div class="gcash-name">
+                      <i class="fas fa-store"></i>
+                      <div>
+                        <span class="label">Account Name:</span>
+                        <span class="value">PABLO'S PERI PERI</span>
+                      </div>
+                    </div>
+                    <div class="gcash-qr">
+                      <span class="label">QR Code:</span>
+                      <div class="qr-container">
+                        <img src="qr-code.png" alt="GCash QR Code" class="qr-image">
+                        <p>Scan to pay instantly</p>
+                      </div>
+                    </div>
+                    <div class="payment-proof">
+                      <span class="label">Payment Proof:</span>
+                      <div class="proof-upload">
+                        <input type="file" id="payment-proof" accept="image/*" style="display: none;" onchange="checkout.handleFileUpload(this)">
+                        <button type="button" class="upload-btn" onclick="document.getElementById('payment-proof').click()">
+                          <i class="fas fa-upload"></i>
+                          <span>Upload Payment Screenshot</span>
+                        </button>
+                        <div class="upload-preview" id="upload-preview"></div>
+                      </div>
+                    </div>
+                    <div class="gcash-account-name">
+                      <span class="label">GCash Account Name <span class="required">*</span></span>
+                      <input
+                        type="text"
+                        id="gcash-account-name"
+                        class="gcash-ref-input"
+                        placeholder="Enter your GCash account name"
+                      >
+                    </div>
+                    <div class="gcash-ref">
+                      <span class="label">GCash Reference No. <span class="required">*</span></span>
+                      <input
+                        type="text"
+                        id="gcash-ref"
+                        class="gcash-ref-input"
+                        placeholder="Enter your GCash reference number"
+                      >
+                    </div>
                   </div>
-                </div>
-                <div class="gcash-account-name">
-                  <span class="label">GCash Account Name <span class="required">*</span></span>
-                  <input
-                    type="text"
-                    id="gcash-account-name"
-                    class="gcash-ref-input"
-                    placeholder="Enter your GCash account name"
-                  >
-                </div>
-                <div class="gcash-ref">
-                  <span class="label">GCash Reference No. <span class="required">*</span></span>
-                  <input
-                    type="text"
-                    id="gcash-ref"
-                    class="gcash-ref-input"
-                    placeholder="Enter your GCash reference number"
-                  >
                 </div>
               </div>
             </div>
+          </section>
+
+          <!-- Action Buttons -->
+          <div class="action-buttons">
+            <button class="add-more-btn" type="button" onclick="goBackToCart()">
+              <i class="fas fa-arrow-left"></i>
+              <span>Back to Cart</span>
+            </button>
+            <button class="proceed-btn" type="button" onclick="placeOrder()">
+              <span>Place Order</span>
+            </button>
           </div>
         </div>
-      </section>
 
-      <!-- Order Summary -->
-      <section class="cart-summary">
-        <div class="summary-header">
-          <h3 class="summary-title">Order Summary</h3>
-        </div>
-        <div class="summary-items" id="summaryItems">
-          <!-- Line items from cart will be injected here -->
-          <div id="summaryLineItems"></div>
+        <!-- Order Summary (sticky side panel) -->
+        <aside class="cart-summary checkout-summary-panel">
+          <div class="summary-header">
+            <h3 class="summary-title">Order Summary</h3>
+          </div>
+          <div class="summary-items" id="summaryItems">
+            <!-- Line items from cart will be injected here -->
+            <div id="summaryLineItems"></div>
 
-          <div class="summary-row subtotal">
-            <span class="summary-label">Sub-Total</span>
-            <span class="summary-value" id="summarySubtotal">₱0.00</span>
+            <div class="summary-row subtotal">
+              <span class="summary-label">Sub-Total</span>
+              <span class="summary-value" id="summarySubtotal">₱0.00</span>
+            </div>
+            <div class="summary-row discount">
+              <span class="summary-label">
+                <i class="fas fa-gift"></i>
+                Discount / Points
+              </span>
+              <span class="summary-value" id="summaryPoints">-₱0.00</span>
+            </div>
+            <div class="summary-row delivery-fee" id="deliveryFeeRow">
+              <span class="summary-label">Delivery Fee</span>
+              <span class="summary-value" id="summaryDeliveryFee">₱0.00</span>
+            </div>
+            <div class="summary-row total">
+              <span class="summary-label">Total</span>
+              <span class="summary-value" id="summaryTotal">₱0.00</span>
+            </div>
+            <div class="summary-row earned-points-row" id="earnedPointsRow" style="display:none;">
+              <span class="summary-label">Loyalty Reward</span>
+              <span class="summary-value" id="earnedPointsValue">+0 pts</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Points remaining</span>
+              <span class="summary-value" id="pointsRemaining">0</span>
+            </div>
           </div>
-          <div class="summary-row discount">
-            <span class="summary-label">
-              <i class="fas fa-gift"></i>
-              Points Applied
-            </span>
-            <span class="summary-value" id="summaryPoints">-₱0.00</span>
-          </div>
-          <div class="summary-row delivery-fee" id="deliveryFeeRow">
-            <span class="summary-label">Delivery Fee</span>
-            <span class="summary-value" id="summaryDeliveryFee">₱0.00</span>
-          </div>
-          <div class="summary-row total">
-            <span class="summary-label">Total</span>
-            <span class="summary-value" id="summaryTotal">₱0.00</span>
-          </div>
-          <div class="summary-row earned-points-row" id="earnedPointsRow" style="display:none;">
-            <span class="summary-label">Loyalty Reward</span>
-            <span class="summary-value" id="earnedPointsValue">+0 pts</span>
-          </div>
-          <div class="summary-row">
-            <span class="summary-label">Points remaining</span>
-            <span class="summary-value" id="pointsRemaining">0</span>
-          </div>
-        </div>
-        <button type="button" class="apply-points-btn" onclick="applyPoints()">
-          <i class="fas fa-coins"></i>
-          <span>Apply Points</span>
-        </button>
-      </section>
-
-      <!-- Action Buttons -->
-      <div class="action-buttons">
-        <button class="add-more-btn" type="button" onclick="goBackToCart()">
-          <i class="fas fa-arrow-left"></i>
-          <span>Back to Cart</span>
-        </button>
-        <button class="proceed-btn" type="button" onclick="placeOrder()">
-          <span>Place Order</span>
-        </button>
+          <button type="button" class="apply-points-btn" onclick="applyPoints()">
+            <i class="fas fa-coins"></i>
+            <span>Apply Points</span>
+          </button>
+        </aside>
       </div>
     </div>
   </main>
@@ -317,6 +355,31 @@
   <script src="js/checkout.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
   <script src="js/mobile-menu.js"></script>
+
+  <!-- Save Address Confirm Modal (Checkout) -->
+  <div class="modal-overlay" id="saveAddressConfirmModal" aria-hidden="true">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 id="saveAddressConfirmTitle">Save this address?</h3>
+        <button class="modal-close" id="closeSaveAddressConfirm" type="button" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 0 0 24px 0;">
+        <p id="saveAddressConfirmMessage" style="margin: 0; color: #333; line-height: 1.6;">
+          Do you want to save this new delivery address to your account for next time?
+        </p>
+      </div>
+      <div class="account-actions modal-actions" style="margin-top: 0;">
+        <button type="button" class="profile-item logout danger-action" id="saveAddressConfirmYes" style="width: 100%; justify-content: center;">
+          <span>Yes, save address</span>
+        </button>
+        <button type="button" class="write-review-toggle" id="saveAddressConfirmNo" style="width: 100%; justify-content: center;">
+          <span>No, continue</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Mobile Menu Tray -->
   <div class="mobile-menu-overlay"></div>

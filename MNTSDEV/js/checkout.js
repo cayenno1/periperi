@@ -6,7 +6,6 @@
 (function() {
     'use strict';
 
-    const GUEST_CART_KEY = 'ppp_guest_cart';
     let baseSubtotal = 0;
     const DELIVERY_FEE = 50;
     const POINT_VALUE = 1; // 1 point = ₱1
@@ -16,36 +15,202 @@
     let loyaltyEnabled = false; // only for signed-in customers
     let pointsUsedInOrder = 0; // Track points used in current order
     let userDiscountInfo = null; // Store user's discount info
+    const PSGC_SOURCES = [
+        {
+            name: 'psgc-gitlab',
+            buildBarangaysUrl: (cityCode) => `https://psgc.gitlab.io/api/cities/${encodeURIComponent(cityCode)}/barangays/`
+        },
+        {
+            name: 'psgc-cloud',
+            buildBarangaysUrl: (cityCode) => `https://psgc.cloud/api/v1/cities-municipalities/${encodeURIComponent(cityCode)}/barangays`
+        }
+    ];
+    const psgcBarangayCache = new Map(); // cityCode -> [{code,name,...}]
 
-    function getGuestCart() {
-        try {
-            const raw = window.localStorage?.getItem(GUEST_CART_KEY);
-            if (!raw) return [];
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch (e) {
-            console.warn('Failed to read guest cart:', e);
-            return [];
+    // Save-address confirm modal (checkout)
+    let saveAddressResolve = null;
+
+    function openSaveAddressConfirmModal() {
+        const modal = document.getElementById('saveAddressConfirmModal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeSaveAddressConfirmModal() {
+        const modal = document.getElementById('saveAddressConfirmModal');
+        if (!modal) return;
+        modal.style.display = 'none';
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    function confirmSaveAddress() {
+        // Returns Promise<boolean>
+        return new Promise((resolve) => {
+            saveAddressResolve = resolve;
+            openSaveAddressConfirmModal();
+        });
+    }
+
+    async function saveNewAddressToFirestore(authUser, addressData) {
+        if (!authUser || !addressData) return null;
+        await window.utils.waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        if (!db || !window.doc || !window.getDoc || !window.setDoc) return null;
+
+        const userDocRef = window.doc(db, 'customers', authUser.uid);
+        const snap = await window.getDoc(userDocRef);
+        const existing = snap.exists() ? (snap.data()?.addresses || []) : [];
+        const addresses = Array.isArray(existing) ? existing.slice(0) : [];
+
+        addresses.push(addressData);
+
+        // Clean legacy fields like account.js does
+        const cleaned = addresses.map((addr) => {
+            const c = { ...(addr || {}) };
+            delete c.isDefault;
+            delete c.is_default;
+            delete c.addressId;
+            return c;
+        });
+
+        await window.setDoc(userDocRef, { addresses: cleaned }, { merge: true });
+        return addressData.id || null;
+    }
+
+    function updateTotalChip(displayValue) {
+        const chip = document.getElementById('summaryTotalChip');
+        if (chip && displayValue) {
+            chip.textContent = displayValue;
+        } else if (chip && !displayValue) {
+            chip.textContent = '₱0.00';
         }
     }
 
-    function setGuestCart(cart) {
-        try {
-            window.localStorage?.setItem(GUEST_CART_KEY, JSON.stringify(cart || []));
-        } catch (e) {
-            console.warn('Failed to save guest cart:', e);
-        }
+    function parseBarangayNumber(name) {
+        const raw = String(name || '');
+        const match = raw.match(/(\d{1,3})/);
+        if (!match) return null;
+        const n = Number(match[1]);
+        return Number.isFinite(n) ? n : null;
     }
 
-    function clearGuestCart() {
+    function isNorthCaloocanBarangayName(name) {
+        const n = parseBarangayNumber(name);
+        if (n !== null) return n >= 77;
+        const upper = String(name || '').toUpperCase();
+        const northHints = ['BAGONG SILANG', 'TALA', 'CAMARIN', 'DEPARO', 'LLANO'];
+        return northHints.some((hint) => upper.includes(hint));
+    }
+
+    function resetNewAddressErrors() {
+        ['deliveryLabelError', 'streetAddressError', 'cityError', 'deliveryBarangayError'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '';
+        });
+    }
+
+    function getSelectedCityPsgcCode() {
+        const cityEl = document.getElementById('city');
+        if (!cityEl) return null;
+        const opt = cityEl.options?.[cityEl.selectedIndex];
+        return opt?.dataset?.psgcCityCode || null;
+    }
+
+    function resetBarangaySelect() {
+        const barangayEl = document.getElementById('deliveryBarangay');
+        const listEl = document.getElementById('deliveryBarangayList');
+        if (!barangayEl) return;
+        if (listEl) listEl.innerHTML = '';
+        barangayEl.value = '';
+        barangayEl.placeholder = 'Select a city first';
+        barangayEl.disabled = true;
+    }
+
+    async function fetchPsgcBarangays(cityCode) {
+        if (psgcBarangayCache.has(cityCode)) return psgcBarangayCache.get(cityCode);
+
+        let lastError = null;
+        for (const source of PSGC_SOURCES) {
+            const url = source.buildBarangaysUrl(cityCode);
+            try {
+                const res = await fetch(url, { headers: { Accept: 'application/json' } });
+                if (!res.ok) {
+                    lastError = new Error(`[${source.name}] PSGC request failed (${res.status})`);
+                    continue;
+                }
+                const json = await res.json();
+                const list = Array.isArray(json)
+                    ? json
+                    : Array.isArray(json?.data)
+                    ? json.data
+                    : Array.isArray(json?.barangays)
+                    ? json.barangays
+                    : [];
+                if (Array.isArray(list) && list.length > 0) {
+                    psgcBarangayCache.set(cityCode, list);
+                    return list;
+                }
+                lastError = new Error(`[${source.name}] Unexpected PSGC response shape`);
+            } catch (error) {
+                lastError = error;
+                continue;
+            }
+        }
+        throw lastError || new Error('PSGC request failed');
+    }
+
+    async function refreshBarangayOptions(desiredBarangayValue = null) {
+        const cityEl = document.getElementById('city');
+        const barangayEl = document.getElementById('deliveryBarangay');
+        const listEl = document.getElementById('deliveryBarangayList');
+        if (!cityEl || !barangayEl) return;
+
+        const cityValue = cityEl.value;
+        const cityCode = getSelectedCityPsgcCode();
+
+        if (!cityValue || !cityCode) {
+            resetBarangaySelect();
+            return;
+        }
+
+        if (listEl) listEl.innerHTML = '';
+        barangayEl.value = '';
+        barangayEl.placeholder = 'Loading barangays...';
+        barangayEl.disabled = true;
+
         try {
-            window.localStorage?.removeItem(GUEST_CART_KEY);
-            window.localStorage?.setItem('ppp_cart_count', '0');
-            document.dispatchEvent(new CustomEvent('cart:count-changed', {
-                detail: { count: 0 }
-            }));
-        } catch (e) {
-            console.warn('Failed to clear guest cart:', e);
+            let barangays = await fetchPsgcBarangays(cityCode);
+            barangays = barangays
+                .map((b) => ({ code: b?.code, name: String(b?.name || '').trim() }))
+                .filter((b) => b.name);
+
+            if (cityValue === 'Caloocan City') {
+                barangays = barangays.filter((b) => isNorthCaloocanBarangayName(b.name));
+            }
+
+            if (listEl) {
+                barangays.forEach((b) => {
+                    const opt = document.createElement('option');
+                    opt.value = b.name;
+                    if (b.code) opt.dataset.psgcCode = String(b.code);
+                    listEl.appendChild(opt);
+                });
+            }
+            barangayEl.placeholder = 'Search barangay';
+            barangayEl.disabled = false;
+
+            if (desiredBarangayValue) {
+                const hasOption = listEl ? Array.from(listEl.options).some((opt) => opt.value === desiredBarangayValue) : true;
+                barangayEl.value = hasOption ? desiredBarangayValue : '';
+            }
+        } catch (error) {
+            console.warn('[PSGC] Failed to load barangays:', error);
+            if (listEl) listEl.innerHTML = '';
+            barangayEl.value = '';
+            barangayEl.placeholder = 'Failed to load barangays. Try again.';
+            barangayEl.disabled = true;
         }
     }
 
@@ -193,7 +358,9 @@
 
         // Calculate final total
         const finalTotal = Math.max(0, baseSubtotal + fee - totalDiscount);
-        if (totalEl) totalEl.textContent = `₱${finalTotal.toFixed(2)}`;
+        const finalDisplay = `₱${finalTotal.toFixed(2)}`;
+        if (totalEl) totalEl.textContent = finalDisplay;
+        updateTotalChip(finalDisplay);
 
         if (!isLoyaltyOn) {
             if (remainingEl) remainingEl.textContent = '0';
@@ -276,7 +443,9 @@
             }
             if (pointsRow) pointsRow.style.display = 'flex';
         }
-        if (totalEl) totalEl.textContent = `₱${newTotal.toFixed(2)}`;
+        const newDisplay = `₱${newTotal.toFixed(2)}`;
+        if (totalEl) totalEl.textContent = newDisplay;
+        updateTotalChip(newDisplay);
         if (remainingEl) remainingEl.textContent = newRemaining;
 
         saveStoredPoints(newRemaining);
@@ -296,6 +465,8 @@
         
         if (addressSelect.value === 'new') {
             newAddressForm.classList.remove('hidden');
+            resetNewAddressErrors();
+            resetBarangaySelect();
         } else {
             newAddressForm.classList.add('hidden');
         }
@@ -314,7 +485,10 @@
         }
 
         const auth = window.firebaseAuth;
-        const userId = auth && auth.currentUser ? auth.currentUser.uid : 'guest';
+        const userId = auth && auth.currentUser ? auth.currentUser.uid : null;
+        if (!userId) {
+            throw new Error('Please sign in before uploading payment proof.');
+        }
         const timestamp = Date.now();
         const safeName = (file.name || 'proof').replace(/[^a-zA-Z0-9._-]/g, '_');
         const fullPath = `paymentProofs/${userId}/${timestamp}-${safeName}`;
@@ -332,6 +506,19 @@
         if (btn && btn.disabled) return;
 
         clearCheckoutErrors();
+
+        const authUser = window.firebaseAuth?.currentUser || null;
+        if (!authUser) {
+            if (window.showAlert) {
+                window.showAlert('Please sign in or create an account to place an order.', 'info');
+            } else {
+                alert('Please sign in or create an account to place an order.');
+            }
+            const file = (window.location.pathname || '').split('/').pop() || 'checkout.html';
+            const redirectTarget = `${file}${window.location.search || ''}`;
+            window.location.href = `login.html?reason=order&redirect=${encodeURIComponent(redirectTarget)}`;
+            return;
+        }
 
         const paymentMethod = document.querySelector('input[name="payment"]:checked')?.value;
         if (!paymentMethod) {
@@ -411,17 +598,13 @@
             hasContactError = true;
         }
 
-        const authUser = window.firebaseAuth?.currentUser || null;
-        if (!authUser && !email) {
-            flagCheckoutError(emailInput);
-            hasContactError = true;
-        }
+        // Signed-in users: email can be sourced from auth profile; keep optional on the form.
 
         if (hasContactError) {
             if (window.showAlert) {
-                window.showAlert('Please provide your name, mobile number, and email (for guest checkout).', 'warning');
+                window.showAlert('Please provide your name and mobile number.', 'warning');
             } else {
-                alert('Please provide your name, mobile number, and email (for guest checkout).');
+                alert('Please provide your name and mobile number.');
             }
             if (btn) {
                 btn.disabled = false;
@@ -455,38 +638,97 @@
                     const barangay = addr.barangay || addr.province || '';
                     const fullAddr =
                         addr.fullAddress ||
-                        `${addr.street || ''}, ${addr.city || ''}, ${barangay} ${addr.postal || ''}`.trim();
+                        `${addr.street || ''}, ${addr.city || ''}, ${barangay}`.trim();
                     addressText = fullAddr;
                 }
             } else {
-                // Use a newly entered address
+                // Use a newly entered address (PSGC-validated)
+                const labelInput = document.getElementById('deliveryLabel');
                 const streetInput = document.getElementById('street-address');
                 const cityInput = document.getElementById('city');
                 const barangayInput = document.getElementById('deliveryBarangay');
-                const postalInput = document.getElementById('deliveryPostal');
+                const barangayList = document.getElementById('deliveryBarangayList');
 
+                resetNewAddressErrors();
+
+                const label = (labelInput?.value || '').trim();
                 const streetAddress = (streetInput?.value || '').trim();
                 const city = (cityInput?.value || '').trim();
                 const barangay = (barangayInput?.value || '').trim();
-                const postal = (postalInput?.value || '').trim();
 
-                if (!streetAddress || !city || !barangay || !postal) {
-                    if (!streetAddress) flagCheckoutError(streetInput);
-                    if (!city) flagCheckoutError(cityInput);
-                    if (!barangay) flagCheckoutError(barangayInput);
-                    if (!postal) flagCheckoutError(postalInput);
-                    if (window.showAlert) {
-                        window.showAlert('Please complete the delivery address (street, city, barangay, and postal code).', 'warning');
-                    } else {
-                        alert('Please complete the delivery address (street, city, barangay, and postal code).');
+                let hasAddrError = false;
+                const allowedCities = new Set(['Quezon City', 'Caloocan City']);
+                if (!label) {
+                    const el = document.getElementById('deliveryLabelError');
+                    if (el) el.textContent = 'Select a label';
+                    hasAddrError = true;
+                }
+                if (!streetAddress) {
+                    const el = document.getElementById('streetAddressError');
+                    if (el) el.textContent = 'Street address is required';
+                    hasAddrError = true;
+                }
+                if (!city || !allowedCities.has(city)) {
+                    const el = document.getElementById('cityError');
+                    if (el) el.textContent = 'We deliver to Quezon City or North Caloocan only';
+                    hasAddrError = true;
+                }
+                if (!barangay) {
+                    const el = document.getElementById('deliveryBarangayError');
+                    if (el) el.textContent = 'Barangay is required';
+                    hasAddrError = true;
+                }
+                if (city && barangay && barangayList) {
+                    const isInList = Array.from(barangayList.options).some((opt) => opt.value === barangay);
+                    if (!isInList) {
+                        const el = document.getElementById('deliveryBarangayError');
+                        if (el) el.textContent = 'Please pick a barangay from the list';
+                        hasAddrError = true;
                     }
+                }
+                if (city === 'Caloocan City' && barangay && !isNorthCaloocanBarangayName(barangay)) {
+                    const el = document.getElementById('deliveryBarangayError');
+                    if (el) el.textContent = 'We only deliver to North Caloocan barangays';
+                    hasAddrError = true;
+                }
+
+                if (hasAddrError) {
                     if (btn) {
                         btn.disabled = false;
                         btn.classList.remove('is-processing');
                     }
                     return;
                 }
-                addressText = `${streetAddress}, ${city}, ${barangay} ${postal}`;
+
+                addressText = `${streetAddress}, ${city}, ${barangay}`;
+
+                // If signed-in, ask whether to save this new address
+                if (authUser) {
+                    const shouldSave = await confirmSaveAddress();
+                    if (shouldSave) {
+                        try {
+                            const nowIso = new Date().toISOString();
+                            const newAddress = {
+                                id: `addr-${Date.now()}`,
+                                label: label,
+                                street: streetAddress,
+                                city: city,
+                                barangay: barangay,
+                                fullAddress: addressText,
+                                updatedAt: nowIso
+                            };
+                            const savedId = await saveNewAddressToFirestore(authUser, newAddress);
+                            if (savedId) {
+                                // Refresh saved addresses list and auto-select it
+                                await loadAddressesForCheckout(authUser);
+                                const sel = document.getElementById('delivery-address');
+                                if (sel) sel.value = savedId;
+                            }
+                        } catch (e) {
+                            console.warn('Failed to save new address from checkout:', e);
+                        }
+                    }
+                }
             }
 
             params.set('address', addressText);
@@ -542,6 +784,9 @@
 
         try {
             const user = window.firebaseAuth?.currentUser || null;
+            if (!user) {
+                throw new Error('You must be signed in to place an order.');
+            }
 
             // Build payment info object - only include GCash fields if GCash is selected
             const paymentInfo = {
@@ -552,26 +797,15 @@
                 gcashRefNo: (paymentMethod === 'gcash' && gcashRefNo) ? gcashRefNo : null
             };
 
-            if (user) {
-                // Signed-in customer: use Firestore cart
-                orderId = await createOrderWithInventoryCheck(
-                    deliveryInfo,
-                    customerInfo,
-                    orderTotal,
-                    paymentInfo
-                );
-                // Clear cart after a successful order
-                await clearUserCart();
-            } else {
-                // Guest: use local guest cart from localStorage
-                orderId = await createGuestOrderWithInventoryCheck(
-                    deliveryInfo,
-                    customerInfo,
-                    orderTotal,
-                    paymentInfo
-                );
-                clearGuestCart();
-            }
+            // Signed-in customer: use Firestore cart
+            orderId = await createOrderWithInventoryCheck(
+                deliveryInfo,
+                customerInfo,
+                orderTotal,
+                paymentInfo
+            );
+            // Clear cart after a successful order
+            await clearUserCart();
 
             if (orderId) {
                 params.set('orderId', orderId);
@@ -1180,203 +1414,6 @@
         });
     }
 
-    async function createGuestOrderWithInventoryCheck(deliveryInfo, customerInfo, orderTotal, paymentInfo) {
-        await window.utils.waitForFirebaseReady();
-
-        const db = window.firebaseDb;
-
-        if (!db || !window.doc || !window.collection || !window.getDocs || !window.runTransaction) {
-            console.warn('Firebase not fully initialized for guest order transaction');
-            throw new Error('Checkout is temporarily unavailable. Please try again later.');
-        }
-
-        const cartItems = getGuestCart();
-        if (!Array.isArray(cartItems) || !cartItems.length) {
-            throw new Error('Your cart is empty.');
-        }
-
-        const MENU_COLLECTION = 'menu';
-
-        // Get next sequential order number before starting the transaction
-        const orderNumber = await getNextOrderNumber(db);
-
-        return await window.runTransaction(db, async (transaction) => {
-            const unavailableItems = [];
-            const orderItems = [];
-            const menuUpdates = {}; // menuId -> { menuRef, currentMaxServingsPerDay, quantity }
-
-            for (const cartItem of cartItems) {
-                const qty =
-                    typeof cartItem.quantity === 'number'
-                        ? cartItem.quantity
-                        : Number(cartItem.quantity) || 1;
-
-                const linePrice =
-                    typeof cartItem.price === 'number'
-                        ? cartItem.price
-                        : Number(cartItem.price) || 0;
-
-                const unitPrice = qty > 0 ? linePrice / qty : linePrice;
-
-                // Include sauce information if present (no additional fee)
-                const sauce = cartItem.sauce || null;
-                // Include variation information if present
-                const variation = cartItem.variation || null;
-
-                const menuId = cartItem.itemId;
-                if (!menuId) {
-                    unavailableItems.push({
-                        itemId: null,
-                        name: cartItem.name || 'Item',
-                        reason: 'Missing menu item ID'
-                    });
-                    continue;
-                }
-
-                // Check menu item availability using maxServingsPerDay
-                const menuRef = window.doc(db, MENU_COLLECTION, menuId);
-                const menuSnap = await transaction.get(menuRef);
-                
-                if (!menuSnap.exists()) {
-                    unavailableItems.push({
-                        itemId: menuId,
-                        name: cartItem.name || 'Item',
-                        reason: 'Item no longer exists on menu'
-                    });
-                    continue;
-                }
-
-                const menuData = menuSnap.data() || {};
-                
-                // Check maxServingsPerDay to determine availability
-                const maxServingsPerDay = typeof menuData.maxServingsPerDay === 'number' 
-                    ? menuData.maxServingsPerDay 
-                    : (typeof menuData.maxServingsPerDay === 'string' 
-                        ? parseFloat(menuData.maxServingsPerDay) 
-                        : null);
-
-                // Log for debugging
-                console.log(`[Checkout Guest] Menu item ${menuId} (${menuData.name || cartItem.name}): maxServingsPerDay = ${maxServingsPerDay}, menuData keys:`, Object.keys(menuData));
-
-                // If maxServingsPerDay is null, undefined, or negative, item is unavailable
-                if (maxServingsPerDay === null || maxServingsPerDay === undefined || isNaN(maxServingsPerDay) || maxServingsPerDay < 0) {
-                    unavailableItems.push({
-                        itemId: menuId,
-                        name: cartItem.name || menuData.name || 'Item',
-                        reason: `Item is currently unavailable (maxServingsPerDay: ${maxServingsPerDay})`
-                    });
-                    continue;
-                }
-
-                // Check if there are enough servings available
-                if (maxServingsPerDay < qty) {
-                    unavailableItems.push({
-                        itemId: menuId,
-                        name: cartItem.name || menuData.name || 'Item',
-                        reason: `Only ${maxServingsPerDay} serving(s) available, but ${qty} requested`
-                    });
-                    continue;
-                }
-
-                // Track menu items that need to be updated (aggregate quantities if same item appears multiple times)
-                if (!menuUpdates[menuId]) {
-                    menuUpdates[menuId] = {
-                        menuRef: menuRef,
-                        currentMaxServingsPerDay: maxServingsPerDay,
-                        quantity: 0
-                    };
-                }
-                menuUpdates[menuId].quantity += qty;
-
-                orderItems.push({
-                    itemId: cartItem.itemId || cartItem.id,
-                    name: cartItem.name || 'Item',
-                    quantity: qty,
-                    unitPrice: unitPrice,
-                    lineTotal: linePrice || unitPrice * qty,
-                    variation: variation ? {
-                        name: variation.name || null,
-                        price: typeof variation.price === 'number' ? variation.price : 
-                            (typeof variation.price === 'string' ? parseFloat(variation.price) : 0)
-                    } : null,
-                    sauce: sauce ? {
-                        id: sauce.id || null,
-                        name: sauce.name || null,
-                        price: 0 // Sauce has no fee when attached to a dish
-                    } : null
-                });
-            }
-
-            // If any items are unavailable, block the order
-            if (unavailableItems.length > 0) {
-                const details = unavailableItems
-                    .map((i) => `${i.name} (${i.reason})`)
-                    .join(', ');
-                const error = new Error(`Unavailable items: ${details}`);
-                error.code = 'inventory/insufficient';
-                throw error;
-            }
-
-            // Verify again that we have enough servings after aggregating quantities
-            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
-                if (updateInfo.currentMaxServingsPerDay < updateInfo.quantity) {
-                    const error = new Error(`Insufficient servings available for one or more items`);
-                    error.code = 'inventory/insufficient';
-                    throw error;
-                }
-            }
-
-            // Create order document for guest with sequential ID
-            const ordersCol = window.collection(db, 'orders');
-            const orderRef = window.doc(ordersCol, orderNumber);
-
-            const now = new Date();
-            const dateOnly = now.toISOString().split('T')[0];
-
-            const orderDoc = {
-                orderNumber: orderNumber, // Store the order number in the document as well
-                userId: null,
-                isGuest: true,
-                items: orderItems,
-                total: orderTotal,
-                deliveryInfo: {
-                    serviceType: deliveryInfo.serviceType,
-                    tableNumber: deliveryInfo.tableNumber || null,
-                    storeLocation: deliveryInfo.storeLocation || null,
-                    address: deliveryInfo.address || null
-                },
-                customerInfo: {
-                    name: customerInfo && customerInfo.name ? customerInfo.name : null,
-                    phone: customerInfo && customerInfo.phone ? customerInfo.phone : null,
-                    email: customerInfo && customerInfo.email ? customerInfo.email : null,
-                    notes: customerInfo && customerInfo.notes ? customerInfo.notes : null
-                },
-                payment: {
-                    method: paymentInfo && paymentInfo.method ? paymentInfo.method : null,
-                    gcashProofUrl: paymentInfo && paymentInfo.gcashProofUrl ? paymentInfo.gcashProofUrl : null,
-                    gcashProofPath: paymentInfo && paymentInfo.gcashProofPath ? paymentInfo.gcashProofPath : null,
-                    gcashAccountName: paymentInfo && paymentInfo.gcashAccountName ? paymentInfo.gcashAccountName : null,
-                    gcashRefNo: paymentInfo && paymentInfo.gcashRefNo ? paymentInfo.gcashRefNo : null
-                },
-                timestamp: dateOnly,
-                status: 'pending',
-                createdAt: window.serverTimestamp ? window.serverTimestamp() : now
-            };
-
-            transaction.set(orderRef, orderDoc);
-
-            // Decrement maxServingsPerDay for each menu item that was ordered
-            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
-                const newMaxServingsPerDay = Math.max(0, updateInfo.currentMaxServingsPerDay - updateInfo.quantity);
-                transaction.update(updateInfo.menuRef, {
-                    maxServingsPerDay: newMaxServingsPerDay
-                });
-            }
-
-            return orderRef.id;
-        });
-    }
-
     async function loadCheckoutTotalsFromFirestore(authUser) {
         try {
             await window.utils.waitForFirebaseReady();
@@ -1393,8 +1430,9 @@
 
             const user = authUser || auth.currentUser;
             if (!user) {
-                console.warn('No authenticated user on checkout page; using guest cart for summary');
-                await loadCheckoutTotalsFromGuestCart();
+                console.warn('No authenticated user on checkout page; checkout requires login');
+                baseSubtotal = 0;
+                initPointsSummary();
                 return;
             }
 
@@ -1476,51 +1514,6 @@
             console.error('Error loading user discount info:', error);
             userDiscountInfo = null;
         }
-    }
-
-    async function loadCheckoutTotalsFromGuestCart() {
-        try {
-            const cart = getGuestCart();
-
-            let subtotal = 0;
-            let rowsHtml = '';
-
-            cart.forEach((item) => {
-                const name = item.name || 'Item';
-                const quantity =
-                    typeof item.quantity === 'number'
-                        ? item.quantity
-                        : Number(item.quantity) || 1;
-                const lineTotal =
-                    typeof item.price === 'number'
-                        ? item.price
-                        : Number(item.price) || 0;
-
-                subtotal += lineTotal;
-
-                rowsHtml += `
-                    <div class="summary-row">
-                        <span class="summary-label">${name} x ${quantity}</span>
-                        <span class="summary-value">₱${lineTotal.toFixed(2)}</span>
-                    </div>
-                `;
-            });
-
-            const lineItemsContainer = document.getElementById('summaryLineItems');
-            if (lineItemsContainer) {
-                lineItemsContainer.innerHTML = rowsHtml;
-            }
-
-            baseSubtotal = subtotal;
-        } catch (error) {
-            console.error('Error loading checkout totals from guest cart:', error);
-            baseSubtotal = 0;
-        }
-
-        // Guest users don't have discount info
-        userDiscountInfo = null;
-
-        initPointsSummary();
     }
 
     async function loadAddressesForCheckout(authUser) {
@@ -1616,6 +1609,44 @@
 
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', () => {
+        updateTotalChip(document.getElementById('summaryTotal')?.textContent || '₱0.00');
+
+        // Save-address confirm modal wiring
+        const saveModal = document.getElementById('saveAddressConfirmModal');
+        const saveYes = document.getElementById('saveAddressConfirmYes');
+        const saveNo = document.getElementById('saveAddressConfirmNo');
+        const saveClose = document.getElementById('closeSaveAddressConfirm');
+        if (saveYes) {
+            saveYes.addEventListener('click', () => {
+                closeSaveAddressConfirmModal();
+                if (saveAddressResolve) saveAddressResolve(true);
+                saveAddressResolve = null;
+            });
+        }
+        if (saveNo) {
+            saveNo.addEventListener('click', () => {
+                closeSaveAddressConfirmModal();
+                if (saveAddressResolve) saveAddressResolve(false);
+                saveAddressResolve = null;
+            });
+        }
+        if (saveClose) {
+            saveClose.addEventListener('click', () => {
+                closeSaveAddressConfirmModal();
+                if (saveAddressResolve) saveAddressResolve(false);
+                saveAddressResolve = null;
+            });
+        }
+        if (saveModal) {
+            saveModal.addEventListener('click', (e) => {
+                if (e.target === saveModal) {
+                    closeSaveAddressConfirmModal();
+                    if (saveAddressResolve) saveAddressResolve(false);
+                    saveAddressResolve = null;
+                }
+            });
+        }
+
         const params = new URLSearchParams(window.location.search);
         const service = (params.get('service') || '').toLowerCase();
         const table = (params.get('table') || '').trim();
@@ -1651,24 +1682,38 @@
             });
         });
 
-        // Load totals based on cart contents for the logged-in user or guest
+        // No guest ordering: require login to access checkout.
         if (window.firebaseAuth && window.onAuthStateChanged) {
             window.onAuthStateChanged(window.firebaseAuth, (user) => {
-                loyaltyEnabled = !!user;
-                if (user) {
-                    loadCheckoutTotalsFromFirestore(user);
-                    loadAddressesForCheckout(user);
-                    setContactFieldsLocked(true);
-                } else {
-                    loadCheckoutTotalsFromGuestCart();
-                    loadAddressesForCheckout(null);
-                    setContactFieldsLocked(false);
+                if (!user) {
+                    if (window.showAlert) {
+                        window.showAlert('Please sign in or create an account to proceed to checkout.', 'info');
+                    }
+                    const file = (window.location.pathname || '').split('/').pop() || 'checkout.html';
+                    const redirectTarget = `${file}${window.location.search || ''}`;
+                    window.location.href = `login.html?reason=checkout&redirect=${encodeURIComponent(redirectTarget)}`;
+                    return;
                 }
+
+                loyaltyEnabled = true;
+                loadCheckoutTotalsFromFirestore(user);
+                loadAddressesForCheckout(user);
+                setContactFieldsLocked(true);
             });
         } else {
-            loyaltyEnabled = false;
-            loadCheckoutTotalsFromGuestCart();
-            loadAddressesForCheckout(null);
+            if (window.showAlert) {
+                window.showAlert('Please sign in or create an account to proceed to checkout.', 'info');
+            }
+            const file = (window.location.pathname || '').split('/').pop() || 'checkout.html';
+            const redirectTarget = `${file}${window.location.search || ''}`;
+            window.location.href = `login.html?reason=checkout&redirect=${encodeURIComponent(redirectTarget)}`;
+        }
+
+        const citySelect = document.getElementById('city');
+        if (citySelect) {
+            citySelect.addEventListener('change', () => {
+                refreshBarangayOptions();
+            });
         }
     });
 })();

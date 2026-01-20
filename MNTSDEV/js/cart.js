@@ -8,7 +8,7 @@
 
     const GUEST_CART_KEY = 'ppp_guest_cart';
 
-    // Guest cart helpers
+    // Guest cart helpers (temporary cart stored locally)
     function getGuestCart() {
         try {
             const raw = window.localStorage?.getItem(GUEST_CART_KEY);
@@ -29,24 +29,29 @@
         }
     }
 
+    function clearGuestCart() {
+        try {
+            window.localStorage?.removeItem(GUEST_CART_KEY);
+        } catch (e) {
+            console.warn('Failed to clear guest cart:', e);
+        }
+    }
+
     function addGuestCartItem({ itemId, name, imageUrl, price, quantity, variation, sauce }) {
         const cart = getGuestCart();
-        const numericPrice = typeof price === 'number' ? price : Number(price) || 0;
+        const numericUnit = typeof price === 'number' ? price : Number(price) || 0;
         const numericQty = typeof quantity === 'number' ? quantity : Number(quantity) || 1;
+        const lineTotal = numericUnit * numericQty;
 
-        // Try to match existing item by itemId, variation, and sauce (for exact match)
+        // Try to match existing item by itemId + variation + sauce
         let existingIndex = -1;
         if (itemId) {
             existingIndex = cart.findIndex((item) => {
-                const itemIdMatch = item.itemId === itemId;
-                const variationMatch = JSON.stringify(item.variation || null) === JSON.stringify(variation || null);
-                const sauceMatch = JSON.stringify(item.sauce || null) === JSON.stringify(sauce || null);
+                const itemIdMatch = item?.itemId === itemId;
+                const variationMatch = JSON.stringify(item?.variation || null) === JSON.stringify(variation || null);
+                const sauceMatch = JSON.stringify(item?.sauce || null) === JSON.stringify(sauce || null);
                 return itemIdMatch && variationMatch && sauceMatch;
             });
-        }
-        // Fallback to name match if no exact match found
-        if (existingIndex === -1 && name) {
-            existingIndex = cart.findIndex((item) => item.name === name);
         }
 
         if (existingIndex !== -1) {
@@ -54,8 +59,7 @@
             const currentQty = typeof existing.quantity === 'number' ? existing.quantity : Number(existing.quantity) || 0;
             const currentPrice = typeof existing.price === 'number' ? existing.price : Number(existing.price) || 0;
             existing.quantity = currentQty + numericQty;
-            // Treat price as line total for this cart row
-            existing.price = currentPrice + numericPrice * numericQty;
+            existing.price = currentPrice + lineTotal;
             cart[existingIndex] = existing;
         } else {
             const id = itemId || `guest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -64,8 +68,8 @@
                 itemId: itemId || null,
                 name: name || null,
                 imageUrl: imageUrl || null,
-                // Price is stored as total for this line (unit price * quantity)
-                price: numericPrice * numericQty,
+                // Store line total
+                price: lineTotal,
                 quantity: numericQty,
                 variation: variation || null,
                 sauce: sauce || null
@@ -122,7 +126,7 @@
                 const currentPrice = typeof data.price === 'number' ? data.price : Number(data.price) || 0;
 
                 const newQty = currentQty + numericQty;
-                const newPrice = currentPrice + numericPrice;
+                const newPrice = currentPrice + (numericPrice * numericQty);
 
                 await window.updateDoc(existingSnap.ref, {
                     quantity: newQty,
@@ -175,10 +179,9 @@
             btn.setAttribute('aria-pressed', 'false');
         }, 1000);
         
-        // If user is logged in, save cart item to their Firestore cart;
-        // otherwise, fall back to a local guest cart stored in localStorage.
         const user = window.firebaseAuth?.currentUser;
         if (user) {
+            // Logged-in: save to Firestore cart.
             saveCartItemToFirestore({
                 itemId,
                 name: itemName,
@@ -187,6 +190,7 @@
                 quantity
             });
         } else {
+            // Guest: save to temporary local cart.
             addGuestCartItem({
                 itemId,
                 name: itemName,
@@ -201,6 +205,7 @@
     window.cart = {
         getGuestCart,
         setGuestCart,
+        clearGuestCart,
         addGuestCartItem,
         saveCartItemToFirestore,
         addToCart

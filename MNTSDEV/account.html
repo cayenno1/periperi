@@ -398,6 +398,12 @@
         </button>
       </div>
       <form class="modal-form" id="addressForm">
+        <div class="restaurant-form-group" style="margin-top: -4px;">
+          <div style="font-size: 0.9rem; color: #666; line-height: 1.4;">
+            <i class="fas fa-circle-info" style="margin-right: 6px; color: #e53935;"></i>
+            We only deliver to <strong>Quezon City</strong> and <strong>North Caloocan</strong>.
+          </div>
+        </div>
         <div class="restaurant-form-group">
           <label for="addressLabel" class="restaurant-form-label">Label</label>
           <select id="addressLabel" name="label" class="restaurant-form-input" required>
@@ -415,18 +421,26 @@
         </div>
         <div class="restaurant-form-group">
           <label for="addressCity" class="restaurant-form-label">City</label>
-          <input type="text" id="addressCity" name="city" class="restaurant-form-input" placeholder="City" required>
+          <select id="addressCity" name="city" class="restaurant-form-input" required>
+            <option value="">Select city</option>
+            <option value="Quezon City" data-psgc-city-code="137404000">Quezon City</option>
+            <option value="Caloocan City" data-psgc-city-code="137501000">Caloocan City (North)</option>
+          </select>
           <span class="error-message" id="addressCityError"></span>
         </div>
         <div class="restaurant-form-group">
           <label for="addressBarangay" class="restaurant-form-label">Barangay</label>
-          <input type="text" id="addressBarangay" name="barangay" class="restaurant-form-input" placeholder="Barangay" required>
+          <input
+            type="text"
+            id="addressBarangay"
+            name="barangay"
+            class="restaurant-form-input"
+            placeholder="Search barangay"
+            list="addressBarangayList"
+            required
+            disabled>
+          <datalist id="addressBarangayList"></datalist>
           <span class="error-message" id="addressBarangayError"></span>
-        </div>
-        <div class="restaurant-form-group">
-          <label for="addressPostal" class="restaurant-form-label">Postal Code</label>
-          <input type="text" id="addressPostal" name="postal" class="restaurant-form-input" placeholder="Postal code" required>
-          <span class="error-message" id="addressPostalError"></span>
         </div>
         <div class="account-actions modal-actions">
           <button type="submit" class="restaurant-auth-button modal-save-btn">
