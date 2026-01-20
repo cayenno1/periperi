@@ -9,6 +9,7 @@
     const GUEST_CART_KEY = 'ppp_guest_cart';
     let availableSauces = []; // Cache for sauces
     const MAX_QTY = 99;
+    const NOTE_MAX_LEN = 140;
 
     function setCartReviewLoading(isLoading) {
         const container = document.querySelector('.cart-review-container');
@@ -346,6 +347,20 @@
         }
     }
 
+    function sanitizeNote(raw) {
+        const s = String(raw ?? '').replace(/\s+/g, ' ').trim();
+        return s.length > NOTE_MAX_LEN ? s.slice(0, NOTE_MAX_LEN) : s;
+    }
+
+    function updateGuestCartItemNote(guestId, note) {
+        if (!guestId) return;
+        const cart = getGuestCart();
+        const idx = cart.findIndex((item) => item.id === guestId);
+        if (idx === -1) return;
+        cart[idx].note = note || '';
+        setGuestCart(cart);
+    }
+
     function updateGuestCartItemQuantity(guestId, newQty, unitPrice) {
         if (!guestId) return;
         const cart = getGuestCart();
@@ -426,6 +441,57 @@
         }
     }
 
+    async function commitNoteForCartItem(cartItem, noteText) {
+        if (!cartItem) return;
+        const safeNote = sanitizeNote(noteText);
+
+        const textarea = cartItem.querySelector('.ppp-item-notes textarea');
+        if (textarea) textarea.value = safeNote;
+
+        const docId = cartItem.dataset.cartDocId;
+        const guestId = cartItem.dataset.guestId;
+        const source = cartItem.dataset.source || (guestId ? 'guest' : 'user');
+
+        if (source === 'guest') {
+            updateGuestCartItemNote(guestId, safeNote);
+            return;
+        }
+
+        if (!docId) return;
+
+        try {
+            await window.utils.waitForFirebaseReady();
+            const db = window.firebaseDb;
+            const auth = window.firebaseAuth;
+            if (!db || !auth || !window.doc || !window.updateDoc) return;
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const customerRef = window.doc(db, 'customers', user.uid);
+            const cartItemRef = window.doc(customerRef, 'cartItems', docId);
+            await window.updateDoc(cartItemRef, {
+                note: safeNote || '',
+                updatedAt: new Date()
+            });
+        } catch (error) {
+            console.error('Error updating cart item note:', error);
+        }
+    }
+
+    function onNoteInput(textarea) {
+        if (!textarea) return;
+        // Allow typing, but clamp length and normalize spacing lightly.
+        const next = String(textarea.value ?? '').slice(0, NOTE_MAX_LEN);
+        if (textarea.value !== next) textarea.value = next;
+    }
+
+    async function onNoteBlur(textarea) {
+        if (!textarea) return;
+        const cartItem = textarea.closest('.cart-item');
+        if (!cartItem) return;
+        await commitNoteForCartItem(cartItem, textarea.value);
+    }
+
     function removeGuestCartItem(guestId) {
         if (!guestId) return;
         const cart = getGuestCart().filter((item) => item.id !== guestId);
@@ -481,6 +547,7 @@
                 const sauce = data.sauce || null;
                 const variation = data.variation || null;
                 const itemId = data.itemId || null;
+                const note = typeof data.note === 'string' ? data.note : '';
 
                 const itemEl = document.createElement('div');
                 itemEl.className = 'cart-item';
@@ -489,6 +556,7 @@
                 itemEl.dataset.source = 'user';
                 itemEl.dataset.itemId = itemId || '';
 
+                const noteId = `note-${docId}-${Date.now()}`;
                 itemEl.innerHTML = `
                     <div class="item-image-container">
                         <img src="${imageUrl}" alt="${name}" class="item-image">
@@ -498,6 +566,16 @@
                             <h3 class="cart-item-title">${name}</h3>
                         </div>
                         <div class="item-options"></div>
+                        <div class="ppp-item-notes">
+                            <label for="${noteId}">Item notes (optional)</label>
+                            <textarea
+                                id="${noteId}"
+                                maxlength="${NOTE_MAX_LEN}"
+                                placeholder="e.g., no onions, extra spicy"
+                                oninput="cartReview.onNoteInput(this)"
+                                onblur="cartReview.onNoteBlur(this)"
+                            >${note || ''}</textarea>
+                        </div>
                         <div class="item-price-section">
                             <div class="cart-item-price">₱${unitPrice.toFixed(2)}</div>
                             <div class="price-per-unit">₱${unitPrice.toFixed(2)} each</div>
@@ -572,6 +650,7 @@
             const sauce = data.sauce || null;
             const variation = data.variation || null;
             const itemId = data.itemId || null;
+            const note = typeof data.note === 'string' ? data.note : '';
 
             const itemEl = document.createElement('div');
             itemEl.className = 'cart-item';
@@ -580,6 +659,7 @@
             itemEl.dataset.source = 'guest';
             itemEl.dataset.itemId = itemId || '';
 
+            const noteId = `note-${guestId}-${Date.now()}`;
             itemEl.innerHTML = `
                 <div class="item-image-container">
                     <img src="${imageUrl}" alt="${name}" class="item-image">
@@ -589,6 +669,16 @@
                         <h3 class="cart-item-title">${name}</h3>
                     </div>
                     <div class="item-options"></div>
+                    <div class="ppp-item-notes">
+                        <label for="${noteId}">Item notes (optional)</label>
+                        <textarea
+                            id="${noteId}"
+                            maxlength="${NOTE_MAX_LEN}"
+                            placeholder="e.g., no onions, extra spicy"
+                            oninput="cartReview.onNoteInput(this)"
+                            onblur="cartReview.onNoteBlur(this)"
+                        >${note || ''}</textarea>
+                    </div>
                     <div class="item-price-section">
                         <div class="cart-item-price">₱${unitPrice.toFixed(2)}</div>
                         <div class="price-per-unit">₱${unitPrice.toFixed(2)} each</div>
@@ -630,6 +720,148 @@
         }
 
         updateCartSummary();
+    }
+
+    function getBasePriceFromMenuItem(item, fallback = 150) {
+        const variations = Array.isArray(item?.variations) ? item.variations : [];
+        if (variations.length > 0) {
+            const v = variations[0];
+            const p = typeof v?.price === 'number' ? v.price : (typeof v?.price === 'string' ? parseFloat(v.price) : NaN);
+            if (Number.isFinite(p)) return p;
+        }
+        const p = typeof item?.price === 'number' ? item.price : (typeof item?.price === 'string' ? parseFloat(item.price) : NaN);
+        if (Number.isFinite(p)) return p;
+        return fallback;
+    }
+
+    function pickImageFromMenuItem(item) {
+        return item?.img || item?.image || item?.imageDataUrl || 'food_img.png';
+    }
+
+    async function quickAddItem(menuItem) {
+        if (!menuItem) return;
+        const itemId = menuItem.id || null;
+        const name = menuItem.displayName || menuItem.name || menuItem.title || 'Item';
+        const unitPrice = getBasePriceFromMenuItem(menuItem, 50);
+        const imageUrl = pickImageFromMenuItem(menuItem);
+
+        try {
+            // Update visible badge count quickly
+            if (typeof window.incrementCartCount === 'function') {
+                window.incrementCartCount(1);
+            }
+        } catch (e) {}
+
+        const user = window.firebaseAuth?.currentUser || null;
+        try {
+            if (user) {
+                await window.cart.saveCartItemToFirestore({
+                    itemId,
+                    name,
+                    imageUrl,
+                    price: unitPrice,
+                    quantity: 1
+                });
+                await loadCartFromFirestore(user);
+            } else {
+                window.cart.addGuestCartItem({
+                    itemId,
+                    name,
+                    imageUrl,
+                    price: unitPrice,
+                    quantity: 1
+                });
+                await loadCartFromGuestCart();
+            }
+            if (window.utils?.showToast) {
+                window.utils.showToast(`Added ${name}`, 'success', 2200);
+            }
+        } catch (e) {
+            console.error('Quick add failed:', e);
+            if (window.utils?.showToast) {
+                window.utils.showToast('Could not add item. Please try again.', 'error');
+            }
+        }
+    }
+
+    function renderAddOnsSection(items) {
+        const mount = document.getElementById('pppAddOns');
+        if (!mount) return;
+        if (!Array.isArray(items) || items.length === 0) {
+            mount.hidden = true;
+            mount.innerHTML = '';
+            return;
+        }
+
+        const top = items.slice(0, 4);
+        mount.hidden = false;
+        mount.innerHTML = `
+            <div class="ppp-addons-title">
+                <h3>Add something extra?</h3>
+                <span style="font-size:.85rem; opacity:.75;">Sides & drinks</span>
+            </div>
+            <div class="ppp-addons-grid">
+                ${top.map((it) => {
+                    const name = it.displayName || it.name || it.title || 'Item';
+                    const price = getBasePriceFromMenuItem(it, 50);
+                    const img = pickImageFromMenuItem(it);
+                    return `
+                        <div class="ppp-addon-card">
+                            <img src="${String(img).replace(/"/g, '&quot;')}" alt="${String(name).replace(/"/g, '&quot;')}">
+                            <div class="ppp-addon-name">${name}</div>
+                            <div class="ppp-addon-meta">
+                                <div class="ppp-addon-price">₱${price.toFixed(2)}</div>
+                                <button type="button" class="btn btn-outline-danger ppp-addon-addbtn" data-addon-id="${it.id}">
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+
+        // Wire buttons
+        mount.querySelectorAll('button[data-addon-id]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-addon-id');
+                const item = items.find((x) => String(x.id) === String(id));
+                if (!item) return;
+                btn.disabled = true;
+                try {
+                    await quickAddItem(item);
+                } finally {
+                    btn.disabled = false;
+                }
+            });
+        });
+    }
+
+    async function loadAndRenderAddOns() {
+        const mount = document.getElementById('pppAddOns');
+        if (!mount) return;
+        try {
+            await window.utils.waitForFirebaseReady();
+            if (!window.firestore?.fetchMenuItems) return;
+
+            const [sides, beverages] = await Promise.all([
+                window.firestore.fetchMenuItems('sides'),
+                window.firestore.fetchMenuItems('beverages')
+            ]);
+            const all = []
+                .concat(Array.isArray(sides) ? sides : [])
+                .concat(Array.isArray(beverages) ? beverages : []);
+
+            // Light shuffle
+            for (let i = all.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [all[i], all[j]] = [all[j], all[i]];
+            }
+
+            renderAddOnsSection(all);
+        } catch (e) {
+            console.warn('Failed to load add-ons:', e);
+        }
     }
 
     async function updateQuantity(btn, change) {
@@ -817,8 +1049,12 @@
                 <span class="summary-value" id="summarySubtotal">${subtotalDisplay}</span>
             </div>
             <div class="summary-row total">
-                <span class="summary-label">Total</span>
+                <span class="summary-label">Estimated total</span>
                 <span class="summary-value" id="summaryTotal">${subtotalDisplay}</span>
+            </div>
+            <div class="summary-row" style="opacity:.75;">
+                <span class="summary-label">Final total is calculated at checkout</span>
+                <span class="summary-value"></span>
             </div>
         `;
 
@@ -870,7 +1106,9 @@
         changeSauce,
         changeVariation,
         onQtyInput,
-        onQtyBlur
+        onQtyBlur,
+        onNoteInput,
+        onNoteBlur
     };
 
     // Global functions for onclick handlers
@@ -925,9 +1163,11 @@
                 try {
                     if (user) {
                         await loadCartFromFirestore(user);
+                        await loadAndRenderAddOns();
                     } else {
                         clearGuestCartIfReload();
                         await loadCartFromGuestCart();
+                        await loadAndRenderAddOns();
                     }
                 } finally {
                     setCartReviewLoading(false);
@@ -939,6 +1179,7 @@
                 try {
                     clearGuestCartIfReload();
                     await loadCartFromGuestCart();
+                    await loadAndRenderAddOns();
                 } finally {
                     setCartReviewLoading(false);
                 }

@@ -38,6 +38,44 @@
         return cached;
     }
 
+    function normalizeServiceType(raw) {
+        const v = String(raw || '').trim().toLowerCase();
+        if (!v) return 'dinein';
+        if (v === 'dine-in' || v === 'dinein' || v === 'dine in') return 'dinein';
+        if (v === 'pick-up') return 'pickup';
+        if (v === 'pickup') return 'pickup';
+        if (v === 'delivery') return 'delivery';
+        return v.replace(/\s+/g, '');
+    }
+
+    function displayServiceLabel(serviceKey) {
+        const k = normalizeServiceType(serviceKey);
+        if (k === 'dinein') return 'DINE-IN';
+        if (k === 'pickup') return 'PICKUP';
+        if (k === 'delivery') return 'DELIVERY';
+        return String(serviceKey || '').toUpperCase();
+    }
+
+    function safeText(v, fallback = '') {
+        const s = String(v ?? '').trim();
+        return s ? s : fallback;
+    }
+
+    function setElText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    }
+
+    function setElDisplay(id, show, displayValue = 'block') {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = show ? displayValue : 'none';
+    }
+
+    function getOrderIdFromPage() {
+        return urlParams.get('orderId') || null;
+    }
+
     function initializeReceipt() {
         document.getElementById('orderNumber').textContent = Math.floor(Math.random() * 9000) + 1000;
         document.getElementById('orderDate').textContent = orderDate;
@@ -50,8 +88,7 @@
 
         // Get service type from URL parameter
         const serviceType = urlParams.get('service') || 'dinein';
-        const serviceTypeUpper = serviceType.toUpperCase();
-        document.getElementById('serviceType').textContent = serviceTypeUpper;
+        document.getElementById('serviceType').textContent = displayServiceLabel(serviceType);
 
         // Get table number from URL parameter (for dine-in)
         const tableNumber = urlParams.get('table');
@@ -73,10 +110,25 @@
             document.getElementById('storeLocation').textContent = storeLocation;
             document.getElementById('storeLocationLine').style.display = 'block';
         }
+
+        // Action CTA: Track / View Status
+        const orderId = getOrderIdFromPage();
+        setElDisplay('trackOrderBtn', !!orderId, 'inline-flex');
     }
 
     function goToAccount() {
         window.location.href = 'account.html';
+    }
+
+    function goToOrderDetails() {
+        const orderId = getOrderIdFromPage();
+        if (!orderId) return;
+        window.location.href = `order_details.html?orderId=${encodeURIComponent(orderId)}`;
+    }
+
+    function orderAgain() {
+        // We route to order details where a full Reorder flow already exists (availability checks, etc.)
+        goToOrderDetails();
     }
 
     function printReceipt() {
@@ -242,6 +294,50 @@
         }
     }
 
+    async function loadAndRenderLoyalty(orderTotalForPoints = 0) {
+        try {
+            await window.utils.waitForFirebaseReady();
+
+            const authUser = window.firebaseAuth?.currentUser || null;
+            if (!authUser) {
+                setElDisplay('loyaltyInfo', false);
+                return;
+            }
+
+            const db = window.firebaseDb;
+            if (!db || !window.doc || !window.getDoc) {
+                setElDisplay('loyaltyInfo', false);
+                return;
+            }
+
+            const userDocRef = window.doc(db, 'customers', authUser.uid);
+            const snap = await window.getDoc(userDocRef);
+            const data = snap.exists() ? (snap.data() || {}) : {};
+            const points =
+                typeof data.points === 'number'
+                    ? data.points
+                    : Number(data.points) || 0;
+
+            const earned = Math.floor((Number(orderTotalForPoints) || 0) / 99);
+            setElDisplay('loyaltyInfo', true);
+            setElText('pointsBalanceValue', `${Math.max(0, points)} pts`);
+
+            if (earned > 0) {
+                setElDisplay('earnedPointsLine', true, 'flex');
+                setElText('earnedPointsValue', `+${earned} pts`);
+            } else {
+                setElDisplay('earnedPointsLine', false);
+            }
+
+            // Simple next reward hint (keeps expectations clear)
+            setElDisplay('pointsHintLine', true, 'flex');
+            setElText('nextRewardHint', '1 pt = ₱1 discount at checkout');
+        } catch (e) {
+            console.warn('Failed to load loyalty points:', e);
+            setElDisplay('loyaltyInfo', false);
+        }
+    }
+
     function populateReceiptFromOrder(order, orderId) {
         // Order number
         const orderNumberEl = document.getElementById('orderNumber');
@@ -344,7 +440,7 @@
             if (serviceType) {
                 const serviceTypeEl = document.getElementById('serviceType');
                 if (serviceTypeEl) {
-                    serviceTypeEl.textContent = serviceType.toUpperCase();
+                    serviceTypeEl.textContent = displayServiceLabel(serviceType);
                 }
 
                 const di = order.deliveryInfo || {};
@@ -400,18 +496,33 @@
                     orderDateEl.textContent = date.toLocaleDateString('en-US', {month: '2-digit', day: '2-digit', year: 'numeric'});
                 }
             }
+
+            // Action CTA: Track / View Status
+            setElDisplay('trackOrderBtn', !!orderId, 'inline-flex');
+
+            // Loyalty points (signed-in customers)
+            loadAndRenderLoyalty(total);
+
+            // Reorder / Order again (only for completed orders)
+            const statusRaw = String(order.status || '').trim().toLowerCase();
+            const isCompleted = statusRaw === 'completed' || statusRaw === 'delivered';
+            setElDisplay('orderAgainBtn', isCompleted && !!orderId, 'inline-flex');
         }
     }
 
     // Expose functions to window
     window.completionReceipt = {
         goToAccount,
+        goToOrderDetails,
+        orderAgain,
         printReceipt,
         saveReceipt
     };
 
     // Global functions for onclick handlers
     window.goToAccount = goToAccount;
+    window.goToOrderDetails = goToOrderDetails;
+    window.orderAgain = orderAgain;
     window.printReceipt = printReceipt;
     window.saveReceipt = saveReceipt;
 

@@ -7,6 +7,142 @@
     'use strict';
 
     let currentCategory = 'favorites';
+    const FAVORITES_KEY = 'ppp_favorites_v1';
+    const MENU_CACHE_PREFIX = 'ppp_menu_cache_v1:';
+    const MENU_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+    let lastNonFavoritesCategory = 'favorites';
+    let lastNonFavoritesTitle = "PABLO'S FAVORITES";
+
+    function getIdList(key) {
+        try {
+            const raw = window.localStorage?.getItem(key);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function setIdList(key, list) {
+        try {
+            window.localStorage?.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
+        } catch (e) {}
+    }
+
+    function isFavorite(itemId) {
+        if (!itemId) return false;
+        return getIdList(FAVORITES_KEY).includes(String(itemId));
+    }
+
+    function toggleFavorite(itemId) {
+        if (!itemId) return false;
+        const id = String(itemId);
+        const ids = getIdList(FAVORITES_KEY);
+        const idx = ids.indexOf(id);
+        const next = idx === -1 ? [id, ...ids] : ids.filter((x) => x !== id);
+        setIdList(FAVORITES_KEY, next.slice(0, 100));
+        return idx === -1;
+    }
+
+    function updateFavoriteButtonsForItem(itemId) {
+        const id = String(itemId || '');
+        const fav = isFavorite(id);
+        const selector = `.ppp-fav-btn[data-fav-id="${id.replace(/"/g, '\\"')}"]`;
+        document.querySelectorAll(selector).forEach((btn) => {
+            btn.classList.toggle('is-fav', fav);
+            btn.setAttribute('aria-label', fav ? 'Remove from favorites' : 'Add to favorites');
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = fav ? 'fas fa-heart' : 'far fa-heart';
+        });
+    }
+
+    function setMenuNotice(html) {
+        const header = document.getElementById('menuSectionHeader');
+        if (!header) return;
+        let box = document.getElementById('pppMenuNotice');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'pppMenuNotice';
+            box.style.width = '100%';
+            box.style.marginTop = '10px';
+            header.appendChild(box);
+        }
+        box.innerHTML = html || '';
+    }
+
+    function updateSectionTitle(menuKey) {
+        const sectionTitle = document.querySelector('.section-category-title');
+        if (!sectionTitle) return;
+
+        if (menuKey === 'myfavorites') {
+            sectionTitle.textContent = 'YOUR FAVORITES';
+            return;
+        }
+
+        const btn = document.querySelector(`.sidebar-category[data-category="${String(menuKey).replace(/"/g, '\\"')}"]`);
+        if (btn) {
+            sectionTitle.textContent = btn.textContent.trim().toUpperCase();
+        }
+    }
+
+    function getFavoritesCount() {
+        return getIdList(FAVORITES_KEY).length;
+    }
+
+    function setFavoritesToggleState() {
+        const btn = document.getElementById('favoritesToggleBtn');
+        const countEl = document.getElementById('favoritesCount');
+        const count = getFavoritesCount();
+        if (countEl) countEl.textContent = String(count);
+        if (btn) btn.classList.toggle('is-active', currentCategory === 'myfavorites');
+    }
+
+    function setActiveSidebarCategory(category) {
+        // Best-effort: if the button exists, mark active; otherwise keep current.
+        document.querySelectorAll('.sidebar-category').forEach((b) => b.classList.remove('active'));
+        const sel = `.sidebar-category[data-category="${String(category).replace(/"/g, '\\"')}"]`;
+        const btn = document.querySelector(sel);
+        if (btn) btn.classList.add('active');
+    }
+
+    function clearSidebarSelection() {
+        document.querySelectorAll('.sidebar-category').forEach((b) => b.classList.remove('active'));
+    }
+
+    function getMenuCache(key) {
+        try {
+            const raw = window.localStorage?.getItem(`${MENU_CACHE_PREFIX}${key}`);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            if (!Array.isArray(parsed.items)) return null;
+            const ts = Number(parsed.ts) || 0;
+            if (!ts || (Date.now() - ts) > MENU_CACHE_TTL_MS) return null;
+            return parsed.items;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setMenuCache(key, items) {
+        try {
+            window.localStorage?.setItem(`${MENU_CACHE_PREFIX}${key}`, JSON.stringify({ ts: Date.now(), items: items || [] }));
+        } catch (e) {}
+    }
+
+    async function fetchItemsByIds(ids) {
+        if (!Array.isArray(ids) || ids.length === 0) return [];
+        if (!window.firestore?.fetchMenuItemById) return [];
+        const unique = Array.from(new Set(ids.map(String)));
+        const results = await Promise.all(unique.map(async (id) => {
+            try {
+                return await window.firestore.fetchMenuItemById(id);
+            } catch (e) {
+                return null;
+            }
+        }));
+        return results.filter(Boolean);
+    }
 
     // Generate star display HTML
     function generateStarDisplay(rating) {
@@ -119,6 +255,7 @@
         }
         
         currentCategory = menuKey;
+        updateSectionTitle(menuKey);
         const menuContent = document.getElementById('menuContent');
 
         if (!menuContent) {
@@ -147,7 +284,31 @@
         `;
 
         try {
+            setMenuNotice('');
+
+            // Local-only categories
+            if (menuKey === 'myfavorites') {
+                // Favorites is a header-driven view; keep sidebar unselected.
+                clearSidebarSelection();
+                const ids = getIdList(FAVORITES_KEY);
+                const items = await fetchItemsByIds(ids);
+                menuContent.innerHTML = items.length
+                    ? items.map(renderCardHtml).join('')
+                    : `
+                        <div class="empty-state show">
+                            <i class="fas fa-heart"></i>
+                            <h4>No favorites yet</h4>
+                            <p>Tap the heart on a menu item to save it here.</p>
+                        </div>
+                    `;
+                updateEmptyState();
+                setFavoritesToggleState();
+                return;
+            }
+
             const items = await window.firestore.fetchMenuItems(menuKey);
+            // Cache successful fetches for offline/slow connections
+            setMenuCache(menuKey, items);
 
             if (!items.length) {
                 // Show category-specific empty message
@@ -161,7 +322,7 @@
                 return;
             }
 
-            menuContent.innerHTML = items.map((item) => {
+            function renderCardHtml(item) {
                 const rawImg = item.img || item.image || item.imageDataUrl || '';
                 const hasImage = !!rawImg;
                 const imgSrc = hasImage ? rawImg : '';
@@ -210,6 +371,7 @@
                 }
                 
                 const price = `₱${basePrice.toFixed(2)}`;
+                const fav = isFavorite(item.id);
 
                 // Default rating display with stars (will be updated when ratings load)
                 const ratingHtml = `
@@ -223,7 +385,7 @@
                 `;
 
                 const imageHtml = hasImage
-                    ? `<img src="${imgSrc}" alt="${displayName}" class="card-image">`
+                    ? `<img src="${imgSrc}" alt="${displayName}" class="card-image" loading="lazy" decoding="async">`
                     : `<div class="card-image" style="display:flex;align-items:center;justify-content:center;background:#f5f5f5;color:#666;font-size:0.9rem;">
                          No photo available
                        </div>`;
@@ -232,6 +394,9 @@
                     <div class="menu-card ${isUnavailable ? 'unavailable' : ''}" data-popular="${popular}" data-item-id="${item.id}" ${isUnavailable ? '' : `onclick="openFoodItem('${item.id}')"`}>
                         <div class="card-image-container">
                             ${imageHtml}
+                            <button class="ppp-fav-btn ${fav ? 'is-fav' : ''}" data-fav-id="${item.id}" aria-label="${fav ? 'Remove from favorites' : 'Add to favorites'}" onclick="window.menu.toggleFavoriteFromCard(event, '${item.id}')">
+                                <i class="${fav ? 'fas' : 'far'} fa-heart"></i>
+                            </button>
                             ${badge ? `<div class="badge"><i class="fas fa-star"></i> ${badge}</div>` : ''}
                         </div>
                         <div class="card-content">
@@ -253,19 +418,73 @@
                         </div>
                     </div>
                 `;
-            }).join('');
+            }
+
+            menuContent.innerHTML = items.map(renderCardHtml).join('');
 
             // After cards are rendered, hydrate rating badges with live review data
             hydrateCardRatings(items);
 
             updateEmptyState();
+            setFavoritesToggleState();
         } catch (error) {
             console.error('Error rendering menu:', error);
+            const cached = getMenuCache(menuKey);
+            if (cached && cached.length) {
+                setMenuNotice(`
+                    <div style="padding:10px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:14px;background:#fff;">
+                        <strong style="color:#222;">Showing saved menu.</strong>
+                        <span style="opacity:.8;">You're offline or the network is slow.</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger" style="margin-left:10px;" onclick="window.menu.retryMenu()">Retry</button>
+                    </div>
+                `);
+                const renderCachedCard = (item) => {
+                    const rawImg = item?.img || item?.image || item?.imageDataUrl || '';
+                    const hasImage = !!rawImg;
+                    const imgSrc = hasImage ? rawImg : '';
+                    const displayName = item?.displayName || item?.name || item?.title || 'Menu item';
+                    const popular = !!item?.popular;
+                    const badge = item?.badge || '';
+                    const fav = isFavorite(item?.id);
+
+                    const imageHtml = hasImage
+                        ? `<img src="${imgSrc}" alt="${displayName}" class="card-image" loading="lazy" decoding="async">`
+                        : `<div class="card-image" style="display:flex;align-items:center;justify-content:center;background:#f5f5f5;color:#666;font-size:0.9rem;">No photo available</div>`;
+
+                    return `
+                        <div class="menu-card" data-item-id="${item?.id || ''}" onclick="openFoodItem('${item?.id || ''}')">
+                            <div class="card-image-container">
+                                ${imageHtml}
+                                <button class="ppp-fav-btn ${fav ? 'is-fav' : ''}" data-fav-id="${item?.id || ''}" aria-label="${fav ? 'Remove from favorites' : 'Add to favorites'}" onclick="window.menu.toggleFavoriteFromCard(event, '${item?.id || ''}')">
+                                    <i class="${fav ? 'fas' : 'far'} fa-heart"></i>
+                                </button>
+                                ${badge ? `<div class="badge"><i class="fas fa-star"></i> ${badge}</div>` : ''}
+                            </div>
+                            <div class="card-content">
+                                <h3 class="card-title">${displayName}</h3>
+                                <div class="card-rating">
+                                    <div class="stars-container">
+                                        <span class="stars"><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i></span>
+                                        <span class="rating-text">Offline</span>
+                                    </div>
+                                    ${popular ? '<span class="popular-tag">Popular</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                };
+
+                menuContent.innerHTML = cached.map(renderCachedCard).join('');
+                updateEmptyState();
+                setFavoritesToggleState();
+                return;
+            }
+
             menuContent.innerHTML = `
                 <div class="empty-state show">
                     <i class="fas fa-exclamation-triangle"></i>
                     <h4>Error loading menu</h4>
-                    <p>Please try again later.</p>
+                    <p>Please check your connection and try again.</p>
                 </div>
             `;
         }
@@ -289,14 +508,10 @@
                 // Get category and render immediately
                 const category = this.dataset.category;
                 if (category) {
+                    lastNonFavoritesCategory = category;
+                    lastNonFavoritesTitle = this.textContent.trim().toUpperCase();
                     renderMenu(category);
-                    
-                    // Update section title
-                    const categoryTitle = this.textContent.trim().toUpperCase();
-                    const sectionTitle = document.querySelector('.section-category-title');
-                    if (sectionTitle) {
-                        sectionTitle.textContent = categoryTitle;
-                    }
+                    updateSectionTitle(category);
                 }
             });
         });
@@ -331,6 +546,15 @@
         // Render menu immediately
         renderMenu('favorites');
 
+        // Favorites quick toggle (header button)
+        const favToggleBtn = document.getElementById('favoritesToggleBtn');
+        if (favToggleBtn) {
+            favToggleBtn.addEventListener('click', () => {
+                window.menu.toggleFavoritesView();
+            });
+        }
+        setFavoritesToggleState();
+
         // Sync floating cart
         syncFloatingCartCount();
         document.addEventListener('cart:count-changed', syncFloatingCartCount);
@@ -352,7 +576,38 @@
         renderMenu,
         openFoodItem,
         updateEmptyState,
-        generateStarDisplay
+        generateStarDisplay,
+        toggleFavoriteFromCard: (e, itemId) => {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const added = toggleFavorite(itemId);
+            updateFavoriteButtonsForItem(itemId);
+            setFavoritesToggleState();
+            if (currentCategory === 'myfavorites' && !added) {
+                // If removing from favorites while viewing favorites, refresh list.
+                renderMenu('myfavorites');
+            }
+            if (window.utils?.showToast) {
+                window.utils.showToast(added ? 'Added to favorites' : 'Removed from favorites', 'success', 1800);
+            }
+        },
+        retryMenu: () => renderMenu(currentCategory),
+        toggleFavoritesView: () => {
+            if (currentCategory === 'myfavorites') {
+                const backTo = lastNonFavoritesCategory || 'favorites';
+                renderMenu(backTo);
+                setActiveSidebarCategory(backTo);
+                updateSectionTitle(backTo);
+                return;
+            }
+            lastNonFavoritesCategory = currentCategory || 'favorites';
+            lastNonFavoritesTitle = document.querySelector('.section-category-title')?.textContent || lastNonFavoritesTitle;
+            // When entering favorites from header, clear sidebar highlight.
+            clearSidebarSelection();
+            renderMenu('myfavorites');
+        }
     };
 
     // Global function for onclick handlers

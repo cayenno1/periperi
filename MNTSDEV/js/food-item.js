@@ -18,6 +18,7 @@
     let selectedSauce = null;
     let baseItemData = null;
     let sauceScrollPosition = 0;
+    const FAVORITES_KEY = 'ppp_favorites_v1';
 
     // Generate star display HTML
     function generateStarDisplay(rating) {
@@ -482,6 +483,53 @@
         }, 1000);
     }
 
+    function getIdList(key) {
+        try {
+            const raw = window.localStorage?.getItem(key);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function setIdList(key, list) {
+        try {
+            window.localStorage?.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
+        } catch (e) {}
+    }
+
+    function isFavorite(itemId) {
+        if (!itemId) return false;
+        const ids = getIdList(FAVORITES_KEY);
+        return ids.includes(String(itemId));
+    }
+
+    function updateFavoriteButton() {
+        const btn = document.getElementById('favToggleBtn');
+        if (!btn) return;
+        const fav = isFavorite(currentItemId);
+        btn.classList.toggle('is-fav', fav);
+        btn.setAttribute('aria-label', fav ? 'Remove from favorites' : 'Add to favorites');
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = fav ? 'fas fa-heart' : 'far fa-heart';
+        }
+    }
+
+    function toggleFavorite() {
+        if (!currentItemId) return;
+        const ids = getIdList(FAVORITES_KEY);
+        const id = String(currentItemId);
+        const idx = ids.indexOf(id);
+        const next = idx === -1 ? [id, ...ids] : ids.filter((x) => x !== id);
+        setIdList(FAVORITES_KEY, next.slice(0, 100));
+        updateFavoriteButton();
+        if (window.utils?.showToast) {
+            window.utils.showToast(idx === -1 ? 'Added to favorites' : 'Removed from favorites', 'success', 1800);
+        }
+    }
+
 
 
     // Load reviews for item - synced with Firebase menu subcollection
@@ -707,6 +755,8 @@
         currentItemName = title;
         currentItemImg = hasImage ? rawImg : '';
 
+        updateFavoriteButton();
+
         loadAllergenInfo(item);
         loadVariations(item);
         await loadSauces(item);
@@ -760,7 +810,8 @@
         loadFoodItem,
         loadReviewsForItem,
         handleQtyInputChange,
-        handleQtyInput
+        handleQtyInput,
+        toggleFavorite
     };
 
     // Global functions for onclick handlers
@@ -769,11 +820,13 @@
     window.selectVariation = selectVariation;
     window.handleQtyInputChange = handleQtyInputChange;
     window.handleQtyInput = handleQtyInput;
+    window.toggleFavorite = toggleFavorite;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         changeQty(0);
         loadFoodItem();
+        updateFavoriteButton();
         
         // Update sauce navigation on window resize
         window.addEventListener('resize', () => {

@@ -15,6 +15,23 @@
     let loyaltyEnabled = false; // only for signed-in customers
     let pointsUsedInOrder = 0; // Track points used in current order
     let userDiscountInfo = null; // Store user's discount info
+    const PENDING_RECEIPT_KEY = 'ppp_pending_receipt_url';
+
+    const PROMOS = {
+        // NOTE: Update these promo codes as needed.
+        // Percent promo: 10% off, capped at ₱100, min subtotal ₱250
+        PABLO10: { type: 'percent', value: 0.10, max: 100, minSubtotal: 250 },
+        // Fixed promo: ₱50 off, min subtotal ₱300
+        WELCOME50: { type: 'fixed', value: 50, minSubtotal: 300 },
+        // Free shipping for delivery
+        FREESHIP: { type: 'freeship' }
+    };
+
+    let promoState = {
+        code: '',
+        amount: 0,
+        freeShipping: false
+    };
     const PSGC_SOURCES = [
         {
             name: 'psgc-gitlab',
@@ -226,6 +243,96 @@
         el.classList.add('checkout-error');
     }
 
+    function scrollToFirstCheckoutError() {
+        const first = document.querySelector('.checkout-error');
+        if (!first) return;
+        try {
+            first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (typeof first.focus === 'function') first.focus({ preventScroll: true });
+        } catch (e) {}
+    }
+
+    function normalizePromoCode(raw) {
+        return String(raw || '')
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '');
+    }
+
+    function computePromo(base, serviceType, code) {
+        const promo = PROMOS[code] || null;
+        if (!promo) return { ok: false, message: 'That promo code is not valid.' };
+
+        const subtotal = Number(base) || 0;
+        if (promo.minSubtotal && subtotal < promo.minSubtotal) {
+            return { ok: false, message: `Minimum subtotal is ₱${promo.minSubtotal.toFixed(2)} for this promo.` };
+        }
+
+        if (promo.type === 'freeship') {
+            if (serviceType !== 'delivery') {
+                return { ok: false, message: 'FREESHIP applies to delivery orders only.' };
+            }
+            return { ok: true, amount: 0, freeShipping: true, message: 'Free delivery applied.' };
+        }
+
+        if (promo.type === 'fixed') {
+            const amt = Math.max(0, Math.min(subtotal, Number(promo.value) || 0));
+            return { ok: true, amount: amt, freeShipping: false, message: `Promo applied: -₱${amt.toFixed(2)}` };
+        }
+
+        if (promo.type === 'percent') {
+            const pct = Number(promo.value) || 0;
+            const rawAmt = subtotal * pct;
+            const capped = promo.max ? Math.min(rawAmt, Number(promo.max) || rawAmt) : rawAmt;
+            const amt = Math.max(0, Math.min(subtotal, capped));
+            return { ok: true, amount: amt, freeShipping: false, message: `Promo applied: -₱${amt.toFixed(2)}` };
+        }
+
+        return { ok: false, message: 'This promo is not supported.' };
+    }
+
+    function togglePromoPanel() {
+        const panel = document.getElementById('promoPanel');
+        if (!panel) return;
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function setPromoMessage(msg, variant = 'info') {
+        const el = document.getElementById('promoMessage');
+        if (!el) return;
+        el.textContent = msg || '';
+        el.style.color = variant === 'error' ? '#e53935' : (variant === 'success' ? '#2e7d32' : '#666');
+    }
+
+    function applyPromoCode() {
+        if (pointsUsedInOrder > 0) {
+            setPromoMessage('Promo codes can’t be applied after points. (Refresh checkout to start over.)', 'error');
+            return;
+        }
+
+        const input = document.getElementById('promoCode');
+        const raw = input ? input.value : '';
+        const code = normalizePromoCode(raw);
+        if (!code) {
+            promoState = { code: '', amount: 0, freeShipping: false };
+            setPromoMessage('Enter a promo code to apply.', 'info');
+            initPointsSummary();
+            return;
+        }
+
+        const result = computePromo(baseSubtotal, currentService, code);
+        if (!result.ok) {
+            promoState = { code: '', amount: 0, freeShipping: false };
+            setPromoMessage(result.message || 'Promo code not valid.', 'error');
+            initPointsSummary();
+            return;
+        }
+
+        promoState = { code, amount: Number(result.amount) || 0, freeShipping: !!result.freeShipping };
+        setPromoMessage(result.message || 'Promo applied.', 'success');
+        initPointsSummary();
+    }
+
     // Lock / unlock contact details for logged-in customers
     function setContactFieldsLocked(isLocked) {
         const nameInput = document.getElementById('contactName');
@@ -315,6 +422,8 @@
         const remainingEl = document.getElementById('pointsRemaining');
         const subtotalEl = document.getElementById('summarySubtotal');
         const pointsEl = document.getElementById('summaryPoints');
+        const promoRow = document.getElementById('promoRow');
+        const promoEl = document.getElementById('summaryPromo');
         const feeEl = document.getElementById('summaryDeliveryFee');
         const totalEl = document.getElementById('summaryTotal');
         const pointsRow = pointsEl ? pointsEl.closest('.summary-row') : null;
@@ -323,21 +432,23 @@
         const applyBtn = document.querySelector('.cart-summary .apply-points-btn');
         const isLoyaltyOn = loyaltyEnabled && !!(window.firebaseAuth && window.firebaseAuth.currentUser);
 
-        const fee = currentService === 'delivery' ? DELIVERY_FEE : 0;
+        const fee = (currentService === 'delivery' && !promoState.freeShipping) ? DELIVERY_FEE : 0;
 
         // Check for ID verification discount (20% off)
         const isIDVerified = userDiscountInfo && userDiscountInfo.IDverification === true;
         const idDiscountAmount = isIDVerified ? baseSubtotal * ID_DISCOUNT_RATE : 0;
         const pointsDiscount = pointsUsedInOrder * POINT_VALUE;
-        const totalDiscount = idDiscountAmount + pointsDiscount;
+        const promoDiscount = Math.max(0, Number(promoState.amount) || 0);
+        const totalDiscount = idDiscountAmount + pointsDiscount + promoDiscount;
 
         if (subtotalEl) subtotalEl.textContent = `₱${baseSubtotal.toFixed(2)}`;
         if (feeEl) feeEl.textContent = `₱${fee.toFixed(2)}`;
         
         // Update points display (shows both ID discount and points if applicable)
         if (pointsEl) {
-            if (totalDiscount > 0) {
-                pointsEl.textContent = `-₱${totalDiscount.toFixed(2)}`;
+            const idAndPoints = idDiscountAmount + pointsDiscount;
+            if (idAndPoints > 0) {
+                pointsEl.textContent = `-₱${idAndPoints.toFixed(2)}`;
                 if (pointsRow) pointsRow.style.display = 'flex';
                 // Update label to show what discount is applied
                 const pointsLabel = pointsRow?.querySelector('.summary-label');
@@ -353,6 +464,19 @@
             } else {
                 pointsEl.textContent = '-₱0.00';
                 if (pointsRow) pointsRow.style.display = 'none';
+            }
+        }
+
+        if (promoRow && promoEl) {
+            if (promoState.freeShipping) {
+                promoRow.style.display = 'flex';
+                promoEl.textContent = '-₱0.00';
+            } else if (promoDiscount > 0) {
+                promoRow.style.display = 'flex';
+                promoEl.textContent = `-₱${promoDiscount.toFixed(2)}`;
+            } else {
+                promoRow.style.display = 'none';
+                promoEl.textContent = '-₱0.00';
             }
         }
 
@@ -405,18 +529,19 @@
             return;
         }
 
-        const fee = currentService === 'delivery' ? DELIVERY_FEE : 0;
+        const fee = (currentService === 'delivery' && !promoState.freeShipping) ? DELIVERY_FEE : 0;
         
         // Calculate ID discount first (20% off subtotal)
         const isIDVerified = userDiscountInfo && userDiscountInfo.IDverification === true;
         const idDiscountAmount = isIDVerified ? baseSubtotal * ID_DISCOUNT_RATE : 0;
-        const subtotalAfterIDDiscount = baseSubtotal - idDiscountAmount;
+        const promoDiscount = Math.max(0, Number(promoState.amount) || 0);
+        const subtotalAfterIDDiscount = Math.max(0, baseSubtotal - idDiscountAmount - promoDiscount);
 
         // Points can be applied to the remaining amount after ID discount
         const maxDiscount = subtotalAfterIDDiscount;
         const pointsToUse = Math.min(remaining, maxDiscount);
         const pointsDiscountAmount = pointsToUse * POINT_VALUE;
-        const totalDiscount = idDiscountAmount + pointsDiscountAmount;
+        const totalDiscount = idDiscountAmount + promoDiscount + pointsDiscountAmount;
         const newTotal = baseSubtotal + fee - totalDiscount;
         const newRemaining = remaining - pointsToUse;
 
@@ -429,7 +554,8 @@
         const pointsRow = pointsEl ? pointsEl.closest('.summary-row') : null;
 
         if (pointsEl) {
-            pointsEl.textContent = `-₱${totalDiscount.toFixed(2)}`;
+            const idAndPoints = idDiscountAmount + pointsDiscountAmount;
+            pointsEl.textContent = `-₱${idAndPoints.toFixed(2)}`;
             // Update label
             const pointsLabel = pointsRow?.querySelector('.summary-label');
             if (pointsLabel) {
@@ -507,6 +633,15 @@
 
         clearCheckoutErrors();
 
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            if (window.showAlert) {
+                window.showAlert('You appear to be offline. Please reconnect and try again.', 'warning');
+            } else {
+                alert('You appear to be offline. Please reconnect and try again.');
+            }
+            return;
+        }
+
         const authUser = window.firebaseAuth?.currentUser || null;
         if (!authUser) {
             if (window.showAlert) {
@@ -528,6 +663,7 @@
             } else {
                 alert('Please select a payment method.');
             }
+            scrollToFirstCheckoutError();
             return;
         }
 
@@ -549,6 +685,7 @@
                 } else {
                     alert('Please upload your GCash payment screenshot before placing your order.');
                 }
+                scrollToFirstCheckoutError();
                 return;
             }
             gcashFile = file;
@@ -561,6 +698,7 @@
                 } else {
                     alert('Please enter your GCash account name.');
                 }
+                scrollToFirstCheckoutError();
                 return;
             }
 
@@ -572,6 +710,7 @@
                 } else {
                     alert('Please enter your GCash reference number.');
                 }
+                scrollToFirstCheckoutError();
                 return;
             }
         }
@@ -606,6 +745,7 @@
             } else {
                 alert('Please provide your name and mobile number.');
             }
+            scrollToFirstCheckoutError();
             if (btn) {
                 btn.disabled = false;
                 btn.classList.remove('is-processing');
@@ -661,21 +801,25 @@
                 if (!label) {
                     const el = document.getElementById('deliveryLabelError');
                     if (el) el.textContent = 'Select a label';
+                    flagCheckoutError(labelInput);
                     hasAddrError = true;
                 }
                 if (!streetAddress) {
                     const el = document.getElementById('streetAddressError');
                     if (el) el.textContent = 'Street address is required';
+                    flagCheckoutError(streetInput);
                     hasAddrError = true;
                 }
                 if (!city || !allowedCities.has(city)) {
                     const el = document.getElementById('cityError');
                     if (el) el.textContent = 'We deliver to Quezon City or North Caloocan only';
+                    flagCheckoutError(cityInput);
                     hasAddrError = true;
                 }
                 if (!barangay) {
                     const el = document.getElementById('deliveryBarangayError');
                     if (el) el.textContent = 'Barangay is required';
+                    flagCheckoutError(barangayInput);
                     hasAddrError = true;
                 }
                 if (city && barangay && barangayList) {
@@ -683,16 +827,19 @@
                     if (!isInList) {
                         const el = document.getElementById('deliveryBarangayError');
                         if (el) el.textContent = 'Please pick a barangay from the list';
+                        flagCheckoutError(barangayInput);
                         hasAddrError = true;
                     }
                 }
                 if (city === 'Caloocan City' && barangay && !isNorthCaloocanBarangayName(barangay)) {
                     const el = document.getElementById('deliveryBarangayError');
                     if (el) el.textContent = 'We only deliver to North Caloocan barangays';
+                    flagCheckoutError(barangayInput);
                     hasAddrError = true;
                 }
 
                 if (hasAddrError) {
+                    scrollToFirstCheckoutError();
                     if (btn) {
                         btn.disabled = false;
                         btn.classList.remove('is-processing');
@@ -847,7 +994,11 @@
             return;
         }
 
-        window.location.href = `completion_receipt_page.html?${params.toString()}`;
+        const receiptUrl = `completion_receipt_page.html?${params.toString()}`;
+        try {
+            window.localStorage?.setItem(PENDING_RECEIPT_KEY, JSON.stringify({ url: receiptUrl, ts: Date.now() }));
+        } catch (e) {}
+        window.location.href = receiptUrl;
     }
 
     function goBackToCart() {
@@ -1260,6 +1411,8 @@
                 const sauce = cartItem.sauce || null;
                 // Include variation information if present
                 const variation = cartItem.variation || null;
+                // Item-level note (optional)
+                const note = typeof cartItem.note === 'string' ? cartItem.note : '';
 
                 const menuId = cartItem.itemId;
                 if (!menuId) {
@@ -1332,6 +1485,7 @@
                     quantity: qty,
                     unitPrice: unitPrice,
                     lineTotal: linePrice || unitPrice * qty,
+                    note: note || null,
                     variation: variation ? {
                         name: variation.name || null,
                         price: typeof variation.price === 'number' ? variation.price : 
@@ -1596,7 +1750,9 @@
         goBackToCart,
         toggleGCashDetails,
         handleFileUpload,
-        removeFile
+        removeFile,
+        togglePromoPanel,
+        applyPromoCode
     };
 
     // Global functions for onclick handlers
@@ -1609,6 +1765,23 @@
 
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', () => {
+        // If the last attempt successfully created an order but navigation failed,
+        // continue to the receipt (avoids duplicate submissions).
+        try {
+            const raw = window.localStorage?.getItem(PENDING_RECEIPT_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                const url = parsed?.url;
+                const ts = Number(parsed?.ts) || 0;
+                if (url && ts && (Date.now() - ts) < 10 * 60 * 1000) {
+                    window.localStorage?.removeItem(PENDING_RECEIPT_KEY);
+                    window.location.href = url;
+                    return;
+                }
+                window.localStorage?.removeItem(PENDING_RECEIPT_KEY);
+            }
+        } catch (e) {}
+
         updateTotalChip(document.getElementById('summaryTotal')?.textContent || '₱0.00');
 
         // Save-address confirm modal wiring
@@ -1674,6 +1847,17 @@
 
         const initialService = getInitialServiceType();
         setServiceType(initialService);
+
+        // Promo input: keep it in sync with current totals
+        const promoInput = document.getElementById('promoCode');
+        if (promoInput) {
+            promoInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applyPromoCode();
+                }
+            });
+        }
 
         document.querySelectorAll('.service-pill').forEach(btn => {
             btn.addEventListener('click', () => {
