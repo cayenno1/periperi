@@ -52,13 +52,8 @@
 </head>
 <body>
     <div class="dashboard">
-        <!-- Mobile Menu Toggle Button -->
-        <button class="mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Toggle menu">
-            <i class="fas fa-bars"></i>
-        </button>
-        
         <!-- Left Sidebar -->
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar">
             <div class="logo-section">
                 <div class="logo">
                     <div class="logo-icon">
@@ -156,6 +151,14 @@
             </nav>
         </aside>
 
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+            <i class="fas fa-bars"></i>
+        </button>
+        
+        <!-- Sidebar Overlay for Mobile -->
+        <div class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+
         <!-- Main Content Area -->
         <main class="main-content">
             <!-- Header -->
@@ -171,7 +174,7 @@
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu" id="adminDropdown">
-                        <a href="#" class="dropdown-item" onclick="showUserProfile()">Profile Settings</a>
+                        <a href="#" class="dropdown-item">Profile Settings</a>
                         <a href="#" class="dropdown-item">Logout</a>
                     </div>
                 </div>
@@ -212,29 +215,36 @@
             <div class="search-filter-bar">
                 <div class="search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="orderSearch" placeholder="Search Orders...." oninput="filterOrders()">
+                        <input type="text" id="orderSearch" placeholder="Search orders..." oninput="filterOrders()">
                 </div>
-                <div class="filter-dropdowns">
-                    <select id="orderSortFilter" class="filter-select" onchange="applyOrderFilters()">
+                <div class="filter-dropdown">
+                    <label for="orderFilter">Filter:</label>
+                    <select id="orderFilter" onchange="applyOrderStatusFilter()">
                         <option value="new-to-old">New to Old</option>
                         <option value="old-to-new">Old to New</option>
-                    </select>
-                    <select id="orderStatusFilter" class="filter-select" onchange="applyOrderFilters()">
-                        <option value="">Status</option>
-                        <option value="pending">NEW ORDER</option>
-                        <option value="preparing">In Kitchen</option>
-                        <option value="ready">Ready</option>
-                        <option value="ready for delivery">Awaiting Driver</option>
-                        <option value="ready for pick-up">Ready for Pick-up</option>
-                        <option value="out-for-delivery">On the Way</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="declined">Declined</option>
-                    </select>
-                    <select id="orderServiceTypeFilter" class="filter-select" onchange="applyOrderFilters()">
-                        <option value="">Service Type</option>
-                        <option value="delivery">Delivery</option>
-                        <option value="dine-in">Dine In</option>
-                        <option value="pick-up">Pick Up</option>
+                        <optgroup label="By Status">
+                            <option value="status:pending">NEW ORDER</option>
+                            <option value="status:preparing">In Kitchen</option>
+                            <option value="status:ready">Ready</option>
+                            <option value="status:ready for delivery">Awaiting Driver</option>
+                            <option value="status:ready for pick-up">Ready for Pick-up</option>
+                            <option value="status:out-for-delivery">On the Way</option>
+                            <option value="status:delivered">Delivered</option>
+                            <option value="status:declined">Declined</option>
+                        </optgroup>
+                        <optgroup label="By Service Type">
+                            <option value="type:delivery">Delivery</option>
+                            <option value="type:dine-in">Dine In</option>
+                            <option value="type:pick-up">Pick Up</option>
+                        </optgroup>
+                        <optgroup label="Combined Filters">
+                            <option value="type:delivery|status:preparing">Delivery - In Kitchen</option>
+                            <option value="type:delivery|status:out-for-delivery">Delivery - On the Way</option>
+                            <option value="type:dine-in|status:preparing">Dine In - In Kitchen</option>
+                            <option value="type:dine-in|status:ready">Dine In - Ready</option>
+                            <option value="type:pick-up|status:preparing">Pick Up - In Kitchen</option>
+                            <option value="type:pick-up|status:ready for pick-up">Pick Up - Ready for Pick-up</option>
+                        </optgroup>
                     </select>
                 </div>
             </div>
@@ -256,13 +266,14 @@
                     <thead>
                         <tr>
                             <th>Order ID</th>
-                            <th>User ID</th>
+                            <th>Order Name</th>
+                            <th>Customer</th>
                             <th>Order Type</th>
-                            <th>Address</th>
-                            <th>Status</th>
+                            <th>Location</th>
+                            <th>Order Status</th>
                             <th>Time</th>
                             <th>Price</th>
-                            <th>Action</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="ordersTableBody">
@@ -347,27 +358,6 @@
     <script src="script.js"></script>
     
     <script>
-        // Remove any stray text nodes in body (like "m   ")
-        (function() {
-            if (document.body) {
-                const walker = document.createTreeWalker(
-                    document.body,
-                    NodeFilter.SHOW_TEXT,
-                    null,
-                    false
-                );
-                const textNodes = [];
-                let node;
-                while (node = walker.nextNode()) {
-                    // Check if text node is a direct child of body and contains only whitespace or single letters
-                    if (node.parentNode === document.body && /^\s*[a-z]\s*$/i.test(node.textContent)) {
-                        textNodes.push(node);
-                    }
-                }
-                textNodes.forEach(textNode => textNode.remove());
-            }
-        })();
-        
         // Update logout functionality
         document.addEventListener('DOMContentLoaded', function() {
             // Update logout links to use the logout function
@@ -388,6 +378,7 @@
             });
         });
     </script>
+    <script src="mobile-menu.js"></script>
 </body>
 </html>
 

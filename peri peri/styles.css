@@ -829,7 +829,20 @@ select {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E") !important;
 }
 
-/* Accept Payment Button - Green */
+/* Verify Payment Button - Green */
+.modern-orders-table .order-action-btn.btn-verify-payment,
+.order-action-btn.btn-verify-payment {
+    background: #28a745 !important;
+    background-color: #28a745 !important;
+}
+
+.modern-orders-table .order-action-btn.btn-verify-payment:hover,
+.order-action-btn.btn-verify-payment:hover {
+    background: #218838 !important;
+    background-color: #218838 !important;
+}
+
+/* Legacy Accept Payment Button - Keep for backward compatibility */
 .modern-orders-table .order-action-btn.btn-accept-payment,
 .order-action-btn.btn-accept-payment {
     background: #28a745 !important;
@@ -6082,6 +6095,297 @@ label[for="description"]::after {
     padding: 6px 12px;
     font-size: 12px;
     white-space: nowrap;
+}
+
+/* Driver Tabs */
+.driver-tabs-container {
+    margin-bottom: 20px;
+}
+
+.driver-tabs {
+    display: flex;
+    gap: 10px;
+    border-bottom: 2px solid #e9ecef;
+    margin-bottom: 20px;
+}
+
+.driver-tab-btn {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 15px;
+    font-weight: 600;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.driver-tab-btn:hover {
+    color: #7E2021;
+    background: #f8f9fa;
+}
+
+.driver-tab-btn.active {
+    color: #7E2021;
+    border-bottom-color: #7E2021;
+}
+
+.driver-tab-content {
+    display: block;
+}
+
+/* Clock-In System Styles */
+.clockin-system-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.clockin-qr-section {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.qr-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.qr-tab-btn {
+    padding: 10px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qr-tab-btn:hover {
+    color: #7E2021;
+    background: #f8f9fa;
+}
+
+.qr-tab-btn.active {
+    color: #7E2021;
+    border-bottom-color: #7E2021;
+}
+
+.qr-display-section {
+    text-align: center;
+}
+
+.qr-display-section h3 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 10px;
+}
+
+.qr-instructions {
+    font-size: 16px;
+    color: #666;
+    margin-bottom: 30px;
+    font-weight: 500;
+}
+
+.qr-code-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 30px;
+    background: #f9fafb;
+    border-radius: 12px;
+    margin: 20px 0;
+}
+
+#clockInQRCanvas,
+#clockOutQRCanvas {
+    width: 400px !important;
+    height: 400px !important;
+    max-width: 100%;
+    border: 4px solid #7E2021;
+    border-radius: 12px;
+    padding: 20px;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.qr-code-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.qr-expiry {
+    color: #dc3545;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qr-status {
+    color: #28a745;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qr-status.expired {
+    color: #dc3545;
+}
+
+.qr-usage {
+    color: #6b7280;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qr-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.qr-actions .btn {
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qr-actions .btn-primary {
+    background: #7E2021;
+    color: white;
+}
+
+.qr-actions .btn-primary:hover {
+    background: #6a1a1b;
+}
+
+.qr-actions .btn-secondary {
+    background: #6b7280;
+    color: white;
+}
+
+.qr-actions .btn-secondary:hover {
+    background: #4b5563;
+}
+
+.clockin-management {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.management-section h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.clockin-logs {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.clockin-log-item {
+    padding: 15px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.clockin-log-item:last-child {
+    border-bottom: none;
+}
+
+.clockin-log-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.clockin-log-driver {
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.clockin-log-time {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.clockin-log-type {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.clockin-log-type.clock-in {
+    background: #d4edda;
+    color: #155724;
+}
+
+.clockin-log-type.clock-out {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+@media (max-width: 768px) {
+    #clockInQRCanvas,
+    #clockOutQRCanvas {
+        width: 300px !important;
+        height: 300px !important;
+    }
+    
+    .qr-code-info {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .qr-actions {
+        flex-direction: column;
+    }
+    
+    .qr-actions .btn {
+        width: 100%;
+    }
 }
 
 .driver-profile-modal {

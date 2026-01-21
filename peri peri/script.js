@@ -962,12 +962,6 @@ async function subscribeToOrdersCollection() {
                     }
                 });
                 
-                // Process orders for automated payment verification
-                // Run this asynchronously so it doesn't block the UI update
-                processOrdersForAutoVerification(previousOrders, ordersState).catch(error => {
-                    console.error('Error in automated payment verification:', error);
-                });
-                
                 renderOrdersTable(ordersState);
                 hydrateOrderCustomers(ordersState);
                 await refreshMenuOrderDependentViews();
@@ -1309,6 +1303,11 @@ function renderOrdersTable(orders) {
         const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
         const isPaymentVerified = order.paymentVerified === true;
         
+        // Add visual indicator for unverified GCash orders
+        const needsVerificationBadge = isGCashOrder && !isPaymentVerified && isPending
+            ? '<span class="verification-badge" title="Payment verification required" style="display: inline-block; margin-left: 8px; padding: 4px 12px; background: transparent; color: #dc3545; border-radius: 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;"><i class="fas fa-exclamation-circle"></i> VERIFY</span>'
+            : '';
+        
         // Service type checks
         const orderServiceType = (order.serviceType || '').toLowerCase().trim();
         const isDineIn = orderServiceType === 'dine-in' || orderServiceType === 'dinein';
@@ -1398,10 +1397,10 @@ function renderOrdersTable(orders) {
                     <i class="fas fa-redo"></i> Reopen Order
                 </button>`);
             } else {
-                // Show Accept Payment button for unverified GCash orders
+                // Show Verify Payment button for unverified GCash orders
                 if (isGCashOrder && !isPaymentVerified) {
-                    buttons.push(`<button class="order-action-btn btn-accept-payment" onclick="event.stopPropagation(); verifyPayment('${escapedOrderId}')" title="Accept Payment">
-                        <i class="fas fa-check-circle"></i> Accept Payment
+                    buttons.push(`<button class="order-action-btn btn-verify-payment" onclick="event.stopPropagation(); verifyPayment('${escapedOrderId}')" title="Verify Payment">
+                        <i class="fas fa-check-circle"></i> Verify Payment
                     </button>`);
                 }
             }
@@ -1458,7 +1457,7 @@ function renderOrdersTable(orders) {
         
         row.innerHTML = `
             <td class="order-id-column">
-                ${escapeHtml(order.trackingId || order.id)}
+                ${escapeHtml(order.trackingId || order.id)}${needsVerificationBadge}
             </td>
             <td class="order-name-column">${escapeHtml(orderName)}${resubmissionBadge}</td>
             <td class="customer-name-column">${escapeHtml(customerName)}</td>
@@ -2490,6 +2489,92 @@ async function acceptOrderWithoutDriver(orderId) {
     }
 }
 
+// Function to get payment proof image URL from Firebase Storage using userId
+async function getPaymentProofImageUrl(order) {
+    // Only for GCash orders
+    const paymentModeLower = (order.paymentMode || '').toLowerCase();
+    const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
+    if (!isGCashOrder) {
+        return null;
+    }
+    
+    // If we already have a paymentProofUrl, use it
+    if (order.paymentProofUrl && order.paymentProofUrl.trim() !== '') {
+        return order.paymentProofUrl;
+    }
+    
+    // Try to get from Firebase Storage using userId
+    try {
+        if (!window.storage || !window.storageFunctions) {
+            await waitForFirebaseReady();
+        }
+        
+        if (!window.storage || !window.storageFunctions) {
+            return null;
+        }
+        
+        const { ref, getDownloadURL, listAll } = window.storageFunctions;
+        const storage = window.storage;
+        const userId = order.userId;
+        const isGuestOrder = !userId || order.isGuest === true;
+        
+        // Determine folder path - userId is the customer's UID
+        const folderPath = isGuestOrder ? 'paymentProofs/guest' : `paymentProofs/${userId}`;
+        
+        // If paymentProofPath exists, try that first
+        if (order.paymentProofPath) {
+            const path = order.paymentProofPath.startsWith('paymentProofs/') 
+                ? order.paymentProofPath 
+                : `paymentProofs/${order.paymentProofPath}`;
+            try {
+                const imageRef = ref(storage, path);
+                return await getDownloadURL(imageRef);
+            } catch (error) {
+                console.log(`Could not load payment proof from path ${path}:`, error);
+            }
+        }
+        
+        // Otherwise, try to list files in the folder and get the first image
+        try {
+            const folderRef = ref(storage, folderPath);
+            const result = await listAll(folderRef);
+            
+            if (result.items && result.items.length > 0) {
+                // Try to find a file that matches the order ID or tracking ID
+                const orderId = order.id;
+                const trackingIdClean = (order.trackingId || '').replace('#', '').toUpperCase();
+                
+                // First, try to find exact match
+                for (const itemRef of result.items) {
+                    const fileName = itemRef.name;
+                    const fileNameUpper = fileName.toUpperCase();
+                    const orderIdUpper = orderId.toUpperCase();
+                    
+                    if (fileNameUpper.includes(orderIdUpper) || 
+                        (trackingIdClean && fileNameUpper.includes(trackingIdClean))) {
+                        return await getDownloadURL(itemRef);
+                    }
+                }
+                
+                // If no match, use the first image file
+                for (const itemRef of result.items) {
+                    const fileName = itemRef.name.toLowerCase();
+                    if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || 
+                        fileName.endsWith('.png') || fileName.endsWith('.webp')) {
+                        return await getDownloadURL(itemRef);
+                    }
+                }
+            }
+        } catch (error) {
+            console.log(`Could not list files in ${folderPath}:`, error);
+        }
+    } catch (error) {
+        console.log('Error loading payment proof:', error);
+    }
+    
+    return null;
+}
+
 function viewOrderDetails(orderId) {
     if (!orderId) {
         showNotification('Order ID is missing.', 'error');
@@ -3069,309 +3154,53 @@ async function verifyPaymentConfirm() {
     }
 }
 
-/**
- * Automated payment verification function
- * Verifies payments that meet safe criteria, leaves edge cases for manual review
- */
-async function attemptAutomatedPaymentVerification(order) {
-    // Only process GCash orders
-    const paymentModeLower = (order.paymentMode || '').toLowerCase();
-    const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
-    if (!isGCashOrder) {
-        return { verified: false, reason: 'Not a GCash order' };
+async function declinePayment() {
+    if (!currentVerifyingOrderId) {
+        showNotification('No order selected for payment decline.', 'error');
+        return;
     }
     
-    // Skip if already verified
-    if (order.paymentVerified === true) {
-        return { verified: false, reason: 'Already verified' };
+    const order = ordersState.find(o => o.id === currentVerifyingOrderId);
+    if (!order) {
+        showNotification('Order not found.', 'error');
+        return;
     }
     
-    // Skip if order is not pending
-    const currentStatus = (order.status || '').toLowerCase().trim();
-    if (currentStatus !== 'pending' && currentStatus !== 'new') {
-        return { verified: false, reason: 'Order not in pending status' };
-    }
-    
-    // Edge case: Multiple payment proof versions (resubmission) - requires manual review
-    if (order.paymentProofVersion && order.paymentProofVersion > 1) {
-        return { verified: false, reason: 'Requires manual review: Payment resubmission', requiresReview: true };
-    }
-    
-    // TIME/DATE VALIDATION 1: Check order age
-    if (order.createdAt && order.createdAt instanceof Date) {
-        const now = new Date();
-        const hoursDiff = (now.getTime() - order.createdAt.getTime()) / (1000 * 60 * 60);
-        
-        // Order too old - suspicious
-        if (hoursDiff > 24) {
-            return { verified: false, reason: 'Requires manual review: Order too old (>24 hours)', requiresReview: true };
-        }
-        
-        // Order too new - might be created before payment (allow 5 minutes grace period)
-        if (hoursDiff < 0) {
-            return { verified: false, reason: 'Requires manual review: Order timestamp in future', requiresReview: true };
-        }
-    }
-    
-    // TIME/DATE VALIDATION 2: Check payment proof upload time from filename
-    if (order.paymentProofPath) {
-        try {
-            // Extract timestamp from path (format: paymentProofs/userId/1234567890-filename.jpg)
-            const pathParts = order.paymentProofPath.split('/');
-            const fileName = pathParts[pathParts.length - 1];
-            const timestampMatch = fileName.match(/^(\d+)-/);
-            
-            if (timestampMatch) {
-                const uploadTimestamp = parseInt(timestampMatch[1], 10);
-                const uploadDate = new Date(uploadTimestamp);
-                
-                if (order.createdAt && order.createdAt instanceof Date) {
-                    const timeDiffMs = Math.abs(uploadDate.getTime() - order.createdAt.getTime());
-                    const timeDiffMinutes = timeDiffMs / (1000 * 60);
-                    
-                    // Payment proof should be uploaded within 30 minutes of order creation
-                    if (timeDiffMinutes > 30) {
-                        return { 
-                            verified: false, 
-                            reason: `Requires manual review: Payment proof uploaded ${Math.round(timeDiffMinutes)} minutes after order creation (suspicious timing)`, 
-                            requiresReview: true 
-                        };
-                    }
-                    
-                    // Payment proof uploaded before order creation (shouldn't happen)
-                    if (uploadDate < order.createdAt) {
-                        const diffBefore = (order.createdAt.getTime() - uploadDate.getTime()) / (1000 * 60);
-                        if (diffBefore > 5) { // Allow 5 minute clock skew
-                            return { 
-                                verified: false, 
-                                reason: `Requires manual review: Payment proof uploaded ${Math.round(diffBefore)} minutes before order creation`, 
-                                requiresReview: true 
-                            };
-                        }
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn('Could not extract timestamp from payment proof path:', error);
-            // Don't fail verification if we can't parse the timestamp
-        }
-    }
-    
-    // TIME/DATE VALIDATION 3: If payment timestamp is collected from customer, validate it
-    if (order.paymentTimestamp) {
-        try {
-            const paymentDate = order.paymentTimestamp instanceof Date ? order.paymentTimestamp : new Date(order.paymentTimestamp);
-            
-            if (order.createdAt && order.createdAt instanceof Date) {
-                const timeDiffMs = Math.abs(paymentDate.getTime() - order.createdAt.getTime());
-                const timeDiffMinutes = timeDiffMs / (1000 * 60);
-                
-                // Payment should be made within 15 minutes of order creation
-                if (timeDiffMinutes > 15) {
-                    return { 
-                        verified: false, 
-                        reason: `Requires manual review: Payment timestamp (${paymentDate.toLocaleString()}) is ${Math.round(timeDiffMinutes)} minutes from order creation`, 
-                        requiresReview: true 
-                    };
-                }
-                
-                // Payment made before order (shouldn't happen)
-                if (paymentDate < order.createdAt) {
-                    const diffBefore = (order.createdAt.getTime() - paymentDate.getTime()) / (1000 * 60);
-                    if (diffBefore > 2) { // Allow 2 minute clock skew
-                        return { 
-                            verified: false, 
-                            reason: `Requires manual review: Payment timestamp is ${Math.round(diffBefore)} minutes before order creation`, 
-                            requiresReview: true 
-                        };
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn('Could not parse payment timestamp:', error);
-            // If timestamp is invalid format, flag for review
-            return { verified: false, reason: 'Requires manual review: Invalid payment timestamp format', requiresReview: true };
-        }
-    }
-    
-    // CRITICAL CHECK 1: Verify all three required fields exist
-    const hasReferenceNumber = !!(order.paymentReferenceNumber && order.paymentReferenceNumber.trim());
-    const hasProofPath = !!(order.paymentProofPath && order.paymentProofPath.trim());
-    const hasProofUrl = !!(order.paymentProofUrl && order.paymentProofUrl.trim());
-    
-    if (!hasReferenceNumber) {
-        return { verified: false, reason: 'Requires manual review: Missing reference number', requiresReview: true };
-    }
-    
-    if (!hasProofPath) {
-        return { verified: false, reason: 'Requires manual review: Missing payment proof path', requiresReview: true };
-    }
-    
-    if (!hasProofUrl) {
-        return { verified: false, reason: 'Requires manual review: Missing payment proof URL', requiresReview: true };
-    }
-    
-    // CRITICAL CHECK 2: Verify reference number is unique (not used in another verified order)
-    const referenceNumber = order.paymentReferenceNumber.trim().toUpperCase();
-    const duplicateOrder = ordersState.find(o => 
-        o.id !== order.id && 
-        o.paymentReferenceNumber && 
-        o.paymentReferenceNumber.trim().toUpperCase() === referenceNumber &&
-        o.paymentVerified === true
-    );
-    
-    if (duplicateOrder) {
-        return { 
-            verified: false, 
-            reason: `Requires manual review: Reference number ${referenceNumber} already used in order ${duplicateOrder.trackingId || duplicateOrder.id}`, 
-            requiresReview: true 
-        };
-    }
-    
-    // CRITICAL CHECK 3: Verify payment proof image exists and is accessible
-    let proofExists = false;
-    let proofAccessible = false;
-    try {
-        if (!window.storage || !window.storageFunctions) {
-            await waitForFirebaseReady();
-        }
-        
-        if (window.storage && window.storageFunctions) {
-            const { ref, getDownloadURL } = window.storageFunctions;
-            const storage = window.storage;
-            
-            // Try using the path first
-            const path = order.paymentProofPath.startsWith('paymentProofs/') 
-                ? order.paymentProofPath 
-                : `paymentProofs/${order.paymentProofPath}`;
-            
-            try {
-                const imageRef = ref(storage, path);
-                const urlFromPath = await getDownloadURL(imageRef);
-                proofExists = true;
-                // Verify the URL matches (or is accessible)
-                if (urlFromPath) {
-                    proofAccessible = true;
-                    // Optional: Verify URL matches stored URL (within reason - URLs might have tokens)
-                    if (order.paymentProofUrl && !order.paymentProofUrl.includes(urlFromPath.split('?')[0])) {
-                        console.warn('URL mismatch between stored URL and path-derived URL');
-                    }
-                }
-            } catch (error) {
-                // Proof file doesn't exist or is inaccessible via path
-                return { verified: false, reason: 'Requires manual review: Payment proof not accessible via path', requiresReview: true };
-            }
-            
-            // Also verify URL is accessible (optional but recommended)
-            if (order.paymentProofUrl) {
-                try {
-                    const response = await fetch(order.paymentProofUrl, { method: 'HEAD' });
-                    if (response.ok) {
-                        proofAccessible = true;
-                    } else {
-                        console.warn('Payment proof URL not accessible:', response.status);
-                    }
-                } catch (error) {
-                    console.warn('Could not verify payment proof URL accessibility:', error);
-                    // Don't fail verification if URL check fails, path check is primary
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error checking payment proof:', error);
-        return { verified: false, reason: 'Requires manual review: Error checking payment proof', requiresReview: true };
-    }
-    
-    // CRITICAL CHECK 4: Validate reference number format (GCash refs are typically alphanumeric, 8-15 chars)
-    const refFormatValid = /^[A-Z0-9]{8,15}$/i.test(referenceNumber);
-    if (!refFormatValid) {
-        return { verified: false, reason: 'Requires manual review: Invalid reference number format', requiresReview: true };
-    }
-    
-    // All checks passed - safe to auto-verify
-    if (proofExists && proofAccessible) {
+    if (confirm(`Decline payment for order ${order.trackingId || currentVerifyingOrderId}? This will change the order status to 'declined' with reason "Payment Verification Failed".`)) {
         try {
             if (!isFirestoreReady()) {
-                return { verified: false, reason: 'Database not ready' };
+                showNotification('Database is not ready. Please try again.', 'error');
+                return;
             }
             
             const fns = window.firestoreFunctions;
-            const orderRef = fns.doc(window.db, 'orders', order.id);
+            const orderRef = fns.doc(window.db, 'orders', currentVerifyingOrderId);
             
             await fns.updateDoc(orderRef, {
-                paymentVerified: true,
-                paymentVerifiedAt: fns.serverTimestamp(),
-                paymentAutoVerified: true, // Flag to indicate automated verification
-                paymentVerificationMethod: 'automated', // Track verification method
+                status: 'declined',
+                declineReason: 'Payment Verification Failed',
+                declinedAt: fns.serverTimestamp(),
                 updatedAt: fns.serverTimestamp()
             });
             
             // Update local state
-            const orderIndex = ordersState.findIndex(o => o.id === order.id);
+            const orderIndex = ordersState.findIndex(o => o.id === currentVerifyingOrderId);
             if (orderIndex !== -1) {
-                ordersState[orderIndex].paymentVerified = true;
-                ordersState[orderIndex].paymentVerifiedAt = new Date();
-                ordersState[orderIndex].paymentAutoVerified = true;
-                ordersState[orderIndex].paymentVerificationMethod = 'automated';
+                ordersState[orderIndex].status = 'declined';
+                ordersState[orderIndex].declineReason = 'Payment Verification Failed';
+                ordersState[orderIndex].declinedAt = new Date();
             }
             
-            console.log(`✓ Auto-verified payment for order ${order.trackingId || order.id} (Ref: ${referenceNumber})`);
-            return { verified: true, reason: 'Auto-verified: All checks passed' };
-        } catch (error) {
-            console.error('Error auto-verifying payment:', error);
-            return { verified: false, reason: 'Error during auto-verification' };
-        }
-    }
-    
-    return { verified: false, reason: 'Payment proof validation failed' };
-}
-
-/**
- * Process new orders for automated payment verification
- * Called when orders are updated via subscription
- */
-async function processOrdersForAutoVerification(previousOrders, currentOrders) {
-    // Track which orders we've already processed to avoid duplicate processing
-    if (!window.processedOrdersForAutoVerification) {
-        window.processedOrdersForAutoVerification = new Set();
-    }
-    
-    // Find new or updated GCash orders that need verification
-    const ordersToCheck = currentOrders.filter(order => {
-        const paymentModeLower = (order.paymentMode || '').toLowerCase();
-        const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
-        const isPending = (order.status || '').toLowerCase().trim() === 'pending' || 
-                        (order.status || '').toLowerCase().trim() === 'new';
-        const notVerified = order.paymentVerified !== true;
-        const notProcessed = !window.processedOrdersForAutoVerification.has(order.id);
-        
-        return isGCashOrder && isPending && notVerified && notProcessed;
-    });
-    
-    // Process each order
-    for (const order of ordersToCheck) {
-        // Mark as processed immediately to avoid duplicate attempts
-        window.processedOrdersForAutoVerification.add(order.id);
-        
-        // Small delay to avoid overwhelming the system
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const result = await attemptAutomatedPaymentVerification(order);
-        
-        if (result.verified) {
-            // Successfully auto-verified - refresh the table
+            // Refresh the orders table
             renderOrdersTable(ordersState);
-            console.log(`Auto-verified payment for order ${order.trackingId || order.id}`);
-        } else if (result.requiresReview) {
-            // Edge case detected - flag for manual review
-            console.log(`Order ${order.trackingId || order.id} requires manual review: ${result.reason}`);
-            // Optional: You could add a flag to highlight these orders in the UI
+            
+            showNotification(`Payment declined for order ${order.trackingId || currentVerifyingOrderId}. Order status changed to 'declined'.`, 'success');
+            closePaymentReceiptModal();
+        } catch (error) {
+            console.error('Error declining payment:', error);
+            showNotification('Failed to decline payment. Please try again.', 'error');
         }
     }
-    
-    // Clean up old processed orders (older than 1 hour) to prevent memory buildup
-    const oneHourAgo = Date.now() - (60 * 60 * 1000);
-    // Note: This is a simple cleanup - in production you might want more sophisticated tracking
 }
 
 async function reopenOrder(orderId) {
@@ -11865,7 +11694,7 @@ function toggleReviewOptions(reviewId) {
 // Initialize page-specific functionality
 document.addEventListener('DOMContentLoaded', function() {
     // Set active navigation item based on current page
-    const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+    const currentPage = window.location.pathname.split('/').pop() || 'admin-index.html';
     const navItems = document.querySelectorAll('.nav-item');
     
     navItems.forEach(item => {
@@ -12145,7 +11974,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize drivers page
         initDriversDashboard();
         console.log('Drivers page loaded');
-    } else if (currentPage === 'index.html' || window.location.pathname.includes('index.html')) {
+    } else if (currentPage === 'admin-index.html' || window.location.pathname.includes('admin-index.html')) {
         // Backfill for_delivery documents for existing orders with drivers
         setTimeout(() => {
             backfillForDeliveryDocuments();
@@ -14630,6 +14459,508 @@ function filterDrivers() {
         renderDriversList();
     }
 }
+
+// ==================== DRIVER CLOCK-IN SYSTEM ====================
+
+// QR Code Management
+let currentQRCodes = {
+    clock_in: null,
+    clock_out: null
+};
+let qrCodeTimers = {
+    clock_in: null,
+    clock_out: null
+};
+
+const QR_CODE_DURATION = 60 * 60 * 1000; // 1 hour
+
+// QRCode library removed; using numeric codes only
+
+// Switch between Drivers and Clock-In System tabs
+function switchDriverTab(tab) {
+    const driversTab = document.getElementById('driversTabContent');
+    const clockinTab = document.getElementById('clockinTabContent');
+    const driversTabBtn = document.getElementById('driversTabBtn');
+    const clockinTabBtn = document.getElementById('clockinTabBtn');
+    
+    if (tab === 'drivers') {
+        driversTab.style.display = 'block';
+        clockinTab.style.display = 'none';
+        driversTabBtn?.classList.add('active');
+        clockinTabBtn?.classList.remove('active');
+    } else if (tab === 'clockin') {
+        driversTab.style.display = 'none';
+        clockinTab.style.display = 'block';
+        driversTabBtn?.classList.remove('active');
+        clockinTabBtn?.classList.add('active');
+        
+        // Load codes when tab is opened
+        loadCurrentQRCodes();
+    }
+}
+
+// Switch between Clock-In and Clock-Out QR codes
+function switchQRType(type) {
+    const clockInDisplay = document.getElementById('clockInQRDisplay');
+    const clockOutDisplay = document.getElementById('clockOutQRDisplay');
+    const qrTabBtns = document.querySelectorAll('.qr-tab-btn');
+    
+    qrTabBtns.forEach(btn => btn.classList.remove('active'));
+    
+    if (type === 'clock_in') {
+        clockInDisplay.style.display = 'block';
+        clockOutDisplay.style.display = 'none';
+        qrTabBtns[0]?.classList.add('active');
+    } else if (type === 'clock_out') {
+        clockInDisplay.style.display = 'none';
+        clockOutDisplay.style.display = 'block';
+        qrTabBtns[1]?.classList.add('active');
+    }
+}
+
+// Generate random secret for QR code security
+function generateRandomSecret() {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+// Generate alphanumeric access code (letters + numbers, excludes ambiguous chars)
+function generateAccessCode(length = 8) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+// Generate QR code
+async function generateQRCode(type = 'clock_in') {
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        const db = window.db;
+        
+        if (!fns || !db) {
+            showNotification('Database not ready. Please try again.', 'error');
+            return;
+        }
+        
+        // Create QR code meta (store in DB); keep QR text short to avoid "Too long data" errors
+        const codeData = {
+            type: type,
+            restaurantId: 'pablo-peri-peri',
+            validUntil: Date.now() + QR_CODE_DURATION,
+            secret: generateRandomSecret()
+        };
+        
+        // Generate QR code container
+        const canvasId = type === 'clock_in' ? 'clockInQRCanvas' : 'clockOutQRCanvas';
+        const container = document.getElementById(canvasId);
+        
+        if (!container) {
+            throw new Error(`QR container element not found: ${canvasId}`);
+        }
+
+        // Create doc id first so we can embed it in the QR text while still passing Firestore rules on create
+        const qrCodeDocRef = fns.doc(fns.collection(db, 'clockInCodes'));
+
+        // Alphanumeric code (8 chars) - no QR library needed
+        const qrText = generateAccessCode(8);
+
+        // Create the document with required fields (rules require `code`, `type`, `restaurantId`, `validUntil`, `isActive`)
+        await fns.setDoc(qrCodeDocRef, {
+            code: qrText,
+            type: type,
+            restaurantId: codeData.restaurantId,
+            validUntil: fns.Timestamp.fromMillis(codeData.validUntil),
+            createdAt: fns.serverTimestamp(),
+            usedBy: [],
+            currentUses: 0,
+            isActive: true,
+            maxUses: null // null = unlimited uses
+        });
+
+        // Render numeric code
+        container.innerHTML = '';
+        container.style.width = '220px';
+        container.style.height = '120px';
+        container.style.display = 'flex';
+        container.style.alignItems = 'center';
+        container.style.justifyContent = 'center';
+        container.style.fontSize = '42px';
+        container.style.fontWeight = '700';
+        container.style.letterSpacing = '4px';
+        container.style.border = '1px solid #ccc';
+        container.style.borderRadius = '8px';
+        container.style.background = '#f7f7f7';
+        container.textContent = qrText;
+        
+        // Store current QR code
+        currentQRCodes[type] = {
+            id: qrCodeDocRef.id,
+            code: qrText
+        };
+        
+        // Update UI
+        updateQRCodeInfo(type, codeData);
+        startExpiryTimer(type, codeData.validUntil);
+        
+        showNotification(`${type === 'clock_in' ? 'Clock-In' : 'Clock-Out'} QR code generated successfully`, 'success');
+        
+        // Load recent clock-ins
+        loadRecentClockIns();
+    } catch (error) {
+        console.error(`Error generating QR code (${type}):`, error);
+        const errorMessage = error.message || error.toString();
+        console.error('Full error details:', error);
+        showNotification(`Failed to generate QR code: ${errorMessage}`, 'error');
+    }
+}
+
+// Update QR code info display
+function updateQRCodeInfo(type, codeData) {
+    const expiryTime = new Date(codeData.validUntil);
+    const expiryTimeStr = expiryTime.toLocaleTimeString();
+    
+    const expiryElementId = type === 'clock_in' ? 'clockInExpiryTime' : 'clockOutExpiryTime';
+    const expiryElement = document.getElementById(expiryElementId);
+    if (expiryElement) {
+        expiryElement.textContent = expiryTimeStr;
+    }
+    
+    // Update status
+    const statusElementId = type === 'clock_in' ? 'clockInStatus' : 'clockOutStatus';
+    const statusElement = document.getElementById(statusElementId);
+    if (statusElement) {
+        statusElement.innerHTML = '<i class="fas fa-check-circle"></i> <span>Active</span>';
+        statusElement.className = 'qr-status';
+    }
+}
+
+// Start expiry countdown timer
+function startExpiryTimer(type, validUntil) {
+    // Clear existing timer
+    if (qrCodeTimers[type]) {
+        clearInterval(qrCodeTimers[type]);
+    }
+    
+    const expiryElementId = type === 'clock_in' ? 'clockInExpiryTime' : 'clockOutExpiryTime';
+    const statusElementId = type === 'clock_in' ? 'clockInStatus' : 'clockOutStatus';
+    
+    // Update countdown every second
+    qrCodeTimers[type] = setInterval(() => {
+        const now = Date.now();
+        const remaining = validUntil - now;
+        
+        const expiryElement = document.getElementById(expiryElementId);
+        const statusElement = document.getElementById(statusElementId);
+        
+        if (remaining <= 0) {
+            // QR code expired
+            if (statusElement) {
+                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> <span>Expired</span>';
+                statusElement.className = 'qr-status expired';
+            }
+            if (expiryElement) {
+                expiryElement.textContent = '00:00';
+            }
+            clearInterval(qrCodeTimers[type]);
+            return;
+        }
+        
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        
+        if (expiryElement) {
+            expiryElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+    }, 1000);
+}
+
+// Load current active QR codes
+async function loadCurrentQRCodes() {
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        const db = window.db;
+        
+        if (!fns || !db) {
+            return;
+        }
+        
+        // Load clock-in QR code
+        await loadActiveQRCode('clock_in');
+        
+        // Load clock-out QR code
+        await loadActiveQRCode('clock_out');
+        
+        // Load recent clock-ins
+        loadRecentClockIns();
+        
+        // Set up real-time listeners for QR code usage updates
+        setupQRCodeListeners();
+    } catch (error) {
+        console.error('Error loading QR codes:', error);
+    }
+}
+
+// Set up real-time listeners for QR code usage
+function setupQRCodeListeners() {
+    try {
+        const fns = window.firestoreFunctions;
+        const db = window.db;
+        
+        if (!fns || !db || !fns.onSnapshot) {
+            return;
+        }
+        
+        // Listen to clockInCodes collection for updates
+        const qrCodesRef = fns.collection(db, 'clockInCodes');
+        fns.onSnapshot(qrCodesRef, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === 'modified') {
+                    const qrData = change.doc.data();
+                    const type = qrData.type;
+                    
+                    // Update usage count if this is the current QR code
+                    if (currentQRCodes[type] && currentQRCodes[type].id === change.doc.id) {
+                        const usageElementId = type === 'clock_in' ? 'clockInUsageCount' : 'clockOutUsageCount';
+                        const usageElement = document.getElementById(usageElementId);
+                        if (usageElement && qrData.currentUses !== undefined) {
+                            usageElement.textContent = qrData.currentUses;
+                        }
+                    }
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error setting up QR code listeners:', error);
+    }
+}
+
+// Load active QR code for a specific type
+async function loadActiveQRCode(type) {
+    try {
+        const fns = window.firestoreFunctions;
+        const db = window.db;
+        
+        const qrCodesRef = fns.collection(db, 'clockInCodes');
+        const querySnap = await fns.getDocs(
+            fns.query(
+                qrCodesRef,
+                fns.where('type', '==', type),
+                fns.where('isActive', '==', true)
+            )
+        );
+        
+        if (!querySnap.empty) {
+            // Choose the most recent valid code (by createdAt or validUntil)
+            let latest = null;
+            const deactivateIds = [];
+            querySnap.forEach(docSnap => {
+                const data = docSnap.data();
+                if (!data || !data.validUntil) return;
+                const expires = data.validUntil.toMillis();
+                if (expires <= Date.now()) return;
+                // Skip legacy/long or non-PPP codes to avoid "Too long data"
+                if (typeof data.code !== 'string' ||
+                    data.code.length > 64) {
+                    deactivateIds.push(docSnap.id);
+                    return;
+                }
+                if (!latest || expires > latest.expires) {
+                    latest = { id: docSnap.id, data, expires };
+                }
+            });
+            
+            // Deactivate any legacy long codes so they don't get reused
+            if (deactivateIds.length) {
+                try {
+                    await Promise.all(
+                        deactivateIds.map(id => {
+                            const ref = fns.doc(db, 'clockInCodes', id);
+                            return fns.updateDoc(ref, { isActive: false });
+                        })
+                    );
+                } catch (err) {
+                    console.warn('Failed to deactivate legacy QR codes:', err);
+                }
+            }
+            
+            if (latest) {
+                try {
+                    await displayQRCode(type, latest.data.code, latest.data);
+                    currentQRCodes[type] = {
+                        id: latest.id,
+                        code: latest.data.code
+                    };
+                    updateQRCodeInfo(type, { validUntil: latest.expires });
+                    startExpiryTimer(type, latest.expires);
+                    return;
+                } catch (err) {
+                    console.warn('Existing QR code unusable, regenerating...', err);
+                    // Mark it inactive to avoid reuse
+                    try {
+                        const ref = fns.doc(db, 'clockInCodes', latest.id);
+                        await fns.updateDoc(ref, { isActive: false });
+                    } catch (e2) {
+                        console.warn('Failed to deactivate unusable QR code:', e2);
+                    }
+                }
+            }
+        }
+        
+        // No active QR code found or expired - generate new one
+        await generateQRCode(type);
+    } catch (error) {
+        console.error(`Error loading ${type} QR code:`, error);
+        // Generate new one if loading fails
+        await generateQRCode(type);
+    }
+}
+
+// Display numeric code
+async function displayQRCode(type, code, qrData) {
+    const canvasId = type === 'clock_in' ? 'clockInQRCanvas' : 'clockOutQRCanvas';
+    const container = document.getElementById(canvasId);
+
+    if (!container) {
+        throw new Error(`QR container element not found: ${canvasId}`);
+    }
+
+    container.innerHTML = '';
+    container.style.width = '220px';
+    container.style.height = '120px';
+    container.style.display = 'flex';
+    container.style.alignItems = 'center';
+    container.style.justifyContent = 'center';
+    container.style.fontSize = '42px';
+    container.style.fontWeight = '700';
+    container.style.letterSpacing = '4px';
+    container.style.border = '1px solid #ccc';
+    container.style.borderRadius = '8px';
+    container.style.background = '#f7f7f7';
+    container.textContent = code;
+    
+    // Update usage count
+    const usageElementId = type === 'clock_in' ? 'clockInUsageCount' : 'clockOutUsageCount';
+    const usageElement = document.getElementById(usageElementId);
+    if (usageElement && qrData.currentUses !== undefined) {
+        usageElement.textContent = qrData.currentUses;
+    }
+}
+
+// Refresh QR code display
+function refreshQRCode(type) {
+    loadActiveQRCode(type);
+}
+
+// Load recent clock-ins
+async function loadRecentClockIns() {
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        const db = window.db;
+        
+        if (!fns || !db) {
+            return;
+        }
+        
+        const logsRef = fns.collection(db, 'logsStaff');
+        const query = fns.query(
+            logsRef,
+            fns.orderBy('createdAt', 'desc'),
+            fns.limit(20)
+        );
+        
+        const snapshot = await fns.getDocs(query);
+        const logsContainer = document.getElementById('recentClockIns');
+        
+        if (!logsContainer) {
+            return;
+        }
+        
+        if (snapshot.empty) {
+            logsContainer.innerHTML = '<div class="empty-message">No clock-ins yet</div>';
+            return;
+        }
+        
+        // Collect all events (clock-in and clock-out) separately
+        let events = [];
+        
+        snapshot.docs.forEach(doc => {
+            const logData = doc.data();
+            const driverName = logData.driverName || 'Unknown';
+            const startTime = logData.startTime?.toDate ? logData.startTime.toDate() : new Date(logData.startTime);
+            const endTime = logData.endTime?.toDate ? logData.endTime.toDate() : null;
+            
+            const clockInMethod = logData.clockInMethod || 'manual';
+            const clockOutMethod = logData.clockOutMethod || 'manual';
+            
+            // Add clock-in event
+            events.push({
+                type: 'clock-in',
+                typeLabel: 'Clock-In',
+                time: startTime,
+                driverName: driverName,
+                method: clockInMethod,
+                methodLabel: clockInMethod === 'qr_code' ? ' (QR Code)' : ''
+            });
+            
+            // Add clock-out event if shift has ended
+            if (endTime) {
+                events.push({
+                    type: 'clock-out',
+                    typeLabel: 'Clock-Out',
+                    time: endTime,
+                    driverName: driverName,
+                    method: clockOutMethod,
+                    methodLabel: clockOutMethod === 'qr_code' ? ' (QR Code)' : clockOutMethod === 'remote' ? ' (Remote)' : ''
+                });
+            }
+        });
+        
+        // Sort events by time (most recent first)
+        events.sort((a, b) => b.time.getTime() - a.time.getTime());
+        
+        // Limit to most recent 20 events
+        events = events.slice(0, 20);
+        
+        // Generate HTML for each event
+        let logsHTML = '';
+        events.forEach(event => {
+            const timeStr = event.time.toLocaleString();
+            logsHTML += `
+                <div class="clockin-log-item">
+                    <div class="clockin-log-info">
+                        <div class="clockin-log-driver">${escapeHtml(event.driverName)}</div>
+                        <div class="clockin-log-time">${timeStr}${event.methodLabel}</div>
+                    </div>
+                    <span class="clockin-log-type ${event.type}">${event.typeLabel}</span>
+                </div>
+            `;
+        });
+        
+        logsContainer.innerHTML = logsHTML;
+    } catch (error) {
+        console.error('Error loading recent clock-ins:', error);
+    }
+}
+
+// Make functions globally available
+window.switchDriverTab = switchDriverTab;
+window.switchQRType = switchQRType;
+window.generateQRCode = generateQRCode;
+window.refreshQRCode = refreshQRCode;
 
 // Driver functions removed - using original hardcoded structure
 
