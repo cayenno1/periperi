@@ -618,6 +618,7 @@
   <meta name="theme-color" content="#ffffff">
   <meta name="description" content="Driver dashboard to manage new, ongoing, and completed orders.">
   <script type="module" src="firebase-init.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
@@ -1231,11 +1232,428 @@
 
     function toggleShift() {
       if (shiftState.isActive) {
-        endShift();
+        // Clock-out: ask for code or remote
+        const useCode = confirm('Do you want to enter a clock-out code?\nOK = enter code\nCancel = remote clock-out');
+        if (useCode) {
+          promptAndHandleCode('clock_out');
+        } else {
+          endShiftRemote();
+        }
       } else {
-        startShift();
+        // Clock-in: require code entry
+        promptAndHandleCode('clock_in');
       }
     }
+
+    // Prompt driver for numeric code and process
+    async function promptAndHandleCode(type) {
+      const input = prompt(`Enter the ${type === 'clock_in' ? 'clock-in' : 'clock-out'} code shown in the store:`);
+      if (!input) return;
+      await handleQRCodeScanned(input.trim(), type);
+    }
+
+    // Gracefully stop any QR/scan session (no-op fallback for now)
+    function stopQRScanner() {
+      try {
+        if (window.html5QrCode && typeof window.html5QrCode.stop === 'function') {
+          window.html5QrCode.stop();
+        }
+        if (window.html5QrcodeScanner && typeof window.html5QrcodeScanner.clear === 'function') {
+          window.html5QrcodeScanner.clear();
+        }
+        if (window.qrScanner && typeof window.qrScanner.stop === 'function') {
+          window.qrScanner.stop();
+        }
+      } catch (error) {
+        console.warn('Failed to stop QR scanner:', error);
+      }
+    }
+
+    // Handle scanned QR code
+    async function handleQRCodeScanned(qrCodeData, type) {
+      stopQRScanner();
+      
+      try {
+        // Validate QR code
+        const validation = await validateQRCode(qrCodeData, type);
+        
+        if (!validation.valid) {
+          notify(validation.error || 'Invalid QR code', 'error');
+          return;
+        }
+        
+        if (type === 'clock_in') {
+          await startShiftWithQR(qrCodeData, validation.qrCodeId);
+        } else {
+          await endShiftWithQR(qrCodeData, validation.qrCodeId);
+        }
+      } catch (error) {
+        console.error('Error handling QR code:', error);
+        notify('Failed to process QR code. Please try again.', 'error');
+      }
+    }
+
+    // Validate QR code
+    async function validateQRCode(qrCodeData, expectedType) {
+      try {
+        // Numeric code (or legacy PPP|type|code). We look up by code + type + isActive.
+        if (typeof qrCodeData !== 'string') {
+          return { valid: false, error: 'Invalid code format' };
+        }
+
+        let enteredCode = qrCodeData.trim();
+        let scannedType = expectedType;
+
+        // Handle legacy PPP|type|code format
+        if (enteredCode.startsWith('PPP|')) {
+          const parts = enteredCode.split('|');
+          if (parts.length < 3) return { valid: false, error: 'Invalid code format' };
+          scannedType = parts[1];
+          enteredCode = parts[2];
+        }
+
+        if (scannedType !== expectedType) {
+          return { valid: false, error: `Code is for ${scannedType}, not ${expectedType}` };
+        }
+
+        const db = window.firebaseDb;
+        const collectionFn = window.collection;
+        const queryFn = window.query;
+        const whereFn = window.where;
+        const getDocsFn = window.getDocs;
+
+        if (!db || !collectionFn || !queryFn || !whereFn || !getDocsFn) {
+          return { valid: false, error: 'Database not ready' };
+        }
+
+        const qrCodesRef = collectionFn(db, 'clockInCodes');
+        const q = queryFn(
+          qrCodesRef,
+          whereFn('code', '==', enteredCode),
+          whereFn('type', '==', expectedType),
+          whereFn('isActive', '==', true)
+        );
+
+        const snapshot = await getDocsFn(q);
+        if (snapshot.empty) {
+          return { valid: false, error: 'Invalid or inactive code' };
+        }
+
+        const qrDoc = snapshot.docs[0];
+        const qrData = qrDoc.data();
+
+        // Validate document
+        if (!qrData || qrData.isActive !== true) {
+          return { valid: false, error: 'QR code is not active' };
+        }
+        if (qrData.type !== expectedType) {
+          return { valid: false, error: 'QR code type mismatch' };
+        }
+        // Cross-check stored code text if present
+        if (qrData.code && qrData.code !== enteredCode && qrData.code !== qrCodeData) {
+          return { valid: false, error: 'QR code mismatch' };
+        }
+
+        // Check if still valid
+        const validUntil = qrData.validUntil.toMillis();
+        if (validUntil < Date.now()) {
+          return { valid: false, error: 'QR code expired' };
+        }
+
+        return { valid: true, qrCodeId: qrDoc.id, qrData: qrData };
+      } catch (error) {
+        console.error('Error validating QR code:', error);
+        return { valid: false, error: 'Invalid QR code format' };
+      }
+    }
+
+    // Start shift with QR code
+    async function startShiftWithQR(qrCodeData, qrCodeId) {
+      if (!currentDriver || !currentDriver.id) {
+        notify('Driver information not available', 'error');
+        return;
+      }
+      
+      // Check if driver already has active shift
+      const hasActiveShift = await checkDriverActiveShift();
+      if (hasActiveShift) {
+        notify('You already have an active shift', 'error');
+        return;
+      }
+      
+      try {
+        const db = window.firebaseDb;
+        const collectionFn = window.collection;
+        const addDocFn = window.addDoc;
+        const serverTimestampFn = window.serverTimestamp;
+        const docFn = window.doc;
+        const updateDocFn = window.updateDoc;
+        const incrementFn = window.increment;
+        
+        if (!db || !collectionFn || !addDocFn || !serverTimestampFn) {
+          notify('Firebase not ready', 'error');
+          return;
+        }
+        
+        const driverId = currentDriver.staffId || currentDriver.id;
+        const driverName = getDriverDisplayName(currentDriver);
+        
+        // Create shift log
+        const logsRef = collectionFn(db, 'logsStaff');
+        const shiftData = {
+          driverId: driverId,
+          driverName: driverName,
+          startTime: serverTimestampFn(),
+          endTime: null,
+          clockInMethod: 'qr_code',
+          qrCodeId: qrCodeId,
+          createdAt: serverTimestampFn()
+        };
+        
+        const docRef = await addDocFn(logsRef, shiftData);
+        const currentTime = new Date();
+        
+        shiftState.isActive = true;
+        shiftState.currentShiftId = docRef.id;
+        shiftState.startTime = currentTime;
+        shiftState.endTime = null;
+        
+        // Update QR code usage
+        if (qrCodeId && updateDocFn && incrementFn) {
+          try {
+            const qrCodeRef = docFn(db, 'clockInCodes', qrCodeId);
+            const updateData = {
+              currentUses: incrementFn(1)
+            };
+            // Add driver to usedBy array if arrayUnion is available
+            if (window.arrayUnion) {
+              updateData.usedBy = window.arrayUnion(driverId);
+            }
+            await updateDocFn(qrCodeRef, updateData);
+          } catch (error) {
+            console.warn('Failed to update QR code usage:', error);
+          }
+        }
+        
+        updateShiftUI();
+        notify('Shift started successfully', 'success');
+        
+        setTimeout(() => {
+          loadShiftStatus();
+        }, 1000);
+        
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) dropdown.classList.remove('show');
+      } catch (error) {
+        console.error('Error starting shift:', error);
+        notify('Error starting shift. Please try again.', 'error');
+      }
+    }
+
+    // End shift with QR code
+    async function endShiftWithQR(qrCodeData, qrCodeId) {
+      if (!shiftState.isActive || !shiftState.currentShiftId) {
+        notify('No active shift to end', 'error');
+        return;
+      }
+      
+      // Check if all deliveries completed
+      const hasPendingDeliveries = await checkPendingDeliveries();
+      if (hasPendingDeliveries) {
+        notify('Please complete all assigned deliveries before clocking out', 'error');
+        return;
+      }
+      
+      try {
+        const db = window.firebaseDb;
+        const docFn = window.doc;
+        const updateDocFn = window.updateDoc;
+        const serverTimestampFn = window.serverTimestamp;
+        const incrementFn = window.increment;
+        
+        if (!db || !docFn || !updateDocFn || !serverTimestampFn) {
+          notify('Firebase not ready', 'error');
+          return;
+        }
+        
+        const shiftRef = docFn(db, 'logsStaff', shiftState.currentShiftId);
+        await updateDocFn(shiftRef, {
+          endTime: serverTimestampFn(),
+          clockOutMethod: 'qr_code',
+          qrCodeId: qrCodeId,
+          updatedAt: serverTimestampFn()
+        });
+        
+        // Update QR code usage
+        if (qrCodeId && incrementFn) {
+          try {
+            const qrCodeRef = docFn(db, 'clockInCodes', qrCodeId);
+            await updateDocFn(qrCodeRef, {
+              currentUses: incrementFn(1)
+            });
+          } catch (error) {
+            console.warn('Failed to update QR code usage:', error);
+          }
+        }
+        
+        const getDocFn = window.getDoc;
+        if (getDocFn) {
+          const shiftDoc = await getDocFn(shiftRef);
+          const shiftData = shiftDoc.data();
+          shiftState.endTime = shiftData.endTime;
+        }
+        
+        shiftState.isActive = false;
+        shiftState.currentShiftId = null;
+        
+        updateShiftUI();
+        notify('Shift ended successfully', 'success');
+        
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) dropdown.classList.remove('show');
+      } catch (error) {
+        console.error('Error ending shift:', error);
+        notify('Error ending shift. Please try again.', 'error');
+      }
+    }
+
+    // End shift remotely (without QR code)
+    async function endShiftRemote() {
+      if (!shiftState.isActive || !shiftState.currentShiftId) {
+        notify('No active shift to end', 'error');
+        return;
+      }
+      
+      // Check if all deliveries completed
+      const hasPendingDeliveries = await checkPendingDeliveries();
+      if (hasPendingDeliveries) {
+        notify('Please complete all assigned deliveries before clocking out', 'error');
+        return;
+      }
+      
+      const confirmed = confirm('Are you sure you want to end your shift remotely?');
+      if (!confirmed) {
+        return;
+      }
+      
+      try {
+        const db = window.firebaseDb;
+        const docFn = window.doc;
+        const updateDocFn = window.updateDoc;
+        const serverTimestampFn = window.serverTimestamp;
+        
+        if (!db || !docFn || !updateDocFn || !serverTimestampFn) {
+          notify('Firebase not ready', 'error');
+          return;
+        }
+        
+        const shiftRef = docFn(db, 'logsStaff', shiftState.currentShiftId);
+        await updateDocFn(shiftRef, {
+          endTime: serverTimestampFn(),
+          clockOutMethod: 'remote',
+          updatedAt: serverTimestampFn()
+        });
+        
+        const getDocFn = window.getDoc;
+        if (getDocFn) {
+          const shiftDoc = await getDocFn(shiftRef);
+          const shiftData = shiftDoc.data();
+          shiftState.endTime = shiftData.endTime;
+        }
+        
+        shiftState.isActive = false;
+        shiftState.currentShiftId = null;
+        
+        updateShiftUI();
+        notify('Shift ended successfully', 'success');
+        
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) dropdown.classList.remove('show');
+      } catch (error) {
+        console.error('Error ending shift:', error);
+        notify('Error ending shift. Please try again.', 'error');
+      }
+    }
+
+    // Check if driver has active shift
+    async function checkDriverActiveShift() {
+      if (!currentDriver || !currentDriver.id) {
+        return false;
+      }
+      
+      try {
+        const db = window.firebaseDb;
+        const collectionFn = window.collection;
+        const queryFn = window.query;
+        const whereFn = window.where;
+        const getDocsFn = window.getDocs;
+        
+        if (!db || !collectionFn || !queryFn || !whereFn || !getDocsFn) {
+          return false;
+        }
+        
+        const driverId = currentDriver.staffId || currentDriver.id;
+        const logsRef = collectionFn(db, 'logsStaff');
+        const q = queryFn(
+          logsRef,
+          whereFn('driverId', '==', driverId),
+          whereFn('endTime', '==', null)
+        );
+        
+        const snapshot = await getDocsFn(q);
+        return !snapshot.empty;
+      } catch (error) {
+        console.error('Error checking active shift:', error);
+        return false;
+      }
+    }
+
+    // Check if driver has pending deliveries
+    async function checkPendingDeliveries() {
+      if (!currentDriver || !currentDriver.id) {
+        return false;
+      }
+      
+      try {
+        const db = window.firebaseDb;
+        const collectionFn = window.collection;
+        const queryFn = window.query;
+        const whereFn = window.where;
+        const getDocsFn = window.getDocs;
+        
+        if (!db || !collectionFn || !queryFn || !whereFn || !getDocsFn) {
+          return false;
+        }
+        
+        const driverId = currentDriver.staffId || currentDriver.id;
+        const ordersRef = collectionFn(db, 'orders');
+        
+        // Check for different status variations
+        const statuses = ['out_for_delivery', 'out-for-delivery', 'in-transit', 'in_transit', 'on the way', 'on-the-way'];
+        let hasPending = false;
+        
+        for (const status of statuses) {
+          const q = queryFn(
+            ordersRef,
+            whereFn('driverId', '==', driverId),
+            whereFn('status', '==', status)
+          );
+          const snapshot = await getDocsFn(q);
+          if (!snapshot.empty) {
+            hasPending = true;
+            break;
+          }
+        }
+        
+        return hasPending;
+      } catch (error) {
+        console.error('Error checking pending deliveries:', error);
+        return false;
+      }
+    }
+
+    // Make functions globally available
+    window.stopQRScanner = stopQRScanner;
 
     (function initShiftButton() {
       const shiftToggleBtn = document.getElementById('shiftToggleBtn');
