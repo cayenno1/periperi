@@ -7,6 +7,51 @@
     'use strict';
 
     // Navigation functions are provided by utils.js
+    function getProviderIds(user) {
+        const list = Array.isArray(user?.providerData) ? user.providerData : [];
+        const ids = list.map((p) => p?.providerId).filter(Boolean);
+        return ids;
+    }
+
+    function isPasswordProviderUser(user) {
+        return getProviderIds(user).includes('password');
+    }
+
+    function isGoogleProviderUser(user) {
+        return getProviderIds(user).includes('google.com');
+    }
+
+    function normalizeString(value) {
+        const v = String(value ?? '').trim();
+        return v || '';
+    }
+
+    async function requireCompleteProfile(user) {
+        // Ensure OAuth users (Google) still provide first/last name + phone like email/password users do.
+        try {
+            if (!user?.uid) return true;
+            await window.utils?.waitForFirebaseReady?.();
+            if (!window.firebaseDb || !window.doc || !window.getDoc) return true;
+
+            const ref = window.doc(window.firebaseDb, 'customers', user.uid);
+            const snap = await window.getDoc(ref);
+            const data = snap.exists() ? (snap.data() || {}) : {};
+
+            const firstName = normalizeString(data.firstName);
+            const lastName = normalizeString(data.lastName);
+            const phone = normalizeString(data.phone);
+            const complete = Boolean(firstName && lastName && phone);
+
+            if (!complete && isGoogleProviderUser(user)) {
+                const current = (window.location.pathname.split('/').pop() || 'account.html').trim() || 'account.html';
+                window.location.href = `complete-profile.html?redirect=${encodeURIComponent(current)}`;
+                return false;
+            }
+            return true;
+        } catch (e) {
+            return true;
+        }
+    }
 
     // Addresses - will be initialized in initialize()
     let addressModal = null;
@@ -1334,6 +1379,12 @@
         try {
             const userDocRef = window.doc(window.firebaseDb, 'customers', user.uid);
             
+            // Ensure loyalty fields exist (points defaults to 0 for new users).
+            // Fire-and-forget so the UI isn't blocked.
+            try {
+                window.utils?.ensureCustomerLoyaltyDefaults?.(user).catch?.(() => {});
+            } catch (e) {}
+            
             // Start listener immediately
             startCustomerReviewsListener(user);
             
@@ -1347,12 +1398,20 @@
                 (snapshot) => {
                     if (snapshot.exists()) {
                         const userData = snapshot.data();
+                        // Patch missing loyalty fields back into Firestore (keeps everything in sync).
+                        try {
+                            window.utils?.ensureCustomerLoyaltyDefaults?.(user).catch?.(() => {});
+                        } catch (e) {}
                         updateUserDisplay(userData, user);
                         updateSecurityMeta(user);
                         const addresses = userData.addresses || [];
                         renderAddresses(addresses);
                         renderDiscountStatus(userData);
                     } else {
+                        // If doc doesn't exist yet, create it with loyalty defaults so points is 0 everywhere.
+                        try {
+                            window.utils?.ensureCustomerLoyaltyDefaults?.(user).catch?.(() => {});
+                        } catch (e) {}
                         updateUserDisplay(null, user);
                         updateSecurityMeta(user);
                         renderAddresses([]);
@@ -1390,10 +1449,12 @@
             return;
         }
 
-        window.onAuthStateChanged(window.firebaseAuth, (user) => {
+        window.onAuthStateChanged(window.firebaseAuth, async (user) => {
             stopUserDataListenerFunc();
 
             if (user) {
+                const ok = await requireCompleteProfile(user);
+                if (!ok) return;
                 setupUserDataListener(user);
                 updateSecurityMeta(user);
             } else {
@@ -1405,15 +1466,73 @@
         });
     }
 
+    function applyPasswordUiForProvider(user) {
+        // Always enforce provider-specific password UI, regardless of whether "last login" elements exist.
+        try {
+            const passwordSection = document.querySelector('.password-change-section');
+            const passwordForm = document.getElementById('passwordChangeForm');
+            const noteId = 'oauthPasswordNote';
+            if (!passwordSection) return;
+
+            const existingNote = document.getElementById(noteId);
+            const shouldHidePasswordForm = user && !isPasswordProviderUser(user);
+
+            if (shouldHidePasswordForm) {
+                if (passwordForm) passwordForm.style.display = 'none';
+
+                // Clear any visible validation error when hiding the form
+                clearAllPasswordErrors();
+                const currentPasswordInput = document.getElementById('currentPassword');
+                if (currentPasswordInput) {
+                    currentPasswordInput.value = '';
+                    currentPasswordInput.classList.remove('error');
+                }
+
+                const successMessage = document.getElementById('passwordSuccessMessage');
+                if (successMessage) {
+                    successMessage.classList.add('d-none');
+                    successMessage.style.display = 'none';
+                }
+
+                const noteHtml = isGoogleProviderUser(user)
+                    ? 'You signed in with <strong>Google</strong>. Password changes are managed through your Google account.'
+                    : 'Password changes are not available for this sign-in method.';
+
+                if (!existingNote) {
+                    const note = document.createElement('div');
+                    note.id = noteId;
+                    note.className = 'account-security-note';
+                    note.style.marginTop = '10px';
+                    note.style.color = '#666';
+                    note.style.fontSize = '0.95rem';
+                    note.style.lineHeight = '1.5';
+                    note.innerHTML = noteHtml;
+                    passwordSection.appendChild(note);
+                } else {
+                    existingNote.innerHTML = noteHtml;
+                }
+            } else {
+                if (passwordForm) passwordForm.style.display = '';
+                if (existingNote) existingNote.remove();
+            }
+        } catch (e) {}
+    }
+
     // Security meta info
     function updateSecurityMeta(user) {
         const lastLoginInfo = document.getElementById('lastLoginInfo');
         const lastLoginDevice = document.getElementById('lastLoginDevice');
-        if (!lastLoginInfo || !lastLoginDevice) return;
+        // Provider-specific UI should always run (even if these elements are missing)
+        applyPasswordUiForProvider(user);
 
         if (!user) {
-            lastLoginInfo.textContent = 'Not signed in';
-            lastLoginDevice.textContent = '—';
+            if (lastLoginInfo) lastLoginInfo.textContent = 'Not signed in';
+            if (lastLoginDevice) lastLoginDevice.textContent = '—';
+            return;
+        }
+
+        if (!lastLoginInfo || !lastLoginDevice) {
+            // Nothing else to render; provider UI already applied above.
             return;
         }
 
@@ -1544,6 +1663,11 @@
             return;
         }
 
+        if (!isPasswordProviderUser(user)) {
+            showPasswordError('currentPassword', 'You signed in with Google. Password changes are managed through your Google account.');
+            return;
+        }
+
         try {
             const credential = window.EmailAuthProvider.credential(user.email, currentPassword);
             await window.reauthenticateWithCredential(user, credential);
@@ -1612,13 +1736,19 @@
         isDeletingAccount = false;
     }
 
-    async function deleteAccount(password) {
+    async function deleteAccountWithPassword(password) {
         const user = window.firebaseAuth?.currentUser;
         if (!user || !user.email) {
             throw new Error('User not found');
         }
 
         try {
+            if (!isPasswordProviderUser(user)) {
+                const err = new Error('Password re-authentication is not available for this account.');
+                err.code = 'auth/operation-not-allowed';
+                throw err;
+            }
+
             const credential = window.EmailAuthProvider.credential(user.email, password);
             await window.reauthenticateWithCredential(user, credential);
 
@@ -1645,6 +1775,50 @@
         }
     }
 
+    async function deleteAccountWithGooglePopup() {
+        const user = window.firebaseAuth?.currentUser;
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        if (!isGoogleProviderUser(user)) {
+            const err = new Error('Google re-authentication is not available for this account.');
+            err.code = 'auth/operation-not-allowed';
+            throw err;
+        }
+
+        if (!window.reauthenticateWithPopup || !window.GoogleAuthProvider) {
+            const err = new Error('Re-authentication is not available right now. Please try again later.');
+            err.code = 'auth/operation-not-allowed';
+            throw err;
+        }
+
+        try {
+            const provider = new window.GoogleAuthProvider();
+            await window.reauthenticateWithPopup(user, provider);
+
+            const userId = user.uid;
+            const userDocRef = window.doc(window.firebaseDb, 'customers', userId);
+            
+            try {
+                const userDoc = await window.getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    await window.deleteDoc(userDocRef);
+                }
+            } catch (firestoreError) {
+                console.error('Error deleting user data:', firestoreError);
+            }
+
+            await window.deleteUser(user);
+            localStorage.removeItem('ppp_user');
+            await window.signOut(window.firebaseAuth);
+            window.location.href = 'index.html';
+        } catch (error) {
+            console.error('Error deleting Google account:', error);
+            throw error;
+        }
+    }
+
     async function deleteUserAccount() {
         const user = window.firebaseAuth?.currentUser;
         if (!user) {
@@ -1666,6 +1840,32 @@
             return;
         }
 
+        // Password users: show password modal. Google users: reauth with popup then delete.
+        if (isPasswordProviderUser(user)) {
+            if (deleteAccountPasswordModal) deleteAccountPasswordModal.style.display = 'flex';
+            if (deleteAccountPasswordInput) deleteAccountPasswordInput.focus();
+            return;
+        }
+
+        if (isGoogleProviderUser(user)) {
+            try {
+                showToast('Re-authenticating with Google...', 'info');
+                await deleteAccountWithGooglePopup();
+            } catch (error) {
+                let errorMessage = error?.message || 'An error occurred while deleting your account. Please try again.';
+                if (error?.code === 'auth/popup-blocked') {
+                    errorMessage = 'Popup was blocked. Please allow popups and try again.';
+                } else if (error?.code === 'auth/popup-closed-by-user') {
+                    errorMessage = 'Popup was closed before completing. Please try again.';
+                } else if (error?.code === 'auth/requires-recent-login') {
+                    errorMessage = 'For security, please sign out and sign in again, then retry deleting your account.';
+                }
+                showToast(errorMessage, 'error');
+            }
+            return;
+        }
+
+        // Fallback: show password modal
         if (deleteAccountPasswordModal) deleteAccountPasswordModal.style.display = 'flex';
         if (deleteAccountPasswordInput) deleteAccountPasswordInput.focus();
     }
@@ -2765,6 +2965,12 @@
                 e.preventDefault();
                 if (isChangingPassword) return;
 
+                const user = window.firebaseAuth?.currentUser;
+                if (!isPasswordProviderUser(user)) {
+                    showToast('You signed in with Google. Password changes are managed through your Google account.', 'info');
+                    return;
+                }
+
                 clearAllPasswordErrors();
                 const currentPassword = currentPasswordInput?.value;
                 if (!currentPassword) return;
@@ -2818,7 +3024,7 @@
                 if (confirmDeleteAccountBtnText) confirmDeleteAccountBtnText.textContent = 'Deleting...';
 
                 try {
-                    await deleteAccount(password);
+                    await deleteAccountWithPassword(password);
                 } catch (error) {
                     isDeletingAccount = false;
                     if (confirmDeleteAccountBtn) confirmDeleteAccountBtn.disabled = false;

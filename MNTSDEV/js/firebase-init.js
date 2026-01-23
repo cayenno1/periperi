@@ -1,6 +1,26 @@
 // Firebase setup
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  updatePassword,
+  reauthenticateWithPopup,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  deleteUser,
+  sendPasswordResetEmail,
+  // OAuth / Social providers
+  signInWithPopup,
+  GoogleAuthProvider,
+  GithubAuthProvider,
+  FacebookAuthProvider,
+  TwitterAuthProvider,
+  OAuthProvider
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   getFirestore,
   doc,
@@ -54,6 +74,12 @@ window.onAuthStateChanged = onAuthStateChanged;
 window.signInWithEmailAndPassword = signInWithEmailAndPassword;
 window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
 window.sendEmailVerification = sendEmailVerification;
+window.signInWithPopup = signInWithPopup;
+window.GoogleAuthProvider = GoogleAuthProvider;
+window.GithubAuthProvider = GithubAuthProvider;
+window.FacebookAuthProvider = FacebookAuthProvider;
+window.TwitterAuthProvider = TwitterAuthProvider;
+window.OAuthProvider = OAuthProvider;
 
 window.getDoc = getDoc;
 window.doc = doc;
@@ -66,6 +92,7 @@ window.arrayRemove = arrayRemove;
 window.updateDoc = updateDoc;
 
 window.updatePassword = updatePassword;
+window.reauthenticateWithPopup = reauthenticateWithPopup;
 window.reauthenticateWithCredential = reauthenticateWithCredential;
 window.EmailAuthProvider = EmailAuthProvider;
 window.deleteUser = deleteUser;

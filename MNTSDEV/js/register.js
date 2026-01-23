@@ -276,6 +276,63 @@
         });
     }
 
+    async function handleProviderSignIn(providerKey) {
+        if (isSubmitting) return;
+
+        const redirectTarget = sanitizeRedirect(getRedirectParam());
+
+        const oauthButtons = document.querySelectorAll('[data-auth-provider]');
+        oauthButtons.forEach((btn) => {
+            try { btn.disabled = true; } catch (e) {}
+        });
+
+        window.auth.setFormState(
+            true,
+            'submitButton',
+            'submitButtonText',
+            'Creating Account...',
+            'Create Account'
+        );
+        isSubmitting = true;
+
+        const result = await window.auth.signInWithProvider(providerKey, { redirectTarget });
+        isSubmitting = false;
+
+        if (result.success) {
+            const finalTarget = redirectTarget || result.redirect || 'index.html';
+            window.location.href = finalTarget;
+            return;
+        }
+
+        window.auth.setFormState(
+            false,
+            'submitButton',
+            'submitButtonText',
+            'Creating Account...',
+            'Create Account'
+        );
+        oauthButtons.forEach((btn) => {
+            try { btn.disabled = false; } catch (e) {}
+        });
+
+        const errorMessage = window.auth.getErrorMessage(result.error);
+        window.auth.showError('email', errorMessage);
+    }
+
+    function initProviderButtons() {
+        const buttons = document.querySelectorAll('[data-auth-provider]');
+        if (!buttons || buttons.length === 0) return;
+
+        buttons.forEach((btn) => {
+            const provider = btn.getAttribute('data-auth-provider');
+            if (!provider) return;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                handleProviderSignIn(provider);
+            });
+        });
+    }
+
     // Initialize input listeners
     function initInputListeners() {
         const firstNameInput = document.getElementById('firstName');
@@ -390,6 +447,7 @@
         wireAuthLinks(redirectTarget);
         window.auth.setupPasswordToggle('passwordToggle', 'password');
         window.auth.setupPasswordToggle('confirmPasswordToggle', 'confirmPassword');
+        initProviderButtons();
         initForm();
         initInputListeners();
     });

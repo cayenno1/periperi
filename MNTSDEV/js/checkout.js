@@ -1121,6 +1121,11 @@
                 return;
             }
 
+            // Ensure doc + loyalty fields exist so updateDoc won't fail.
+            try {
+                await window.utils?.ensureCustomerLoyaltyDefaults?.(user);
+            } catch (e) {}
+
             const userDocRef = window.doc(db, 'customers', user.uid);
 
             // Get current points
@@ -1193,6 +1198,11 @@
                 console.warn('No authenticated user; skipping points award');
                 return;
             }
+
+            // Ensure doc + loyalty fields exist for first-time earners.
+            try {
+                await window.utils?.ensureCustomerLoyaltyDefaults?.(user);
+            } catch (e) {}
 
             const userDocRef = window.doc(db, 'customers', user.uid);
 
@@ -1880,6 +1890,19 @@
                 }
 
                 loyaltyEnabled = true;
+                // Sync loyalty points from Firestore (defaults to 0 if missing).
+                (async () => {
+                    try {
+                        const res = await window.utils?.ensureCustomerLoyaltyDefaults?.(user);
+                        if (res && typeof res.points === 'number') {
+                            // ensureCustomerLoyaltyDefaults already syncs localStorage, but keep explicit safety.
+                            try {
+                                window.localStorage?.setItem('ppp_points', String(Math.max(0, res.points)));
+                            } catch (e) {}
+                        }
+                        initPointsSummary();
+                    } catch (e) {}
+                })();
                 loadCheckoutTotalsFromFirestore(user);
                 loadAddressesForCheckout(user);
                 setContactFieldsLocked(true);

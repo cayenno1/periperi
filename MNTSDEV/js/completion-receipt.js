@@ -310,6 +310,11 @@
                 return;
             }
 
+            // Ensure points exists in Firestore (defaults to 0 for new users).
+            try {
+                await window.utils?.ensureCustomerLoyaltyDefaults?.(authUser);
+            } catch (e) {}
+
             const userDocRef = window.doc(db, 'customers', authUser.uid);
             const snap = await window.getDoc(userDocRef);
             const data = snap.exists() ? (snap.data() || {}) : {};

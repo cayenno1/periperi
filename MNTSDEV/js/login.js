@@ -247,6 +247,65 @@
         });
     }
 
+    async function handleProviderSignIn(providerKey) {
+        if (isSubmitting) return;
+
+        const redirectTarget = sanitizeRedirect(getRedirectParam());
+
+        // Reuse the existing submit button spinner/disable behavior.
+        window.auth.setFormState(
+            true,
+            'submitButton',
+            'submitButtonText',
+            'Signing In...',
+            'Sign In'
+        );
+        isSubmitting = true;
+
+        const oauthButtons = document.querySelectorAll('[data-auth-provider]');
+        oauthButtons.forEach((btn) => {
+            try { btn.disabled = true; } catch (e) {}
+        });
+
+        const result = await window.auth.signInWithProvider(providerKey, { redirectTarget });
+        isSubmitting = false;
+
+        if (result.success) {
+            await migrateGuestCartToUserCart();
+            const finalTarget = redirectTarget || result.redirect || 'index.html';
+            window.location.href = finalTarget;
+            return;
+        }
+
+        window.auth.setFormState(
+            false,
+            'submitButton',
+            'submitButtonText',
+            'Signing In...',
+            'Sign In'
+        );
+        oauthButtons.forEach((btn) => {
+            try { btn.disabled = false; } catch (e) {}
+        });
+
+        const errorMessage = window.auth.getErrorMessage(result.error);
+        window.auth.showError('email', errorMessage);
+    }
+
+    function initProviderButtons() {
+        const buttons = document.querySelectorAll('[data-auth-provider]');
+        if (!buttons || buttons.length === 0) return;
+
+        buttons.forEach((btn) => {
+            const provider = btn.getAttribute('data-auth-provider');
+            if (!provider) return;
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                handleProviderSignIn(provider);
+            });
+        });
+    }
+
     // Password reset form
     function initPasswordResetForm() {
         const form = document.getElementById('resetPasswordForm');
@@ -322,6 +381,7 @@
         initPasswordToggle();
         initForgotPasswordModal();
         initLoginForm();
+        initProviderButtons();
         initPasswordResetForm();
         initInputListeners();
     });

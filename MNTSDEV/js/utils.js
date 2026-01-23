@@ -7,6 +7,7 @@
     const ppp = (window.ppp = window.ppp || {});
 
     const CART_COUNT_KEY = 'ppp_cart_count';
+    const LOYALTY_POINTS_KEY = 'ppp_points';
     const ROUTES = {
         home: 'index.html',
         menu: 'menu.html',
@@ -76,6 +77,95 @@
         while (!window.firebaseReady && attempts < maxAttempts) {
             await new Promise((resolve) => setTimeout(resolve, delayMs));
             attempts++;
+        }
+    }
+
+    function normalizePoints(value) {
+        const n = typeof value === 'number' ? value : parseInt(String(value ?? ''), 10);
+        if (!Number.isFinite(n) || Number.isNaN(n)) return 0;
+        return Math.max(0, Math.floor(n));
+    }
+
+    function writeStoredPoints(points) {
+        try {
+            window.localStorage?.setItem(LOYALTY_POINTS_KEY, String(normalizePoints(points)));
+        } catch (e) {}
+    }
+
+    /**
+     * Ensure every customer doc has loyalty fields with safe defaults.
+     * This prevents "undefined points" across account/checkout/receipt pages.
+     *
+     * Creates the customer doc if missing (minimal fields + loyalty defaults).
+     */
+    async function ensureCustomerLoyaltyDefaults(userOrUid) {
+        try {
+            await waitForFirebaseReady();
+
+            const db = window.firebaseDb;
+            if (!db || !window.doc || !window.getDoc || !window.setDoc) return { points: 0, updated: false };
+
+            const uid = typeof userOrUid === 'string' ? userOrUid : userOrUid?.uid;
+            if (!uid) return { points: 0, updated: false };
+
+            const customerRef = window.doc(db, 'customers', uid);
+
+            let snap = null;
+            let data = {};
+            try {
+                snap = await window.getDoc(customerRef);
+                data = snap.exists() ? (snap.data() || {}) : {};
+            } catch (e) {
+                snap = null;
+                data = {};
+            }
+
+            const patch = {};
+            const exists = !!(snap && typeof snap.exists === 'function' && snap.exists());
+
+            // Loyalty fields
+            const points = normalizePoints(data.points);
+            if (!exists || typeof data.points !== 'number' || data.points !== points) {
+                patch.points = points;
+            }
+
+            const lastEarnedPoints = normalizePoints(data.lastEarnedPoints);
+            if (!exists || typeof data.lastEarnedPoints !== 'number' || data.lastEarnedPoints !== lastEarnedPoints) {
+                patch.lastEarnedPoints = lastEarnedPoints;
+            }
+
+            if (!Array.isArray(data.pointsHistory)) {
+                patch.pointsHistory = [];
+            }
+
+            // Keep lastEarnedAt if present; otherwise standardize it to null.
+            if (typeof data.lastEarnedAt === 'undefined') {
+                patch.lastEarnedAt = null;
+            }
+
+            // If the doc doesn't exist yet, store minimal identity info (merge-safe).
+            if (!exists) {
+                patch.uid = uid;
+                const email = typeof userOrUid === 'object' ? (userOrUid?.email || null) : null;
+                if (email) patch.email = email;
+                patch.createdAt = new Date();
+            }
+
+            // Timestamp for audits / debugging
+            patch.updatedAt = window.serverTimestamp ? window.serverTimestamp() : new Date();
+
+            const needsWrite = Object.keys(patch).length > 1 || (Object.keys(patch).length === 1 && !('updatedAt' in patch));
+            if (needsWrite) {
+                await window.setDoc(customerRef, patch, { merge: true });
+            }
+
+            // Always keep local points cache consistent (checkout uses it).
+            writeStoredPoints(points);
+            return { points, updated: needsWrite };
+        } catch (e) {
+            // Never block the page; default to 0.
+            writeStoredPoints(0);
+            return { points: 0, updated: false };
         }
     }
 
@@ -493,6 +583,7 @@
         navigateTo,
         formatPeso,
         waitForFirebaseReady,
+        ensureCustomerLoyaltyDefaults,
         showToast,
         setupCartPreview,
         removeCartItemFromPreview,
