@@ -8,6 +8,8 @@
 
     const MENU_COLLECTION = 'menu';
     const REVIEWS_SUBCOLLECTION = 'reviews';
+    const CUSTOMER_COLLECTION = 'customers';
+    const FAVORITES_FIELD = 'favoriteMenuItemIds';
 
     // Fetch menu items with optional category filter
     async function fetchMenuItems(categoryKey) {
@@ -403,6 +405,88 @@
         }
     }
 
+    // ============================
+    // FAVORITES (per-customer)
+    // Stored on: customers/{uid}.favoriteMenuItemIds = string[]
+    // ============================
+
+    async function fetchFavoriteMenuItemIdsForUser(uid) {
+        await window.utils.waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        if (!db || !window.doc || !window.getDoc) {
+            console.warn('Firebase not ready for favorites fetch');
+            return [];
+        }
+        if (!uid) return [];
+
+        try {
+            const ref = window.doc(db, CUSTOMER_COLLECTION, uid);
+            const snap = await window.getDoc(ref);
+            if (!snap.exists()) return [];
+            const data = snap.data() || {};
+            const raw = data[FAVORITES_FIELD];
+            if (!Array.isArray(raw)) return [];
+            return raw.filter(Boolean).map((x) => String(x));
+        } catch (e) {
+            console.error('Error fetching favorites for user:', e);
+            return [];
+        }
+    }
+
+    async function setFavoriteMenuItemForUser(uid, itemId, shouldFavorite) {
+        await window.utils.waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        if (!db || !window.doc || !window.arrayUnion || !window.arrayRemove) {
+            throw new Error('Favorites are not available right now. Please try again later.');
+        }
+        if (!uid) throw new Error('You must be signed in to favorite items.');
+        if (!itemId) return;
+
+        const ref = window.doc(db, CUSTOMER_COLLECTION, uid);
+        const id = String(itemId);
+        const op = shouldFavorite ? window.arrayUnion(id) : window.arrayRemove(id);
+
+        // updateDoc requires the doc to exist; fall back to setDoc(merge) if needed.
+        try {
+            if (!window.updateDoc) throw new Error('updateDoc not available');
+            await window.updateDoc(ref, { [FAVORITES_FIELD]: op });
+        } catch (e) {
+            if (!window.setDoc) throw e;
+            await window.setDoc(ref, { [FAVORITES_FIELD]: op }, { merge: true });
+        }
+    }
+
+    function subscribeFavoriteMenuItemIdsForUser(uid, onChange) {
+        // Returns unsubscribe fn (or no-op).
+        try {
+            if (!uid) return () => {};
+            const db = window.firebaseDb;
+            if (!db || !window.doc || !window.onSnapshot) return () => {};
+
+            const ref = window.doc(db, CUSTOMER_COLLECTION, uid);
+            return window.onSnapshot(
+                ref,
+                (snap) => {
+                    const data = snap.exists() ? (snap.data() || {}) : {};
+                    const raw = data[FAVORITES_FIELD];
+                    const ids = Array.isArray(raw) ? raw.filter(Boolean).map((x) => String(x)) : [];
+                    try {
+                        if (typeof onChange === 'function') onChange(ids);
+                    } catch (e) {
+                        // Consumer errors should not break snapshot listener
+                    }
+                },
+                (err) => {
+                    console.warn('Favorites snapshot error:', err);
+                }
+            );
+        } catch (e) {
+            return () => {};
+        }
+    }
+
     // Expose to window
     window.firestore = {
         MENU_COLLECTION,
@@ -413,7 +497,12 @@
         fetchReviewsForItem,
         saveReviewForItem,
         deleteReview,
-        hasUserOrderedItem
+        hasUserOrderedItem,
+        // Favorites API
+        FAVORITES_FIELD,
+        fetchFavoriteMenuItemIdsForUser,
+        setFavoriteMenuItemForUser,
+        subscribeFavoriteMenuItemIdsForUser
     };
 })();
 

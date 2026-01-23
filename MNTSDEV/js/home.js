@@ -101,6 +101,8 @@
         const container = document.querySelector('.bestsellers-container');
         if (!container) return;
 
+        const MIN_FAVORITES_RATING = 4.0;
+
         container.innerHTML = `
             <div class="bestseller-card">
                 <div class="bestseller-content">
@@ -149,8 +151,29 @@
             })
         );
 
+        // Only show items with strong ratings (4-5 stars) and at least 1 review
+        const topRated = itemsWithRatings
+            .filter((item) => (Number(item.rating) || 0) >= MIN_FAVORITES_RATING && (Number(item.reviewCount) || 0) > 0)
+            .sort((a, b) => {
+                const ra = Number(a.rating) || 0;
+                const rb = Number(b.rating) || 0;
+                if (rb !== ra) return rb - ra;
+                const ca = Number(a.reviewCount) || 0;
+                const cb = Number(b.reviewCount) || 0;
+                return cb - ca;
+            });
+
+        if (!topRated.length) {
+            container.innerHTML = `
+                <div class="home-favorites-empty">
+                    <p>No 4–5 star favorites yet. Check back once reviews come in!</p>
+                </div>
+            `;
+            return;
+        }
+
         // Limit to first 12 items to keep the carousel manageable
-        const selected = itemsWithRatings.slice(0, 12);
+        const selected = topRated.slice(0, 12);
 
         container.innerHTML = selected.map((item) => {
             const rawImg = item.img || item.image || item.imageDataUrl || '';

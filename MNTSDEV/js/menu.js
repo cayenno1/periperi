@@ -12,7 +12,14 @@
     const MENU_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
     let lastNonFavoritesCategory = 'favorites';
 
-    function getIdList(key) {
+    // Favorites are stored per-account in Firestore when signed in.
+    // Fallback for guests: localStorage.
+    let favoritesSource = 'local'; // 'local' | 'firebase'
+    let favoritesUid = null;
+    let favoriteIds = [];
+    let unsubscribeFavorites = null;
+
+    function getLocalIdList(key) {
         try {
             const raw = window.localStorage?.getItem(key);
             const parsed = raw ? JSON.parse(raw) : [];
@@ -22,24 +29,53 @@
         }
     }
 
-    function setIdList(key, list) {
+    function setLocalIdList(key, list) {
         try {
             window.localStorage?.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
         } catch (e) {}
     }
 
-    function isFavorite(itemId) {
-        if (!itemId) return false;
-        return getIdList(FAVORITES_KEY).includes(String(itemId));
+    function getFavoriteIds() {
+        if (favoritesSource === 'firebase') {
+            return Array.isArray(favoriteIds) ? favoriteIds.filter(Boolean).map(String) : [];
+        }
+        return getLocalIdList(FAVORITES_KEY);
     }
 
-    function toggleFavorite(itemId) {
+    function isFavorite(itemId) {
+        if (!itemId) return false;
+        return getFavoriteIds().includes(String(itemId));
+    }
+
+    async function toggleFavorite(itemId) {
         if (!itemId) return false;
         const id = String(itemId);
-        const ids = getIdList(FAVORITES_KEY);
+        const currentlyFav = isFavorite(id);
+        const nextAdded = !currentlyFav;
+
+        if (favoritesSource === 'firebase' && favoritesUid && window.firestore?.setFavoriteMenuItemForUser) {
+            // Optimistic update for snappy UI; snapshot will reconcile.
+            favoriteIds = nextAdded
+                ? [id, ...getFavoriteIds().filter((x) => x !== id)]
+                : getFavoriteIds().filter((x) => x !== id);
+
+            try {
+                await window.firestore.setFavoriteMenuItemForUser(favoritesUid, id, nextAdded);
+                return nextAdded;
+            } catch (e) {
+                // Revert on failure
+                favoriteIds = currentlyFav
+                    ? [id, ...getFavoriteIds().filter((x) => x !== id)]
+                    : getFavoriteIds().filter((x) => x !== id);
+                throw e;
+            }
+        }
+
+        // Guest/local fallback
+        const ids = getLocalIdList(FAVORITES_KEY);
         const idx = ids.indexOf(id);
         const next = idx === -1 ? [id, ...ids] : ids.filter((x) => x !== id);
-        setIdList(FAVORITES_KEY, next.slice(0, 100));
+        setLocalIdList(FAVORITES_KEY, next.slice(0, 100));
         return idx === -1;
     }
 
@@ -52,6 +88,59 @@
             btn.setAttribute('aria-label', fav ? 'Remove from favorites' : 'Add to favorites');
             const icon = btn.querySelector('i');
             if (icon) icon.className = fav ? 'fas fa-heart' : 'far fa-heart';
+        });
+    }
+
+    function updateAllFavoriteButtons() {
+        document.querySelectorAll('.ppp-fav-btn[data-fav-id]').forEach((btn) => {
+            const id = String(btn.getAttribute('data-fav-id') || '');
+            if (!id) return;
+            const fav = isFavorite(id);
+            btn.classList.toggle('is-fav', fav);
+            btn.setAttribute('aria-label', fav ? 'Remove from favorites' : 'Add to favorites');
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = fav ? 'fas fa-heart' : 'far fa-heart';
+        });
+    }
+
+    function setupFavoritesSync() {
+        // Subscribe to the signed-in user's favorites so they load per account.
+        if (!window.onAuthStateChanged || !window.firebaseAuth) return;
+
+        window.onAuthStateChanged(window.firebaseAuth, async (user) => {
+            try {
+                await window.utils?.waitForFirebaseReady?.();
+            } catch (e) {}
+
+            // Cleanup old subscription
+            if (typeof unsubscribeFavorites === 'function') {
+                try { unsubscribeFavorites(); } catch (e) {}
+            }
+            unsubscribeFavorites = null;
+
+            favoritesUid = user?.uid || null;
+
+            if (favoritesUid && window.firestore?.subscribeFavoriteMenuItemIdsForUser) {
+                favoritesSource = 'firebase';
+                favoriteIds = [];
+
+                unsubscribeFavorites = window.firestore.subscribeFavoriteMenuItemIdsForUser(favoritesUid, (ids) => {
+                    favoriteIds = Array.isArray(ids) ? ids.filter(Boolean).map(String) : [];
+                    setFavoritesToggleState();
+                    updateAllFavoriteButtons();
+                    if (currentCategory === 'myfavorites') {
+                        renderMenu('myfavorites');
+                    }
+                });
+            } else {
+                favoritesSource = 'local';
+                favoriteIds = [];
+                setFavoritesToggleState();
+                updateAllFavoriteButtons();
+                if (currentCategory === 'myfavorites') {
+                    renderMenu('myfavorites');
+                }
+            }
         });
     }
 
@@ -85,7 +174,7 @@
     }
 
     function getFavoritesCount() {
-        return getIdList(FAVORITES_KEY).length;
+        return getFavoriteIds().length;
     }
 
     function setFavoritesToggleState() {
@@ -289,7 +378,7 @@
             if (menuKey === 'myfavorites') {
                 // Favorites is a header-driven view; keep sidebar unselected.
                 clearSidebarSelection();
-                const ids = getIdList(FAVORITES_KEY);
+                const ids = getFavoriteIds();
                 const items = await fetchItemsByIds(ids);
                 menuContent.innerHTML = items.length
                     ? items.map(renderCardHtml).join('')
@@ -525,6 +614,7 @@
     // Initialize menu page
     function initializeMenu() {
         setupSidebarNavigation();
+        setupFavoritesSync();
         
         // Set "Pablo's Favorites" as active immediately
         const favoritesBtn = document.querySelector('.sidebar-category[data-category="favorites"]');
@@ -575,20 +665,26 @@
         openFoodItem,
         updateEmptyState,
         generateStarDisplay,
-        toggleFavoriteFromCard: (e, itemId) => {
+        toggleFavoriteFromCard: async (e, itemId) => {
             if (e) {
                 e.preventDefault();
                 e.stopPropagation();
             }
-            const added = toggleFavorite(itemId);
-            updateFavoriteButtonsForItem(itemId);
-            setFavoritesToggleState();
-            if (currentCategory === 'myfavorites' && !added) {
-                // If removing from favorites while viewing favorites, refresh list.
-                renderMenu('myfavorites');
-            }
-            if (window.utils?.showToast) {
-                window.utils.showToast(added ? 'Added to favorites' : 'Removed from favorites', 'success', 1800);
+            try {
+                const added = await toggleFavorite(itemId);
+                updateFavoriteButtonsForItem(itemId);
+                setFavoritesToggleState();
+                if (currentCategory === 'myfavorites' && !added) {
+                    // If removing from favorites while viewing favorites, refresh list.
+                    renderMenu('myfavorites');
+                }
+                if (window.utils?.showToast) {
+                    window.utils.showToast(added ? 'Added to favorites' : 'Removed from favorites', 'success', 1800);
+                }
+            } catch (err) {
+                if (window.utils?.showToast) {
+                    window.utils.showToast('Could not update favorites. Please try again.', 'error', 2200);
+                }
             }
         },
         retryMenu: () => renderMenu(currentCategory),
