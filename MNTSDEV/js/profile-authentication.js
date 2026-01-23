@@ -29,10 +29,10 @@ async function updateProfileUI(user) {
     profileButton.classList.add('logged-in');
     profileIcon.style.display = '';
     profileText.style.display = '';
-    
+
     if (profileName) profileName.textContent = user.displayName || 'User';
     if (profileEmail) profileEmail.textContent = user.email || '';
-    
+
     fetchUserData(user.uid)
       .then((userData) => {
         if (userData) {
@@ -67,7 +67,7 @@ function setProfileLoadingState() {
 
   // Add loading state
   profileButton.classList.add('checking-auth');
-  
+
   // Show loading text
   if (profileText) {
     profileText.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -87,13 +87,13 @@ function setProfileLoadingState() {
     const observer = new MutationObserver(function(mutations) {
       const profileButton = document.getElementById('profileButton');
       const profileText = document.getElementById('profileText');
-      
+
       if (profileButton && profileText && !profileButton.classList.contains('checking-auth') && !profileButton.classList.contains('logged-in')) {
         setProfileLoadingState();
         observer.disconnect();
       }
     });
-    
+
     // Start observing
     if (document.body) {
       observer.observe(document.body, { childList: true, subtree: true });
@@ -107,7 +107,7 @@ function setProfileLoadingState() {
         observer.disconnect();
       });
     }
-    
+
     // Also try immediately in case elements already exist
     setTimeout(function() {
       const profileButton = document.getElementById('profileButton');
@@ -123,7 +123,7 @@ function setProfileLoadingState() {
 async function fetchUserData(userId) {
   try {
     const userDoc = await window.getDoc(window.doc(window.firebaseDb, CUSTOMERS_COLLECTION, userId));
-    
+
     if (!userDoc.exists()) {
       return null;
     }
@@ -186,7 +186,7 @@ function applyDropdownContext() {
 function initProfileAuth() {
   const btn = document.getElementById('profileButton');
   const dropdown = document.getElementById('profileDropdown');
-  
+
   if (!btn || !dropdown) {
     return;
   }
@@ -194,12 +194,12 @@ function initProfileAuth() {
   function toggleDropdown(e) {
     e.stopPropagation();
     const user = window.firebaseAuth?.currentUser;
-    
+
     if (!user) {
       window.location.href = LOGIN_PAGE;
       return;
     }
-    
+
     dropdown.classList.toggle('show');
   }
 
@@ -236,12 +236,12 @@ function initProfileAuth() {
 
   // Setup auth listener
   function initAuthListener() {
-    // Ensure loading state is set (profile-loading-init.js should have done this, but ensure it)
+    // Ensure loading state is set (profile-login.js should have done this, but ensure it)
     const profileButton = document.getElementById('profileButton');
     if (profileButton && !profileButton.classList.contains('checking-auth') && !profileButton.classList.contains('logged-in')) {
       setProfileLoadingState();
     }
-    
+
     if (!window.firebaseAuth || !window.firebaseReady) {
       setTimeout(initAuthListener, RETRY_DELAY_MS);
       return;

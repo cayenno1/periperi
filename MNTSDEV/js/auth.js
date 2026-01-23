@@ -1,10 +1,10 @@
-// ============================================
-// AUTHENTICATION OPERATIONS
-// All Firebase Auth operations (login, register, password reset)
-// ============================================
+// Authentication helpers for login/register/reset flows.
+// Exposes a small API for the simple multi-page setup.
 
 (function() {
     'use strict';
+
+    const ppp = (window.ppp = window.ppp || {});
 
     // Error handling helpers
     function showError(fieldId, message) {
@@ -341,8 +341,8 @@
         }
     }
 
-    // Expose to window
-    window.auth = {
+    // Public API (keep legacy global for compatibility).
+    const authApi = {
         showError,
         clearError,
         clearAllErrors,
@@ -355,5 +355,7 @@
         sendPasswordReset,
         getErrorMessage
     };
+    ppp.auth = authApi;
+    window.auth = authApi;
 })();
 

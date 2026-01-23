@@ -1,10 +1,10 @@
-// ============================================
-// UTILITY FUNCTIONS
-// Shared utilities across the application
-// ============================================
+// Shared client-side utilities used across pages.
+// This file intentionally exposes a small global API for simple HTML pages.
 
 (function() {
     'use strict';
+
+    const ppp = (window.ppp = window.ppp || {});
 
     const CART_COUNT_KEY = 'ppp_cart_count';
     const ROUTES = {
@@ -483,8 +483,8 @@
         }
     }
 
-    // Expose to window
-    window.utils = {
+    // Public API (keep legacy globals for compatibility).
+    const utilsApi = {
         safeNumber,
         getStoredCartCount,
         storeCartCount,
@@ -498,17 +498,21 @@
         removeCartItemFromPreview,
         changeCartPreviewQty
     };
+    ppp.utils = utilsApi;
+    window.utils = utilsApi;
 
     // Global navigation functions
-    window.goHome = () => navigateTo('home');
-    window.goToMenu = () => navigateTo('menu');
-    window.goToHelp = () => navigateTo('help');
-    window.goToCart = () => navigateTo('cart');
+    ppp.nav = ppp.nav || {};
+    ppp.nav.goHome = window.goHome = () => navigateTo('home');
+    ppp.nav.goToMenu = window.goToMenu = () => navigateTo('menu');
+    ppp.nav.goToHelp = window.goToHelp = () => navigateTo('help');
+    ppp.nav.goToCart = window.goToCart = () => navigateTo('cart');
 
     // Global cart count functions
-    window.getCartCount = getStoredCartCount;
+    ppp.cart = ppp.cart || {};
+    ppp.cart.getCount = window.getCartCount = getStoredCartCount;
 
-    window.setCartCount = function setCartCount(count) {
+    ppp.cart.setCount = window.setCartCount = function setCartCount(count) {
         const next = Math.max(0, safeNumber(count, 0));
         storeCartCount(next);
         updateCartBadges(next);
@@ -516,12 +520,12 @@
         return next;
     };
 
-    window.incrementCartCount = function incrementCartCount(delta = 1) {
+    ppp.cart.incrementCount = window.incrementCartCount = function incrementCartCount(delta = 1) {
         const current = getStoredCartCount();
         return window.setCartCount(current + safeNumber(delta, 0));
     };
 
-    window.resetCartCount = function resetCartCount() {
+    ppp.cart.resetCount = window.resetCartCount = function resetCartCount() {
         return window.setCartCount(0);
     };
 

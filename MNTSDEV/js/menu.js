@@ -1,17 +1,16 @@
-// ============================================
-// MENU PAGE FUNCTIONALITY
-// Menu page specific JavaScript
-// ============================================
+// Menu page controller.
+// Owns category switching, favorites, caching, and rating hydration.
 
 (function() {
     'use strict';
+
+    const ppp = (window.ppp = window.ppp || {});
 
     let currentCategory = 'favorites';
     const FAVORITES_KEY = 'ppp_favorites_v1';
     const MENU_CACHE_PREFIX = 'ppp_menu_cache_v1:';
     const MENU_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
     let lastNonFavoritesCategory = 'favorites';
-    let lastNonFavoritesTitle = "PABLO'S FAVORITES";
 
     function getIdList(key) {
         try {
@@ -190,32 +189,32 @@
             try {
                 // Fetch fresh review summary from Firebase menu subcollection
                 const summary = await window.firestore.fetchReviewSummaryForItem(item.id);
-            if (!summary) {
-                ratingLabel.textContent = 'No reviews yet';
-                if (starsDisplay) {
-                    starsDisplay.innerHTML = '<i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i>';
+                if (!summary) {
+                    ratingLabel.textContent = 'No reviews yet';
+                    if (starsDisplay) {
+                        starsDisplay.innerHTML = '<i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i>';
+                    }
+                    return;
                 }
-                return;
-            }
 
-            const avg = summary.average || 0;
-            const count = summary.count || 0;
+                const avg = summary.average || 0;
+                const count = summary.count || 0;
 
-            if (!count) {
-                ratingLabel.textContent = 'No reviews yet';
-                if (starsDisplay) {
-                    starsDisplay.innerHTML = '<i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i>';
+                if (!count) {
+                    ratingLabel.textContent = 'No reviews yet';
+                    if (starsDisplay) {
+                        starsDisplay.innerHTML = '<i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i><i class="far fa-star"></i>';
+                    }
+                    return;
                 }
-                return;
-            }
 
-            const avgText = avg.toFixed(1);
-            const countLabel = count === 1 ? '1 review' : `${count} reviews`;
-            ratingLabel.textContent = `${avgText} (${countLabel})`;
-            
-            if (starsDisplay) {
-                starsDisplay.innerHTML = generateStarDisplay(avg);
-            }
+                const avgText = avg.toFixed(1);
+                const countLabel = count === 1 ? '1 review' : `${count} reviews`;
+                ratingLabel.textContent = `${avgText} (${countLabel})`;
+
+                if (starsDisplay) {
+                    starsDisplay.innerHTML = generateStarDisplay(avg);
+                }
             } catch (error) {
                 console.error('Error fetching review summary for item:', item.id, error);
                 // Set default values on error
@@ -509,7 +508,6 @@
                 const category = this.dataset.category;
                 if (category) {
                     lastNonFavoritesCategory = category;
-                    lastNonFavoritesTitle = this.textContent.trim().toUpperCase();
                     renderMenu(category);
                     updateSectionTitle(category);
                 }
@@ -571,8 +569,8 @@
         }
     }
 
-    // Expose functions
-    window.menu = {
+    // Public API (keep legacy global for compatibility).
+    const menuApi = {
         renderMenu,
         openFoodItem,
         updateEmptyState,
@@ -603,12 +601,13 @@
                 return;
             }
             lastNonFavoritesCategory = currentCategory || 'favorites';
-            lastNonFavoritesTitle = document.querySelector('.section-category-title')?.textContent || lastNonFavoritesTitle;
             // When entering favorites from header, clear sidebar highlight.
             clearSidebarSelection();
             renderMenu('myfavorites');
         }
     };
+    ppp.menu = menuApi;
+    window.menu = menuApi;
 
     // Global function for onclick handlers
     window.openFoodItem = openFoodItem;
