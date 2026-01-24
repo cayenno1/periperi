@@ -76,7 +76,7 @@
                         </a>
                     </li>
                     <li class="nav-item active">
-                        <a href="admin-index.html" class="nav-link">
+                        <a href="index.html" class="nav-link">
                             <i class="fas fa-shopping-cart"></i>
                             <span>Orders</span>
                         </a>
@@ -134,6 +134,12 @@
                         <ul class="menu-nav-submenu" id="analyticsTabDropdown">
                             <li><a href="sales.html#sales">Sales</a></li>
                         </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="settings.html" class="nav-link">
+                            <i class="fas fa-cog"></i>
+                            <span>Payment Settings</span>
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a href="admin-profile.html" class="nav-link">
@@ -266,13 +272,11 @@
                     <thead>
                         <tr>
                             <th>Order ID</th>
-                            <th>Order Name</th>
                             <th>Customer</th>
                             <th>Order Type</th>
                             <th>Location</th>
                             <th>Order Status</th>
                             <th>Time</th>
-                            <th>Price</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -321,7 +325,7 @@
                 <button class="btn btn-success" onclick="verifyPaymentConfirm()">
                     <i class="fas fa-check-circle"></i> Verify
                 </button>
-                <button class="btn btn-danger" onclick="declinePayment()">
+                <button class="btn btn-danger" onclick="openPaymentDeclineModal()">
                     <i class="fas fa-times-circle"></i> Decline
                 </button>
                 <button class="btn btn-secondary" onclick="closePaymentReceiptModal()">Close</button>
@@ -329,6 +333,33 @@
         </div>
     </div>
 
+
+    <!-- Payment Decline Modal -->
+    <div id="paymentDeclineModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Decline Payment</h3>
+                <button class="modal-close" onclick="closePaymentDeclineModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Please select a reason for declining this payment:</p>
+                <div style="margin: 20px 0;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 500;">Reason:</label>
+                    <select id="paymentDeclineReasonSelect" class="form-control" style="width: 100%; margin-bottom: 15px;">
+                        <option value="">Select a reason...</option>
+                        <option value="wrong_screenshot">Wrong Screenshot</option>
+                        <option value="credentials_mismatch">Account Credentials Do not Match</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <textarea id="paymentDeclineReasonText" class="form-control" placeholder="Additional notes (optional)" rows="3" style="width: 100%; display: none; margin-top: 10px;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closePaymentDeclineModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmPaymentDecline()">Decline Payment</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Driver Selection Modal -->
     <div id="driverSelectionModal" class="modal" style="display: none;">

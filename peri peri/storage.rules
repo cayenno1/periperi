@@ -71,6 +71,21 @@ service firebase.storage {
                    );
     }
     
+    // Allow read/write access to payment settings (QR codes, etc.)
+    match /paymentSettings/{fileName} {
+      // Allow public read: QR codes need to be visible to customers
+      allow read: if true;
+      
+      // Allow write: Since app uses custom session auth (not Firebase Auth),
+      // allow writes with file size and content type restrictions
+      allow write: if request.resource.size < 5 * 1024 * 1024  // Max 5MB
+                   && (
+                     // Allow if content type is an image (if set)
+                     !('contentType' in request.resource) ||
+                     request.resource.contentType.matches('image/.*')
+                   );
+    }
+    
     // Default: deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

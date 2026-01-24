@@ -72,7 +72,7 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="admin-index.html" class="nav-link">
+                        <a href="index.html" class="nav-link">
                             <i class="fas fa-shopping-cart"></i>
                             <span>Orders</span>
                         </a>
@@ -130,6 +130,12 @@
                         <ul class="menu-nav-submenu" id="analyticsTabDropdown">
                             <li><a href="sales.html#sales">Sales</a></li>
                         </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="settings.html" class="nav-link">
+                            <i class="fas fa-cog"></i>
+                            <span>Payment Settings</span>
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a href="admin-profile.html" class="nav-link">
@@ -198,21 +204,17 @@
             </script>
 
             <!-- Driver Tabs -->
-            <div class="driver-tabs-container">
-                <div class="driver-tabs">
-                    <button class="driver-tab-btn active" id="driversTabBtn" onclick="switchDriverTab('drivers')">
-                        <i class="fas fa-car"></i> Drivers
-                    </button>
-                    <button class="driver-tab-btn" id="clockinTabBtn" onclick="switchDriverTab('clockin')">
-                        <i class="fas fa-qrcode"></i> Clock-In System
-                    </button>
-                </div>
+            <div class="driver-tabs">
+                <button class="driver-tab-btn active" onclick="switchDriverTab('availability')">
+                    <i class="fas fa-car"></i> Driver Availability
+                </button>
+                <button class="driver-tab-btn" onclick="switchDriverTab('clockin')">
+                    <i class="fas fa-clock"></i> Clock-In System
+                </button>
             </div>
 
-            <!-- Drivers Tab Content -->
-            <div id="driversTabContent" class="driver-tab-content">
             <!-- Driver Availability Section -->
-            <div class="driver-availability-section">
+            <div class="driver-availability-section driver-tab-content" id="driverAvailabilityTab">
                 <div class="section-header">
                     <h3><i class="fas fa-car"></i> Driver Availability</h3>
                 </div>
@@ -235,97 +237,82 @@
                     <!-- Drivers will be loaded here -->
                 </div>
             </div>
-            </div>
 
-            <!-- Clock-In System Tab Content -->
-            <div id="clockinTabContent" class="driver-tab-content" style="display: none;">
-                <div class="clockin-system-container">
-                    <!-- QR Code Display Section -->
-                    <div class="clockin-qr-section">
-                        <div class="qr-tabs">
-                            <button class="qr-tab-btn active" onclick="switchQRType('clock_in')">
-                                <i class="fas fa-sign-in-alt"></i> Clock-In QR
-                            </button>
-                            <button class="qr-tab-btn" onclick="switchQRType('clock_out')">
-                                <i class="fas fa-sign-out-alt"></i> Clock-Out QR
-                            </button>
-                        </div>
+            <!-- Clock-In System Section -->
+            <div class="clockin-system-container driver-tab-content" id="clockInSystemTab" style="display: none;">
+                <div class="clockin-qr-section">
+                    <div class="qr-tabs">
+                        <button class="qr-tab-btn active" onclick="switchQRTab('clockin')">
+                            <i class="fas fa-sign-in-alt"></i> Clock-In Code
+                        </button>
+                        <button class="qr-tab-btn" onclick="switchQRTab('clockout')">
+                            <i class="fas fa-sign-out-alt"></i> Clock-Out Code
+                        </button>
+                    </div>
 
-                        <!-- Clock-In Code Display -->
-                        <div id="clockInQRDisplay" class="qr-display-section">
-                            <h3>Driver Clock-In Code</h3>
-                            <p class="qr-instructions">Drivers: Enter this code in your app to clock in</p>
-                            
-                            <div class="qr-code-container">
-                                <div id="clockInQRCanvas" class="numeric-code-box"></div>
-                                <div class="qr-code-info">
-                                    <div class="qr-expiry" id="clockInExpiry">
-                                        <i class="fas fa-clock"></i>
-                                        <span>Expires in: <span id="clockInExpiryTime">--:--</span></span>
-                                    </div>
-                                    <div class="qr-status" id="clockInStatus">
-                                        <i class="fas fa-check-circle"></i>
-                                        <span>Active</span>
-                                    </div>
-                                    <div class="qr-usage" id="clockInUsage">
-                                        <i class="fas fa-users"></i>
-                                        <span>Used by: <span id="clockInUsageCount">0</span> drivers</span>
-                                    </div>
+                    <!-- Clock-In QR Section -->
+                    <div class="qr-display-section" id="clockInQRSection">
+                        <h3>Clock-In Code</h3>
+                        <p class="qr-instructions">Generate a code for drivers to use and clock in. The code will expire after the set duration.</p>
+                        
+                        <div class="qr-code-container">
+                            <div class="qr-code-info">
+                                <div class="qr-code-details">
+                                    <p><strong>Code:</strong> <span id="clockInCodeDisplay" class="code-display">—</span></p>
+                                    <p><strong>Valid Until:</strong> <span id="clockInValidUntil">—</span></p>
+                                    <p><strong>Status:</strong> <span id="clockInStatus" class="status-badge status-inactive">Not Generated</span></p>
                                 </div>
                             </div>
-                            
                             <div class="qr-actions">
-                                <button class="btn btn-primary" onclick="generateQRCode('clock_in')">
-                                    <i class="fas fa-sync-alt"></i> Generate New QR Code
+                                <label for="clockInDuration" style="margin-right: 10px;">Duration (minutes):</label>
+                                <input type="number" id="clockInDuration" value="60" min="1" max="1440" style="width: 80px; padding: 8px; margin-right: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <button class="btn btn-primary" onclick="generateClockInCode()">
+                                    <i class="fas fa-qrcode"></i> Generate Clock-In Code
                                 </button>
-                                <button class="btn btn-secondary" onclick="refreshQRCode('clock_in')">
-                                    <i class="fas fa-refresh"></i> Refresh Display
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Clock-Out Code Display -->
-                        <div id="clockOutQRDisplay" class="qr-display-section" style="display: none;">
-                            <h3>Driver Clock-Out Code</h3>
-                            <p class="qr-instructions">Drivers: Enter this code in your app to clock out</p>
-                            
-                            <div class="qr-code-container">
-                                <div id="clockOutQRCanvas" class="numeric-code-box"></div>
-                                <div class="qr-code-info">
-                                    <div class="qr-expiry" id="clockOutExpiry">
-                                        <i class="fas fa-clock"></i>
-                                        <span>Expires in: <span id="clockOutExpiryTime">--:--</span></span>
-                                    </div>
-                                    <div class="qr-status" id="clockOutStatus">
-                                        <i class="fas fa-check-circle"></i>
-                                        <span>Active</span>
-                                    </div>
-                                    <div class="qr-usage" id="clockOutUsage">
-                                        <i class="fas fa-users"></i>
-                                        <span>Used by: <span id="clockOutUsageCount">0</span> drivers</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="qr-actions">
-                                <button class="btn btn-primary" onclick="generateQRCode('clock_out')">
-                                    <i class="fas fa-sync-alt"></i> Generate New QR Code
-                                </button>
-                                <button class="btn btn-secondary" onclick="refreshQRCode('clock_out')">
-                                    <i class="fas fa-refresh"></i> Refresh Display
+                                <button class="btn btn-secondary" onclick="clearClockInCode()" id="clearClockInBtn" style="display: none;">
+                                    <i class="fas fa-times"></i> Clear Code
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Management Section -->
-                    <div class="clockin-management">
-                        <div class="management-section">
-                            <h3><i class="fas fa-list"></i> Recent Clock-Ins</h3>
-                            <div id="recentClockIns" class="clockin-logs">
-                                <!-- Recent clock-ins will be loaded here -->
+                    <!-- Clock-Out QR Section -->
+                    <div class="qr-display-section" id="clockOutQRSection" style="display: none;">
+                        <h3>Clock-Out Code</h3>
+                        <p class="qr-instructions">Generate a code for drivers to use and clock out. The code will expire after the set duration.</p>
+                        
+                        <div class="qr-code-container">
+                            <div class="qr-code-info">
+                                <div class="qr-code-details">
+                                    <p><strong>Code:</strong> <span id="clockOutCodeDisplay" class="code-display">—</span></p>
+                                    <p><strong>Valid Until:</strong> <span id="clockOutValidUntil">—</span></p>
+                                    <p><strong>Status:</strong> <span id="clockOutStatus" class="status-badge status-inactive">Not Generated</span></p>
+                                </div>
+                            </div>
+                            <div class="qr-actions">
+                                <label for="clockOutDuration" style="margin-right: 10px;">Duration (minutes):</label>
+                                <input type="number" id="clockOutDuration" value="60" min="1" max="1440" style="width: 80px; padding: 8px; margin-right: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <button class="btn btn-primary" onclick="generateClockOutCode()">
+                                    <i class="fas fa-qrcode"></i> Generate Clock-Out Code
+                                </button>
+                                <button class="btn btn-secondary" onclick="clearClockOutCode()" id="clearClockOutBtn" style="display: none;">
+                                    <i class="fas fa-times"></i> Clear Code
+                                </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Clock-In Logs Section -->
+                <div class="clockin-management">
+                    <div class="section-header">
+                        <h3><i class="fas fa-history"></i> Clock-In Logs</h3>
+                        <button class="btn btn-sm btn-secondary" onclick="refreshClockInLogs()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="clockin-logs" id="clockInLogs">
+                        <div class="loading-message">Loading clock-in logs...</div>
                     </div>
                 </div>
             </div>
@@ -340,7 +327,10 @@
     
     <!-- Update User Profile Display -->
     <script src="update-user-profile.js"></script>
-
+    
+    <!-- QR Code Library -->
+    <script src="qrcodejs.min.js"></script>
+    
     <script src="script.js"></script>
     <script>
         // Ensure POS link is always visible - prevent sidebar from auto-scrolling

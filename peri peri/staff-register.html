@@ -349,6 +349,24 @@
             </div>
 
             <div class="form-group">
+                <label for="phoneNumber">
+                    <i class="fas fa-phone"></i>
+                    Phone Number
+                </label>
+                <input 
+                    type="tel" 
+                    id="phoneNumber" 
+                    name="phoneNumber" 
+                    class="form-control" 
+                    placeholder="+63XXXXXXXXXX"
+                    value="+63"
+                    required
+                    oninput="validatePhoneNumber()"
+                >
+                <span class="error-message" id="phoneNumberError"></span>
+            </div>
+
+            <div class="form-group">
                 <label for="staffId">
                     <i class="fas fa-id-card"></i>
                     Staff ID
@@ -535,6 +553,59 @@
             }
         }
 
+        // Phone number validator
+        function validatePhoneNumber() {
+            const phoneInput = document.getElementById('phoneNumber');
+            let phoneNumber = phoneInput.value;
+            const phoneError = document.getElementById('phoneNumberError');
+
+            // Ensure it starts with +63
+            if (!phoneNumber.startsWith('+63')) {
+                if (phoneNumber.length === 0) {
+                    phoneInput.value = '+63';
+                    phoneNumber = '+63';
+                } else if (phoneNumber.startsWith('+')) {
+                    // If it starts with + but not +63, replace with +63
+                    const rest = phoneNumber.substring(1).replace(/\D/g, ''); // Remove non-digits
+                    phoneInput.value = '+63' + rest;
+                    phoneNumber = phoneInput.value;
+                } else {
+                    // If it doesn't start with +, prepend +63 and keep only digits
+                    const digits = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+                    phoneInput.value = '+63' + digits;
+                    phoneNumber = phoneInput.value;
+                }
+            } else {
+                // If it already starts with +63, ensure only digits follow
+                const prefix = '+63';
+                const rest = phoneNumber.substring(3).replace(/\D/g, ''); // Remove non-digits after +63
+                phoneInput.value = prefix + rest;
+                phoneNumber = phoneInput.value;
+            }
+
+            // Validate format: +63 followed by 10 digits
+            const phoneRegex = /^\+63\d{10}$/;
+            const currentValue = phoneInput.value;
+
+            if (currentValue.length > 0 && !phoneRegex.test(currentValue)) {
+                if (currentValue.length < 4) {
+                    phoneError.classList.remove('show');
+                    phoneInput.classList.remove('error');
+                } else if (currentValue.length < 13) {
+                    phoneError.textContent = 'Phone number must be +63 followed by 10 digits (e.g., +639123456789)';
+                    phoneError.classList.add('show');
+                    phoneInput.classList.add('error');
+                } else {
+                    phoneError.textContent = 'Phone number is too long. Must be +63 followed by exactly 10 digits.';
+                    phoneError.classList.add('show');
+                    phoneInput.classList.add('error');
+                }
+            } else {
+                phoneError.classList.remove('show');
+                phoneInput.classList.remove('error');
+            }
+        }
+
         // Form validation and submission
         function handleRegister(event) {
             event.preventDefault();
@@ -545,6 +616,7 @@
             const lastName = document.getElementById('lastName').value.trim();
             const suffix = document.getElementById('suffix').value.trim();
             const email = document.getElementById('email').value.trim();
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
             const staffId = document.getElementById('staffId').value.trim();
             const role = document.getElementById('role').value;
             const password = document.getElementById('password').value;
@@ -593,6 +665,15 @@
                 isValid = false;
             }
 
+            // Validate phone number
+            const phoneRegex = /^\+63\d{10}$/;
+            if (!phoneNumber || !phoneRegex.test(phoneNumber)) {
+                document.getElementById('phoneNumberError').textContent = 'Phone number must be +63 followed by 10 digits (e.g., +639123456789)';
+                document.getElementById('phoneNumberError').classList.add('show');
+                document.getElementById('phoneNumber').classList.add('error');
+                isValid = false;
+            }
+
             // Validate staff ID
             if (!staffId || staffId.length < 3) {
                 document.getElementById('staffIdError').textContent = 'Staff ID must be at least 3 characters';
@@ -635,11 +716,11 @@
             registerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
 
             // Save to Firebase
-            saveStaffToFirebase(firstName, middleName, lastName, suffix, email, staffId, role, password, registerBtn);
+            saveStaffToFirebase(firstName, middleName, lastName, suffix, email, phoneNumber, staffId, role, password, registerBtn);
         }
 
         // Save staff data to Firebase
-        async function saveStaffToFirebase(firstName, middleName, lastName, suffix, email, staffId, role, password, registerBtn) {
+        async function saveStaffToFirebase(firstName, middleName, lastName, suffix, email, phoneNumber, staffId, role, password, registerBtn) {
             try {
                 // Check if Firebase is initialized
                 if (!window.db || !window.firestoreFunctions) {
@@ -690,6 +771,7 @@
                     lastName: lastName,
                     suffix: suffix || '', // Optional field
                     email: email,
+                    phoneNumber: phoneNumber,
                     staffId: staffId,
                     role: role,
                     password: password, // Note: In production, hash passwords before storing
@@ -724,6 +806,7 @@
                     lastName,
                     suffix,
                     email,
+                    phoneNumber,
                     staffId,
                     role,
                     documentId: staffId
@@ -784,6 +867,7 @@
         // Make functions available globally
         window.checkPasswordStrength = checkPasswordStrength;
         window.checkPasswordMatch = checkPasswordMatch;
+        window.validatePhoneNumber = validatePhoneNumber;
         window.handleRegister = handleRegister;
     </script>
 </body>

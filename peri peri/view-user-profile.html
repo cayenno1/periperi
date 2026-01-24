@@ -338,7 +338,7 @@
             <nav class="navigation">
                 <ul class="nav-list">
                     <li class="nav-item">
-                        <a href="admin-index.html" class="nav-link">
+                        <a href="index.html" class="nav-link">
                             <i class="fas fa-shopping-cart"></i>
                             <span>Orders</span>
                         </a>
@@ -379,6 +379,12 @@
                         <a href="sales.html" class="nav-link">
                             <i class="fas fa-chart-bar"></i>
                             <span>Sales</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="settings.html" class="nav-link">
+                            <i class="fas fa-cog"></i>
+                            <span>Payment Settings</span>
                         </a>
                     </li>
                     <li class="nav-item active">
@@ -499,6 +505,11 @@
                                     <input type="email" id="email" disabled>
                                 </div>
                                 <div class="info-item">
+                                    <label>Phone Number</label>
+                                    <input type="tel" id="phoneNumber" disabled placeholder="+63XXXXXXXXXX" oninput="validatePhoneNumberProfile()">
+                                    <span class="error-message" id="phoneNumberError" style="display: none; color: #dc3545; font-size: 12px; margin-top: 5px;"></span>
+                                </div>
+                                <div class="info-item">
                                     <label>Role</label>
                                     <select id="role" disabled>
                                         <option value="Admin">Admin</option>
@@ -508,12 +519,13 @@
                                     </select>
                                 </div>
                                 <div class="info-item" style="grid-column: 1 / -1;">
-                                    <label>Password</label>
-                                    <button type="button" class="btn-password-reset" id="passwordResetButton" onclick="sendPasswordReset()">
-                                        <i class="fas fa-envelope"></i> Send Password Reset Link
-                                    </button>
+                                    <label>Change Password</label>
+                                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                                        <input type="password" id="newPassword" disabled placeholder="Enter new password" style="padding: 10px 15px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 16px;">
+                                        <input type="password" id="confirmPassword" disabled placeholder="Confirm new password" style="padding: 10px 15px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 16px;">
+                                    </div>
                                     <p style="font-size: 12px; color: #6c757d; margin-top: 8px;">
-                                        <i class="fas fa-info-circle"></i> A password reset link will be sent to the user's email address.
+                                        <i class="fas fa-info-circle"></i> Leave blank to keep current password. Password must be at least 8 characters.
                                     </p>
                                 </div>
                             </div>
@@ -807,7 +819,12 @@
             document.getElementById('lastName').value = data.lastName || '';
             document.getElementById('suffix').value = data.suffix || '';
             document.getElementById('email').value = data.email || '';
+            // Set phone number
+            document.getElementById('phoneNumber').value = data.phoneNumber || '';
             document.getElementById('staffIdDisplay').textContent = data.staffId || data.id || '-';
+            // Clear password fields
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
             // Set role value - handle case variations and ensure it matches dropdown options
             const roleValue = data.role || 'Admin';
             const roleSelect = document.getElementById('role');
@@ -1001,7 +1018,7 @@
             const saveButton = document.getElementById('saveButton');
             
             // Get all editable fields
-            const editableFields = ['firstName', 'middleName', 'lastName', 'suffix', 'email', 'role', 'status'];
+            const editableFields = ['firstName', 'middleName', 'lastName', 'suffix', 'email', 'phoneNumber', 'role', 'status'];
             
             // Add shift fields if user is a driver
             const isDriver = (currentUserData?.role || '').toLowerCase() === 'driver';
@@ -1055,9 +1072,20 @@
                     lastName: document.getElementById('lastName').value,
                     suffix: document.getElementById('suffix').value,
                     email: document.getElementById('email').value,
+                    phoneNumber: document.getElementById('phoneNumber').value,
                     role: document.getElementById('role').value,
                     status: document.getElementById('status').value
                 };
+                
+                // Enable password fields for editing
+                document.getElementById('newPassword').disabled = false;
+                document.getElementById('confirmPassword').disabled = false;
+                
+                // Initialize phone number with +63 if empty when entering edit mode
+                const phoneInput = document.getElementById('phoneNumber');
+                if (!phoneInput.value || phoneInput.value.trim() === '') {
+                    phoneInput.value = '+63';
+                }
                 
                 // Add shift times if driver
                 if (isDriver) {
@@ -1078,6 +1106,12 @@
                         field.disabled = true;
                     }
                 });
+                
+                // Disable password fields
+                document.getElementById('newPassword').disabled = true;
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmPassword').disabled = true;
+                document.getElementById('confirmPassword').value = '';
                 
                 editToggle.innerHTML = '<i class="fas fa-edit"></i> Edit';
                 editToggle.classList.remove('cancel');
@@ -1178,11 +1212,30 @@
                     lastName: document.getElementById('lastName').value.trim(),
                     suffix: document.getElementById('suffix').value.trim() || '',
                     email: document.getElementById('email').value.trim(),
+                    phoneNumber: document.getElementById('phoneNumber').value.trim(),
                     role: roleToSave, // Use preserved or explicitly changed role
                     status: document.getElementById('status').value,
                     staffId: staffIdValue, // Include staffId to satisfy Firestore rules
                     updatedAt: new Date().toISOString()
                 };
+                
+                // Handle password change if provided
+                const newPassword = document.getElementById('newPassword').value.trim();
+                const confirmPassword = document.getElementById('confirmPassword').value.trim();
+                
+                if (newPassword || confirmPassword) {
+                    // Validate password if provided
+                    if (newPassword.length < 8) {
+                        throw new Error('Password must be at least 8 characters long');
+                    }
+                    
+                    if (newPassword !== confirmPassword) {
+                        throw new Error('Passwords do not match');
+                    }
+                    
+                    // Add password to update data
+                    updatedData.password = newPassword;
+                }
                 
                 // Add shift times if user is a driver
                 const isDriver = updatedData.role.toLowerCase() === 'driver';
@@ -1221,6 +1274,14 @@
                 
                 if (!updatedData.email || !updatedData.email.includes('@')) {
                     throw new Error('Valid email address is required');
+                }
+                
+                // Validate phone number format if provided
+                if (updatedData.phoneNumber && updatedData.phoneNumber.trim() !== '') {
+                    const phoneRegex = /^\+63\d{10}$/;
+                    if (!phoneRegex.test(updatedData.phoneNumber.trim())) {
+                        throw new Error('Phone number must be in format +63 followed by 10 digits (e.g., +639123456789)');
+                    }
                 }
                 
                 // Ensure role is preserved - don't allow changing from Driver to something else accidentally
@@ -1286,7 +1347,8 @@
                 const shiftMessage = isDriver && (updatedData.startShift || updatedData.endShift)
                     ? `\n\nShift times updated:\nStart: ${updatedData.startShift || 'Not set'}\nEnd: ${updatedData.endShift || 'Not set'}`
                     : '';
-                alert('User profile updated successfully!' + shiftMessage);
+                const passwordMessage = updatedData.password ? '\n\nPassword has been updated successfully.' : '';
+                alert('User profile updated successfully!' + shiftMessage + passwordMessage);
                 
                 // Exit edit mode
                 toggleEditMode();
@@ -1304,96 +1366,6 @@
             }
         }
 
-        // Send password reset email
-        async function sendPasswordReset() {
-            if (!currentUserData || !currentUserData.email) {
-                alert('User email not found. Cannot send password reset link.');
-                return;
-            }
-            
-            // Check permissions
-            if (!canEdit) {
-                alert('You do not have permission to send password reset links. Only Owners and Admins can send reset links.');
-                return;
-            }
-            
-            const resetButton = document.getElementById('passwordResetButton');
-            resetButton.disabled = true;
-            resetButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-            
-            try {
-                await waitForFirebase();
-                
-                const db = window.db;
-                const { doc, updateDoc } = window.firestoreFunctions;
-                
-                // Generate a reset token (in production, use a more secure method)
-                const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-                const resetExpiry = new Date();
-                resetExpiry.setHours(resetExpiry.getHours() + 24); // Token expires in 24 hours
-                
-                // Store reset token in user's document
-                const staffDocRef = doc(db, 'staff', currentUserData.id);
-                await updateDoc(staffDocRef, {
-                    passwordResetToken: resetToken,
-                    passwordResetExpiry: resetExpiry.toISOString(),
-                    passwordResetRequestedAt: new Date().toISOString()
-                });
-                
-                // Create password reset link
-                const resetLink = `${window.location.origin}/staff-login.html?resetToken=${resetToken}&email=${encodeURIComponent(currentUserData.email)}`;
-                
-                // In a real application, you would send this via email using a backend service
-                // For now, we'll show it in an alert and log it
-                console.log('Password Reset Link:', resetLink);
-                
-                // TODO: Integrate with email service (e.g., SendGrid, AWS SES, Firebase Extensions)
-                // For now, show the link to the admin
-                const emailBody = `Hello ${currentUserData.firstName || 'User'},\n\n` +
-                    `A password reset has been requested for your account.\n\n` +
-                    `Click the following link to reset your password:\n${resetLink}\n\n` +
-                    `This link will expire in 24 hours.\n\n` +
-                    `If you did not request this reset, please ignore this email.`;
-                
-                // Show confirmation with option to copy link
-                const userConfirmed = confirm(
-                    `Password reset link generated!\n\n` +
-                    `User: ${currentUserData.email}\n\n` +
-                    `Reset Link: ${resetLink}\n\n` +
-                    `Would you like to copy this link to clipboard?\n\n` +
-                    `Note: In production, this would be sent automatically via email.`
-                );
-                
-                if (userConfirmed) {
-                    // Copy to clipboard
-                    navigator.clipboard.writeText(resetLink).then(() => {
-                        alert('Reset link copied to clipboard!');
-                    }).catch(() => {
-                        // Fallback for older browsers
-                        const textArea = document.createElement('textarea');
-                        textArea.value = resetLink;
-                        document.body.appendChild(textArea);
-                        textArea.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(textArea);
-                        alert('Reset link copied to clipboard!');
-                    });
-                }
-                
-                alert('Password reset link has been generated and stored. The user can now reset their password using the link.');
-                
-            } catch (error) {
-                console.error('Error sending password reset:', error);
-                let errorMessage = 'Failed to send password reset link: ' + error.message;
-                if (error.code === 'permission-denied') {
-                    errorMessage = 'Permission denied. You may not have permission to send password reset links.';
-                }
-                alert(errorMessage);
-            } finally {
-                resetButton.disabled = false;
-                resetButton.innerHTML = '<i class="fas fa-envelope"></i> Send Password Reset Link';
-            }
-        }
 
         // Delete user
         async function deleteUser() {
@@ -1474,11 +1446,66 @@
             await loadUserProfile();
         });
 
+        // Phone number validator for profile page
+        function validatePhoneNumberProfile() {
+            const phoneInput = document.getElementById('phoneNumber');
+            let phoneNumber = phoneInput.value;
+            const phoneError = document.getElementById('phoneNumberError');
+
+            if (!phoneInput.disabled) {
+                // Ensure it starts with +63
+                if (!phoneNumber.startsWith('+63')) {
+                    if (phoneNumber.length === 0) {
+                        phoneInput.value = '+63';
+                        phoneNumber = '+63';
+                    } else if (phoneNumber.startsWith('+')) {
+                        // If it starts with + but not +63, replace with +63
+                        const rest = phoneNumber.substring(1).replace(/\D/g, ''); // Remove non-digits
+                        phoneInput.value = '+63' + rest;
+                        phoneNumber = phoneInput.value;
+                    } else {
+                        // If it doesn't start with +, prepend +63 and keep only digits
+                        const digits = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+                        phoneInput.value = '+63' + digits;
+                        phoneNumber = phoneInput.value;
+                    }
+                } else {
+                    // If it already starts with +63, ensure only digits follow
+                    const prefix = '+63';
+                    const rest = phoneNumber.substring(3).replace(/\D/g, ''); // Remove non-digits after +63
+                    phoneInput.value = prefix + rest;
+                    phoneNumber = phoneInput.value;
+                }
+
+                // Validate format: +63 followed by 10 digits
+                const phoneRegex = /^\+63\d{10}$/;
+                const currentValue = phoneInput.value;
+
+                if (currentValue.length > 0 && !phoneRegex.test(currentValue)) {
+                    if (currentValue.length < 4) {
+                        phoneError.style.display = 'none';
+                        phoneInput.style.borderColor = '#e9ecef';
+                    } else if (currentValue.length < 13) {
+                        phoneError.textContent = 'Phone number must be +63 followed by 10 digits (e.g., +639123456789)';
+                        phoneError.style.display = 'block';
+                        phoneInput.style.borderColor = '#dc3545';
+                    } else {
+                        phoneError.textContent = 'Phone number is too long. Must be +63 followed by exactly 10 digits.';
+                        phoneError.style.display = 'block';
+                        phoneInput.style.borderColor = '#dc3545';
+                    }
+                } else {
+                    phoneError.style.display = 'none';
+                    phoneInput.style.borderColor = '#e9ecef';
+                }
+            }
+        }
+
         // Make functions globally accessible
         window.toggleEditMode = toggleEditMode;
         window.saveChanges = saveChanges;
         window.deleteUser = deleteUser;
-        window.sendPasswordReset = sendPasswordReset;
+        window.validatePhoneNumberProfile = validatePhoneNumberProfile;
     </script>
 </body>
 </html>

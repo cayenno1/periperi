@@ -368,7 +368,7 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="admin-index.html" class="nav-link">
+                        <a href="index.html" class="nav-link">
                             <i class="fas fa-shopping-cart"></i>
                             <span>Orders</span>
                         </a>
@@ -426,6 +426,12 @@
                         <ul class="menu-nav-submenu" id="analyticsTabDropdown">
                             <li><a href="sales.html#sales">Sales</a></li>
                         </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a href="settings.html" class="nav-link">
+                            <i class="fas fa-cog"></i>
+                            <span>Payment Settings</span>
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a href="admin-profile.html" class="nav-link">
@@ -692,15 +698,20 @@
                     <!-- Price and Stock Section -->
                     <div class="form-section">
                         <h3>Price and Stock</h3>
-                        <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
                             <div class="form-group">
                                 <label for="price">Price <span style="color: #ff8c00; font-weight: bold;">*</span></label>
                                 <input type="text" id="price" class="form-control" placeholder="PHP 0.00">
                             </div>
                             <div class="form-group">
-                                <label for="quantity">Quantity of Serving <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                                <label for="quantity">Default Daily Serving Limit <span style="color: #ff8c00; font-weight: bold;">*</span></label>
                                 <input type="number" id="quantity" class="form-control" min="0" step="1" placeholder="0">
-                                <small class="form-hint">How many servings of this dish are currently available.</small>
+                                <small class="form-hint">This sets the default maximum servings per day for this meal in the menu list. Set to 0 to make it unavailable by default.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="calories">Calories (kcal)</label>
+                                <input type="number" id="calories" class="form-control" min="0" step="1" placeholder="0">
+                                <small class="form-hint">Enter the number of calories per serving.</small>
                             </div>
                         </div>
                     </div>
@@ -971,8 +982,8 @@
                                     <select id="menuListSort" class="form-control" style="min-width: 200px;" onchange="applyMenuListSort()">
                                         <option value="name">Sort by Name</option>
                                         <option value="most-sold">Most Sold</option>
-                                        <option value="least-remaining">Least Remaining Qty</option>
-                                        <option value="most-remaining">Most Remaining Qty</option>
+                                        <option value="least-remaining">Least Daily Servings</option>
+                                        <option value="most-remaining">Most Daily Servings</option>
                                     </select>
                                 </div>
                             </div>
@@ -984,7 +995,8 @@
                                         <th class="menu-list-image-header">Image</th>
                                         <th>Menu ID</th>
                                         <th>Name</th>
-                                        <th>Remaining Qty</th>
+                                        <th>Remaining Servings <small id="resetTimeHeader" style="font-weight: normal; color: #6c757d; font-size: 0.75rem; display: block; margin-top: 2px;"></small></th>
+                                        <th>Daily Servings</th>
                                         <th>Status</th>
                                         <th>Price</th>
                                         <th class="menu-list-actions-header">Actions</th>
@@ -992,7 +1004,7 @@
                                 </thead>
                                 <tbody id="menuListTableBody">
                                     <tr>
-                                        <td colspan="7" class="empty-table">No active menu items found.</td>
+                                        <td colspan="8" class="empty-table">No active menu items found.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1118,6 +1130,11 @@
                                 <span class="detail-label">Purchased Orders</span>
                                 <span class="detail-value" id="menuDetailOrdersCount">0</span>
                             </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Calories (kcal)</span>
+                                <span class="detail-value" id="menuDetailCalories">—</span>
+                                <input type="number" class="detail-input" id="menuDetailCaloriesInput" min="0" step="1" placeholder="0" style="display: none;">
+                            </div>
                             <div class="detail-row" id="menuDetailChangeImageRow" style="display: none;">
                                 <button type="button" class="menu-detail-change-image-btn" id="menuDetailChangeImageBtn" onclick="document.getElementById('menuDetailImageInput').click()" title="Change Image">
                                     <i class="fas fa-camera"></i>
@@ -1230,6 +1247,10 @@
                         <div class="menu-edit-section">
                             <label for="menuEditQuantity">Quantity Available</label>
                             <input type="number" id="menuEditQuantity" class="form-control" min="0" step="1" placeholder="0">
+                        </div>
+                        <div class="menu-edit-section">
+                            <label for="menuEditCalories">Calories (kcal)</label>
+                            <input type="number" id="menuEditCalories" class="form-control" min="0" step="1" placeholder="0">
                         </div>
                         <div class="menu-edit-section">
                         </div>

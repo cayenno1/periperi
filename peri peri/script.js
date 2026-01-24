@@ -172,6 +172,38 @@ const DailyServingsStore = (() => {
         }
     }
     
+    // Initialize dailyServings document for a menu item (if it doesn't exist)
+    async function initializeDailyServings(menuItemId, menuItemName, maxServings) {
+        const fns = assertFirestoreReady();
+        const today = getTodayDateString();
+        const docId = `${today}_${menuItemId}`;
+        const docRef = fns.doc(window.db, COLLECTION, docId);
+        
+        try {
+            const doc = await fns.getDoc(docRef);
+            if (!doc.exists()) {
+                // Default to 0 if maxServings is null/undefined
+                const effectiveMaxServings = maxServings !== null && maxServings !== undefined && maxServings > 0 ? maxServings : 0;
+                
+                // Create document with count 0 (remaining = maxServings at start of day)
+                // Each day, count resets to 0, so remaining = maxServings
+                await fns.setDoc(docRef, {
+                    menuItemId: menuItemId,
+                    menuItemName: menuItemName,
+                    date: today,
+                    count: 0, // Count starts at 0 each day, remaining = maxServings
+                    maxServings: effectiveMaxServings,
+                    createdAt: fns.serverTimestamp(),
+                    updatedAt: fns.serverTimestamp()
+                });
+                console.log(`Initialized dailyServings document for ${menuItemName} (${menuItemId}) - count: 0, maxServings: ${effectiveMaxServings}`);
+            }
+        } catch (error) {
+            console.error('Error initializing dailyServings:', error);
+            throw error;
+        }
+    }
+    
     // Check if order can be placed (serving availability)
     async function checkServingAvailability(menuItemId, menuItemName, maxServings, orderQuantity) {
         // If no limit set, always available
@@ -218,7 +250,8 @@ const DailyServingsStore = (() => {
         incrementServing,
         checkServingAvailability,
         getTodayAllServings,
-        getTodayDateString
+        getTodayDateString,
+        initializeDailyServings
     };
 })();
 
@@ -544,9 +577,11 @@ const MenuStore = (() => {
             throw new Error(`${data.name} is already registered in the menu.`);
         }
         // Prepare document data with proper date handling
+        // Default maxServingsPerDay to 0 (unavailable) if not provided
         const docData = {
             ...data,
             isActive: true,
+            maxServingsPerDay: data.maxServingsPerDay !== null && data.maxServingsPerDay !== undefined ? data.maxServingsPerDay : 0,
             createdAt: fns.serverTimestamp(),
             updatedAt: fns.serverTimestamp()
         };
@@ -562,6 +597,17 @@ const MenuStore = (() => {
         });
         
         await fns.setDoc(docRef, docData);
+        
+        // Initialize dailyServings document for new active menu item
+        if (docData.isActive !== false) {
+            try {
+                await initializeDailyServingsForMenuItem(slug, data.name || 'Unknown', data.maxServingsPerDay || null);
+            } catch (error) {
+                console.warn('Failed to initialize dailyServings for new menu item:', error);
+                // Don't throw - menu item creation should still succeed
+            }
+        }
+        
         return await getItems();
     }
 
@@ -842,7 +888,22 @@ const MenuStore = (() => {
     }
 
     async function setItemActiveState(id, isActive) {
-        return await updateItem(id, { isActive });
+        const result = await updateItem(id, { isActive });
+        
+        // If activating, initialize dailyServings document
+        if (isActive === true || isActive === 'true') {
+            try {
+                const item = result.find(i => i.id === id);
+                if (item) {
+                    await DailyServingsStore.initializeDailyServings(id, item.name || 'Unknown', item.maxServingsPerDay || null);
+                }
+            } catch (error) {
+                console.warn('Failed to initialize dailyServings for activated menu item:', error);
+                // Don't throw - activation should still succeed
+            }
+        }
+        
+        return result;
     }
     
     async function restoreItem(id) {
@@ -880,6 +941,16 @@ const MenuStore = (() => {
         // Move back to menu collection
         const docRef = fns.doc(window.db, COLLECTION, id);
         await fns.setDoc(docRef, restoreData);
+        
+        // Initialize dailyServings document for restored active menu item
+        if (restoreData.isActive !== false) {
+            try {
+                await DailyServingsStore.initializeDailyServings(id, restoreData.name || 'Unknown', restoreData.maxServingsPerDay || null);
+            } catch (error) {
+                console.warn('Failed to initialize dailyServings for restored menu item:', error);
+                // Don't throw - restoration should still succeed
+            }
+        }
         
         // Delete from archive
         await fns.deleteDoc(archiveRef);
@@ -924,6 +995,12 @@ async function initOrdersDashboard() {
         await waitForFirebaseReady();
         await loadOrdersCollectionOnce();
         await subscribeToOrdersCollection();
+        
+        // Sync dailyServings for existing orders in preparing status (today only)
+        // Run this asynchronously so it doesn't block the UI
+        syncDailyServingsForExistingOrders().catch(error => {
+            console.error('Error syncing dailyServings for existing orders:', error);
+        });
     } catch (error) {
         console.error('Orders dashboard failed to initialize:', error);
         showNotification(error.message || 'Unable to load customer orders.', 'error');
@@ -949,9 +1026,67 @@ async function subscribeToOrdersCollection() {
             ordersQuery,
             async (snapshot) => {
                 const previousOrders = [...ordersState]; // Keep copy of previous state
+                const previousOrderIds = new Set(previousOrders.map(o => o.id));
+                
+                // Update ordersState first
                 ordersState = snapshot.docs
                     .map(docSnap => normalizeOrderDoc(docSnap))
                     .filter(Boolean);
+                
+                // Process new orders (added) - deduct servings when order is created with status "new" or "pending"
+                // Use docChanges() if available, otherwise compare with previous state
+                let newOrdersToProcess = [];
+                
+                try {
+                    if (snapshot.docChanges && typeof snapshot.docChanges === 'function') {
+                        const changes = snapshot.docChanges();
+                        changes.forEach(change => {
+                            if (change.type === 'added') {
+                                const order = normalizeOrderDoc(change.doc);
+                                if (order && !previousOrderIds.has(order.id)) {
+                                    newOrdersToProcess.push(order);
+                                }
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.warn('docChanges() not available, using fallback method', e);
+                }
+                
+                // Fallback: Check for new orders by comparing with previous state
+                if (newOrdersToProcess.length === 0) {
+                    newOrdersToProcess = ordersState.filter(newOrder => 
+                        !previousOrderIds.has(newOrder.id)
+                    );
+                }
+                
+                // Process each new order
+                if (newOrdersToProcess.length > 0) {
+                    console.log(`Found ${newOrdersToProcess.length} new order(s) to process`);
+                    for (const order of newOrdersToProcess) {
+                        const orderStatus = (order.status || '').toLowerCase().trim();
+                        // Deduct servings when order is created with status "new" or "pending"
+                        if (orderStatus === 'new' || orderStatus === 'pending') {
+                            console.log(`New order detected: ${order.id} with status ${orderStatus} - deducting servings`);
+                            try {
+                                await deductDailyServingsForOrder(order);
+                                // Refresh menu list after deduction
+                                if (menuState && menuState.length > 0) {
+                                    const menuItemIds = menuState.map(item => item.id);
+                                    await refreshServingsCache(menuItemIds);
+                                    const menuListTable = document.getElementById('menuListTableBody');
+                                    if (menuListTable) {
+                                        await renderMenuListTable();
+                                    }
+                                }
+                            } catch (error) {
+                                console.error(`Error deducting servings for new order ${order.id}:`, error);
+                            }
+                        } else {
+                            console.log(`Skipping order ${order.id} - status is ${orderStatus}, not "new" or "pending"`);
+                        }
+                    }
+                }
                 // Recalculate isNew status for all orders (in case time has passed)
                 ordersState.forEach(order => {
                     if (order.createdAt && order.createdAt instanceof Date) {
@@ -960,6 +1095,12 @@ async function subscribeToOrdersCollection() {
                         const minutesDiff = timeDiff / (1000 * 60);
                         order.isNew = minutesDiff < 8 && (order.status === 'pending' || order.status === 'new');
                     }
+                });
+                
+                // Process orders for automated payment verification
+                // Run this asynchronously so it doesn't block the UI update
+                processOrdersForAutoVerification(previousOrders, ordersState).catch(error => {
+                    console.error('Error in automated payment verification:', error);
                 });
                 
                 renderOrdersTable(ordersState);
@@ -1113,6 +1254,8 @@ function normalizeOrderDoc(docSnap) {
         paymentVerified: data.paymentVerified || false,
         paymentVerifiedAt: data.paymentVerifiedAt || null,
         paymentAutoVerified: data.paymentAutoVerified || false,
+        paymentProofVersion: data.paymentProofVersion || 1,
+        paymentProofHistory: Array.isArray(data.paymentProofHistory) ? data.paymentProofHistory : [],
         createdAt,
         updatedAt,
         createdLabel: createdAt ? formatDateLabel(createdAt) : (typeof data.timestamp === 'string' ? data.timestamp : '—')
@@ -1303,11 +1446,6 @@ function renderOrdersTable(orders) {
         const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
         const isPaymentVerified = order.paymentVerified === true;
         
-        // Add visual indicator for unverified GCash orders
-        const needsVerificationBadge = isGCashOrder && !isPaymentVerified && isPending
-            ? '<span class="verification-badge" title="Payment verification required" style="display: inline-block; margin-left: 8px; padding: 4px 12px; background: transparent; color: #dc3545; border-radius: 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;"><i class="fas fa-exclamation-circle"></i> VERIFY</span>'
-            : '';
-        
         // Service type checks
         const orderServiceType = (order.serviceType || '').toLowerCase().trim();
         const isDineIn = orderServiceType === 'dine-in' || orderServiceType === 'dinein';
@@ -1357,23 +1495,17 @@ function renderOrdersTable(orders) {
             }
         }
         
-        // Build status display
-        const statusDisplay = formatOrderStatusBadge(order.status);
+        // Build status display - pass order object to check for resubmission and verification status
+        const statusDisplay = formatOrderStatusBadge(order.status, order);
         
         // Get customer name
         const customerName = formatOrderCustomer(order);
-        
-        // Get order name (short version)
-        const orderName = formatOrderNameShort(order.items);
         
         // Get location
         const location = formatOrderLocation(order);
         
         // Get time
         const orderTime = formatOrderTime(order);
-        
-        // Get price
-        const price = formatCurrency(order.total || 0);
         
         // Service type badge for Order Type column
         let serviceTypeBadge = '';
@@ -1399,7 +1531,7 @@ function renderOrdersTable(orders) {
             } else {
                 // Show Verify Payment button for unverified GCash orders
                 if (isGCashOrder && !isPaymentVerified) {
-                    buttons.push(`<button class="order-action-btn btn-verify-payment" onclick="event.stopPropagation(); verifyPayment('${escapedOrderId}')" title="Verify Payment">
+                    buttons.push(`<button class="order-action-btn btn-accept-payment" onclick="event.stopPropagation(); verifyPayment('${escapedOrderId}')" title="Verify Payment">
                         <i class="fas fa-check-circle"></i> Verify Payment
                     </button>`);
                 }
@@ -1448,24 +1580,15 @@ function renderOrdersTable(orders) {
             };
         }
         
-        // Check if this is a resubmission
-        const isResubmission = order.paymentProofVersion && order.paymentProofVersion > 1 && 
-                               (orderStatusLower === 'pending' || orderStatusLower === 'new');
-        const resubmissionBadge = isResubmission 
-            ? ' <span class="resubmission-badge" title="Customer resubmitted payment">🔄</span>' 
-            : '';
-        
         row.innerHTML = `
             <td class="order-id-column">
-                ${escapeHtml(order.trackingId || order.id)}${needsVerificationBadge}
+                ${escapeHtml(order.trackingId || order.id)}
             </td>
-            <td class="order-name-column">${escapeHtml(orderName)}${resubmissionBadge}</td>
             <td class="customer-name-column">${escapeHtml(customerName)}</td>
             <td class="order-type-column">${serviceTypeBadge}</td>
             <td class="location-column">${location}</td>
             <td class="status-column">${statusDisplay}</td>
             <td class="time-column">${escapeHtml(orderTime)}</td>
-            <td class="price-column">${price}</td>
             <td class="actions-column">
                 ${actionButtonsHTML}
             </td>
@@ -1961,12 +2084,19 @@ async function updateOrderStatus(orderId, newStatus) {
     let statusValid = false;
     let errorMessage = '';
     
+    // Normalize status variations to "preparing"
+    const preparingStatuses = ['preparing', 'in kitchen', 'being-cooked', 'being_cooked', 'cooking', 'being cooked', 'accepted'];
+    let actualNewStatus = normalizedNewStatus;
+    if (preparingStatuses.includes(normalizedNewStatus)) {
+        actualNewStatus = 'preparing'; // Normalize to "preparing" for database
+    }
+    
     // Cannot change status from declined (must use reopen function)
-    if (currentStatus === 'declined' && normalizedNewStatus !== 'pending') {
+    if (currentStatus === 'declined' && actualNewStatus !== 'pending') {
         statusValid = false;
         errorMessage = 'Declined orders must be reopened first. Use the "Reopen Order" button.';
-    } else if (normalizedNewStatus === 'preparing') {
-        // Can move to preparing from pending
+    } else if (preparingStatuses.includes(normalizedNewStatus)) {
+        // Can move to preparing (or any variation) from pending
         statusValid = isPending;
         errorMessage = 'Can only mark pending orders as preparing.';
     } else if (normalizedNewStatus === 'out for delivery' || normalizedNewStatus === 'out_for_delivery') {
@@ -2013,27 +2143,9 @@ async function updateOrderStatus(orderId, newStatus) {
         return;
     }
     
-    // If moving to preparing, deduct daily servings (inventory deduction disabled)
-    if (normalizedNewStatus === 'preparing') {
-        try {
-            // Deduct daily servings for each item in the order
-            await deductDailyServingsForOrder(order);
-            // Refresh serving cache to update menu list display
-            if (menuState && menuState.length > 0) {
-                const menuItemIds = menuState.map(item => item.id);
-                await refreshServingsCache(menuItemIds);
-                // Re-render menu list table to show updated serving counts
-                const menuListTable = document.getElementById('menuListTableBody');
-                if (menuListTable) {
-                    await renderMenuListTable();
-                }
-            }
-        } catch (e) {
-            console.error('Daily serving deduction failed:', e);
-            showNotification(e.message || 'Unable to update daily servings for this order.', 'error');
-            return;
-        }
-    }
+    // NOTE: Daily servings are now deducted when orders are created (status: "new" or "pending")
+    // This happens in subscribeToOrdersCollection() when detecting new orders
+    // We no longer deduct when moving to preparing status
 
     // Confirm status change
     const statusLabels = {
@@ -2064,14 +2176,14 @@ async function updateOrderStatus(orderId, newStatus) {
             const fns = window.firestoreFunctions;
             const orderRef = fns.doc(window.db, 'orders', orderId);
             
-        // Prepare update object
+        // Prepare update object (use normalized status for database)
         const updateData = {
-            status: normalizedNewStatus,
+            status: actualNewStatus, // Use normalized status
             updatedAt: fns.serverTimestamp()
         };
         
         // Add timestamp fields based on status
-        if (normalizedNewStatus === 'preparing') {
+        if (actualNewStatus === 'preparing' || preparingStatuses.includes(normalizedNewStatus)) {
             updateData.cookingStartedAt = fns.serverTimestamp();
             updateData.preparingStartedAt = fns.serverTimestamp();
         } else if (normalizedNewStatus === 'ready') {
@@ -2269,49 +2381,201 @@ async function deductMenuQuantityForOrder(order) {
 
 // NEW: Deduct daily servings when order moves to preparing
 async function deductDailyServingsForOrder(order) {
-    if (!order || !Array.isArray(order.items) || !order.items.length) return;
+    if (!order || !Array.isArray(order.items) || !order.items.length) {
+        console.warn('deductDailyServingsForOrder: Order or items missing', { orderId: order?.id, hasItems: !!order?.items });
+        return;
+    }
+    
     await ensureMenuStateLoaded();
+    
+    console.log(`deductDailyServingsForOrder: Processing order ${order.id} with ${order.items.length} items`);
     
     for (const orderItem of order.items) {
         const qty = Number(orderItem.quantity) > 0 ? Number(orderItem.quantity) : 1;
-        const menuItemId = orderItem.menuItemId || orderItem.id;
-        const menuItemName = orderItem.name || 'Unknown Item';
+        const menuItemName = orderItem.name || orderItem.itemName || 'Unknown Item';
         
-        // Find menu item to get maxServingsPerDay and ingredients
+        // Find menu item to get ID, maxServingsPerDay and ingredients
         const menuItem = findMenuItemByOrderItem(orderItem);
-        const maxServings = menuItem ? (menuItem.maxServingsPerDay || null) : null;
         
-        if (menuItemId) {
-            try {
-                await DailyServingsStore.incrementServing(menuItemId, menuItemName, maxServings, qty);
-                // Update cache
-                const currentCount = todayServingsCache[menuItemId] || 0;
-                todayServingsCache[menuItemId] = currentCount + qty;
-                
-                // NEW: Log ingredient usage
-                if (menuItem && Array.isArray(menuItem.ingredients) && menuItem.ingredients.length > 0) {
-                    for (const ingredient of menuItem.ingredients) {
-                        if (ingredient.ingredientId && ingredient.baseAmountPerDish) {
-                            const totalAmount = Number(ingredient.baseAmountPerDish) * qty;
-                            try {
-                                await IngredientLogStore.logIngredientUsage(
-                                    ingredient.ingredientId,
-                                    ingredient.ingredientName || ingredient.ingredientId,
-                                    totalAmount,
-                                    order.id || order.trackingId,
-                                    menuItemName
-                                );
-                            } catch (error) {
-                                console.error(`Error logging ingredient usage for ${ingredient.ingredientId}:`, error);
-                            }
+        if (!menuItem) {
+            console.warn('deductDailyServingsForOrder: Could not find menu item for order item', orderItem);
+            continue;
+        }
+        
+        // Use the menu item's ID (not the order item's ID)
+        const menuItemId = menuItem.id;
+        const maxServings = menuItem.maxServingsPerDay !== null && menuItem.maxServingsPerDay !== undefined ? menuItem.maxServingsPerDay : 0;
+        
+        console.log(`deductDailyServingsForOrder: Deducting ${qty} servings for ${menuItemName} (menuItemId: ${menuItemId})`);
+        
+        try {
+            await DailyServingsStore.incrementServing(menuItemId, menuItemName, maxServings, qty);
+            console.log(`deductDailyServingsForOrder: Successfully incremented serving for ${menuItemName} (${menuItemId})`);
+            
+            // Update cache
+            const currentCount = todayServingsCache[menuItemId] || 0;
+            todayServingsCache[menuItemId] = currentCount + qty;
+            console.log(`deductDailyServingsForOrder: Updated cache for ${menuItemId}: ${currentCount} -> ${todayServingsCache[menuItemId]}`);
+            
+            // NEW: Log ingredient usage
+            if (menuItem && Array.isArray(menuItem.ingredients) && menuItem.ingredients.length > 0) {
+                for (const ingredient of menuItem.ingredients) {
+                    if (ingredient.ingredientId && ingredient.baseAmountPerDish) {
+                        const totalAmount = Number(ingredient.baseAmountPerDish) * qty;
+                        try {
+                            await IngredientLogStore.logIngredientUsage(
+                                ingredient.ingredientId,
+                                ingredient.ingredientName || ingredient.ingredientId,
+                                totalAmount,
+                                order.id || order.trackingId,
+                                menuItemName
+                            );
+                        } catch (error) {
+                            console.error(`Error logging ingredient usage for ${ingredient.ingredientId}:`, error);
                         }
                     }
                 }
+            }
+        } catch (error) {
+            console.error(`Error deducting serving for ${menuItemId}:`, error);
+            // Continue with other items even if one fails
+        }
+    }
+    
+    console.log(`deductDailyServingsForOrder: Completed processing order ${order.id}`);
+}
+
+// Track synced orders to prevent double-processing in the same session
+const syncedOrdersToday = new Set();
+
+// Sync dailyServings for existing orders that are already in preparing status (today only)
+async function syncDailyServingsForExistingOrders() {
+    try {
+        // Check if we've already synced today (using session storage key)
+        const syncKey = `dailyServings_synced_${DailyServingsStore.getTodayDateString()}`;
+        if (sessionStorage.getItem(syncKey) === 'true') {
+            console.log('DailyServings already synced for today');
+            return;
+        }
+        
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        if (!fns || !window.db) {
+            console.warn('Firestore not ready for sync');
+            return;
+        }
+        
+        const today = DailyServingsStore.getTodayDateString();
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        
+        // Normalize timestamps for comparison
+        const normalizeTimestamp = (ts) => {
+            if (!ts) return null;
+            if (ts instanceof Date) return ts;
+            if (ts.toDate && typeof ts.toDate === 'function') return ts.toDate();
+            if (ts._seconds) return new Date(ts._seconds * 1000);
+            if (typeof ts === 'number') return new Date(ts);
+            return new Date(ts);
+        };
+        
+        // Query orders that are in preparing status (or variations)
+        const preparingStatuses = ['preparing', 'in kitchen', 'being-cooked', 'being_cooked', 'cooking', 'being cooked', 'accepted'];
+        const ordersCol = fns.collection(window.db, 'orders');
+        const ordersSnapshot = await fns.getDocs(ordersCol);
+        
+        const ordersToProcess = [];
+        
+        ordersSnapshot.docs.forEach(doc => {
+            const orderData = doc.data();
+            const orderStatus = (orderData.status || '').toLowerCase().trim();
+            
+            // Check if order is in preparing status
+            if (preparingStatuses.includes(orderStatus)) {
+                // Check if order was created or updated today
+                const createdAt = normalizeTimestamp(orderData.createdAt);
+                const updatedAt = normalizeTimestamp(orderData.updatedAt);
+                const cookingStartedAt = normalizeTimestamp(orderData.cookingStartedAt);
+                
+                const isToday = (createdAt && createdAt >= todayStart && createdAt <= todayEnd) ||
+                               (updatedAt && updatedAt >= todayStart && updatedAt <= todayEnd) ||
+                               (cookingStartedAt && cookingStartedAt >= todayStart && cookingStartedAt <= todayEnd);
+                
+                // Only process if order is from today and hasn't been synced yet
+                if (isToday && !syncedOrdersToday.has(doc.id)) {
+                    ordersToProcess.push({
+                        id: doc.id,
+                        ...orderData,
+                        items: orderData.items || []
+                    });
+                    syncedOrdersToday.add(doc.id);
+                }
+            }
+        });
+        
+        if (ordersToProcess.length === 0) {
+            console.log('No existing orders in preparing status for today to sync');
+            // Mark as synced even if no orders to process
+            sessionStorage.setItem(syncKey, 'true');
+            return;
+        }
+        
+        console.log(`Syncing dailyServings for ${ordersToProcess.length} existing orders in preparing status (today only)`);
+        
+        await ensureMenuStateLoaded();
+        
+        // Process each order
+        let syncedCount = 0;
+        for (const order of ordersToProcess) {
+            try {
+                // Process each item in the order
+                for (const orderItem of order.items) {
+                    const qty = Number(orderItem.quantity) > 0 ? Number(orderItem.quantity) : 1;
+                    const menuItemId = orderItem.menuItemId || orderItem.id || orderItem.itemId;
+                    const menuItemName = orderItem.name || orderItem.itemName || 'Unknown Item';
+                    
+                    if (!menuItemId) continue;
+                    
+                    // Find menu item to get maxServingsPerDay
+                    const menuItem = findMenuItemByOrderItem(orderItem);
+                    const maxServings = menuItem ? (menuItem.maxServingsPerDay || null) : null;
+                    
+                    try {
+                        // Use incrementServing which handles transactions and prevents double-counting
+                        await DailyServingsStore.incrementServing(menuItemId, menuItemName, maxServings, qty);
+                    } catch (error) {
+                        console.warn(`Failed to sync serving for ${menuItemId} in order ${order.id}:`, error);
+                    }
+                }
+                
+                syncedCount++;
             } catch (error) {
-                console.error(`Error deducting serving for ${menuItemId}:`, error);
-                // Continue with other items even if one fails
+                console.error(`Error syncing order ${order.id}:`, error);
             }
         }
+        
+        console.log(`Successfully synced dailyServings for ${syncedCount} orders`);
+        
+        // Mark as synced for today
+        sessionStorage.setItem(syncKey, 'true');
+        
+        // Refresh serving cache and menu list
+        if (menuState && menuState.length > 0) {
+            const menuItemIds = menuState.map(item => item.id);
+            await refreshServingsCache(menuItemIds);
+            const menuListTable = document.getElementById('menuListTableBody');
+            if (menuListTable) {
+                await renderMenuListTable();
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error syncing dailyServings for existing orders:', error);
     }
 }
 
@@ -2362,14 +2626,23 @@ async function loadDriversForSelection() {
 
 function renderDriversForSelection() {
     const driversList = document.getElementById('driversSelectionList');
-    if (!driversList) return;
+    if (!driversList) {
+        console.error('renderDriversForSelection: driversSelectionList element not found');
+        return;
+    }
+    
+    console.log('renderDriversForSelection: currentOrderForAssignment =', currentOrderForAssignment);
     
     // Get order info for display
     let orderInfo = '';
+    let nearbyOrders = [];
     if (currentOrderForAssignment) {
         const order = ordersState.find(o => o.id === currentOrderForAssignment);
         if (order) {
             orderInfo = ` for Order ${order.trackingId || currentOrderForAssignment}`;
+            
+            // Check for nearby orders
+            nearbyOrders = checkForNearbyOrders(currentOrderForAssignment);
         }
     }
     
@@ -2384,8 +2657,88 @@ function renderDriversForSelection() {
     
     console.log('Rendering driver selection - Total drivers:', driversState.length, 'Available:', availableDrivers.length);
     console.log('Available drivers:', availableDrivers.map(d => ({ name: d.name, driverId: d.driverId, availability: d.availability })));
+    console.log('Nearby orders found:', nearbyOrders.length);
     
     driversList.innerHTML = '';
+    
+    // Show batch assignment option if nearby orders found
+    if (nearbyOrders.length > 0 && currentOrderForAssignment && availableDrivers.length > 0) {
+        const order = ordersState.find(o => o.id === currentOrderForAssignment);
+        const primaryAddress = order?.address || order?.deliveryInfo?.address || '';
+        const barangay = extractBarangayFromAddress(primaryAddress);
+        
+        const batchInfo = document.createElement('div');
+        batchInfo.className = 'batch-assignment-info';
+        batchInfo.style.cssText = 'background: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 16px; border-radius: 4px;';
+        batchInfo.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <i class="fas fa-map-marker-alt" style="color: #2196f3;"></i>
+                <strong style="color: #1976d2;">Nearby Orders Found (${nearbyOrders.length})</strong>
+            </div>
+            <p style="margin: 0 0 8px 0; color: #555; font-size: 0.9rem;">
+                Found ${nearbyOrders.length} order(s) in the same barangay (${barangay || 'Unknown'}). 
+                You can assign them together to optimize delivery route.
+            </p>
+            <div style="font-size: 0.85rem; color: #666; margin-bottom: 8px;">
+                <strong>Orders:</strong> ${[order?.trackingId || currentOrderForAssignment, ...nearbyOrders.map(o => o.trackingId || o.id)].join(', ')}
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-primary batch-assign-btn" data-driver-id="${availableDrivers[0]?.id || ''}" data-order-id="${currentOrderForAssignment}" 
+                        style="font-size: 0.9rem; padding: 6px 12px;">
+                    <i class="fas fa-layer-group"></i> Assign Batch (${nearbyOrders.length + 1} orders)
+                </button>
+                <button class="btn btn-secondary single-assign-btn" data-order-id="${currentOrderForAssignment}" 
+                        style="font-size: 0.9rem; padding: 6px 12px;">
+                    <i class="fas fa-shipping-fast"></i> Single Order Only
+                </button>
+            </div>
+        `;
+        driversList.appendChild(batchInfo);
+        
+        // Add event listeners for batch buttons
+        const batchAssignBtn = batchInfo.querySelector('.batch-assign-btn');
+        if (batchAssignBtn) {
+            batchAssignBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const driverId = this.getAttribute('data-driver-id');
+                const orderId = this.getAttribute('data-order-id');
+                console.log('Batch assign button clicked:', { driverId, orderId });
+                if (typeof assignBatchToDriver === 'function') {
+                    assignBatchToDriver(driverId, orderId);
+                } else {
+                    console.error('assignBatchToDriver function not found on window');
+                    showNotification('Error: Batch assignment function not available. Please refresh the page.', 'error');
+                }
+            });
+        }
+        
+        const singleAssignBtn = batchInfo.querySelector('.single-assign-btn');
+        if (singleAssignBtn) {
+            singleAssignBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const orderId = this.getAttribute('data-order-id');
+                console.log('Single assign button clicked:', { orderId });
+                if (typeof assignSingleOrderOnly === 'function') {
+                    assignSingleOrderOnly(orderId);
+                } else {
+                    console.error('assignSingleOrderOnly function not found on window');
+                    showNotification('Error: Assignment function not available. Please refresh the page.', 'error');
+                }
+            });
+        }
+        
+        // Add separator
+        const separator = document.createElement('div');
+        separator.style.cssText = 'border-top: 1px solid #ddd; margin: 16px 0;';
+        driversList.appendChild(separator);
+        
+        const orText = document.createElement('div');
+        orText.style.cssText = 'text-align: center; color: #999; font-size: 0.85rem; margin: 8px 0;';
+        orText.textContent = 'OR select driver manually:';
+        driversList.appendChild(orText);
+    }
     
     if (!availableDrivers.length) {
         driversList.innerHTML = '<div class="empty-message">No available drivers at the moment.</div>';
@@ -2403,14 +2756,6 @@ function renderDriversForSelection() {
             driverItem.style.opacity = '0.7';
         }
         
-        const assignButton = isFirstInLine 
-            ? `<button class="btn btn-primary" onclick="assignDriverToOrder('${driver.id}', '${currentOrderForAssignment}')">
-                   Assign
-               </button>`
-            : `<button class="btn btn-secondary" disabled style="cursor: not-allowed;">
-                   Not Available
-               </button>`;
-        
         driverItem.innerHTML = `
             <div class="driver-icon">
                 <i class="fas fa-user"></i>
@@ -2420,10 +2765,108 @@ function renderDriversForSelection() {
                 <div class="driver-id">${escapeHtml(driver.driverId)}</div>
                 <div class="driver-phone">${escapeHtml(driver.phoneNumber || 'No phone number')}</div>
             </div>
-            ${assignButton}
+            <div class="driver-action">
+                ${isFirstInLine && currentOrderForAssignment
+                    ? `<button class="btn btn-primary assign-driver-btn" data-driver-id="${escapeHtml(driver.id)}" data-order-id="${escapeHtml(currentOrderForAssignment)}">
+                           Assign
+                       </button>`
+                    : `<button class="btn btn-secondary" disabled style="cursor: not-allowed;">
+                           Not Available
+                       </button>`}
+            </div>
         `;
+        
+        // Add event listener for assign button
+        if (isFirstInLine && currentOrderForAssignment) {
+            const assignBtn = driverItem.querySelector('.assign-driver-btn');
+            if (assignBtn) {
+                assignBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const driverId = this.getAttribute('data-driver-id');
+                    const orderId = this.getAttribute('data-order-id');
+                    console.log('Assign button clicked:', { driverId, orderId });
+                    if (typeof assignDriverToOrder === 'function') {
+                        assignDriverToOrder(driverId, orderId);
+                    } else {
+                        console.error('assignDriverToOrder function not found on window');
+                        showNotification('Error: Assignment function not available. Please refresh the page.', 'error');
+                    }
+                });
+            }
+        }
+        
         driversList.appendChild(driverItem);
     });
+}
+
+/**
+ * Check for nearby orders ready for delivery in the same barangay
+ */
+function checkForNearbyOrders(orderId) {
+    try {
+        const order = ordersState.find(o => o.id === orderId);
+        if (!order) {
+            console.warn('checkForNearbyOrders: Order not found', orderId);
+            return [];
+        }
+        
+        // Get all orders ready for delivery
+        const readyOrders = ordersState.filter(o => {
+            const status = (o.status || '').toLowerCase().trim();
+            return (status === 'ready for delivery' || 
+                    status === 'ready_for_delivery' ||
+                    status === 'for delivery' ||
+                    status === 'for_delivery') &&
+                   !o.driverId && // Not yet assigned
+                   o.id !== orderId; // Not the same order
+        });
+        
+        // Find nearby orders
+        return findNearbyOrdersForBatching(order, readyOrders, { maxBatchSize: 3 });
+    } catch (error) {
+        console.error('Error checking for nearby orders:', error);
+        return [];
+    }
+}
+
+/**
+ * Assign batch to driver (called from batch info button)
+ */
+async function assignBatchToDriver(driverId, primaryOrderId) {
+    if (!driverId || !primaryOrderId) {
+        showNotification('Invalid parameters for batch assignment.', 'error');
+        return;
+    }
+    
+    const primaryOrder = ordersState.find(o => o.id === primaryOrderId);
+    if (!primaryOrder) {
+        showNotification('Primary order not found.', 'error');
+        return;
+    }
+    
+    // Get nearby orders
+    const nearbyOrders = checkForNearbyOrders(primaryOrderId);
+    
+    // Combine primary order with nearby orders
+    const batchOrders = [primaryOrder, ...nearbyOrders];
+    
+    // Assign batch
+    await assignDriverToBatch(driverId, batchOrders);
+}
+
+/**
+ * Assign single order only (skip batching)
+ */
+async function assignSingleOrderOnly(orderId) {
+    const availableDrivers = driversState.filter(d => d.availability === 'available');
+    if (availableDrivers.length === 0) {
+        showNotification('No available drivers.', 'error');
+        return;
+    }
+    
+    // Assign to first available driver
+    await assignDriverToOrder(availableDrivers[0].id, orderId);
 }
 
 // Updated markOutForDelivery to use the new unified function
@@ -2487,92 +2930,6 @@ async function acceptOrderWithoutDriver(orderId) {
         console.error('Error accepting order:', error);
         showNotification('Failed to accept order. Please try again.', 'error');
     }
-}
-
-// Function to get payment proof image URL from Firebase Storage using userId
-async function getPaymentProofImageUrl(order) {
-    // Only for GCash orders
-    const paymentModeLower = (order.paymentMode || '').toLowerCase();
-    const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
-    if (!isGCashOrder) {
-        return null;
-    }
-    
-    // If we already have a paymentProofUrl, use it
-    if (order.paymentProofUrl && order.paymentProofUrl.trim() !== '') {
-        return order.paymentProofUrl;
-    }
-    
-    // Try to get from Firebase Storage using userId
-    try {
-        if (!window.storage || !window.storageFunctions) {
-            await waitForFirebaseReady();
-        }
-        
-        if (!window.storage || !window.storageFunctions) {
-            return null;
-        }
-        
-        const { ref, getDownloadURL, listAll } = window.storageFunctions;
-        const storage = window.storage;
-        const userId = order.userId;
-        const isGuestOrder = !userId || order.isGuest === true;
-        
-        // Determine folder path - userId is the customer's UID
-        const folderPath = isGuestOrder ? 'paymentProofs/guest' : `paymentProofs/${userId}`;
-        
-        // If paymentProofPath exists, try that first
-        if (order.paymentProofPath) {
-            const path = order.paymentProofPath.startsWith('paymentProofs/') 
-                ? order.paymentProofPath 
-                : `paymentProofs/${order.paymentProofPath}`;
-            try {
-                const imageRef = ref(storage, path);
-                return await getDownloadURL(imageRef);
-            } catch (error) {
-                console.log(`Could not load payment proof from path ${path}:`, error);
-            }
-        }
-        
-        // Otherwise, try to list files in the folder and get the first image
-        try {
-            const folderRef = ref(storage, folderPath);
-            const result = await listAll(folderRef);
-            
-            if (result.items && result.items.length > 0) {
-                // Try to find a file that matches the order ID or tracking ID
-                const orderId = order.id;
-                const trackingIdClean = (order.trackingId || '').replace('#', '').toUpperCase();
-                
-                // First, try to find exact match
-                for (const itemRef of result.items) {
-                    const fileName = itemRef.name;
-                    const fileNameUpper = fileName.toUpperCase();
-                    const orderIdUpper = orderId.toUpperCase();
-                    
-                    if (fileNameUpper.includes(orderIdUpper) || 
-                        (trackingIdClean && fileNameUpper.includes(trackingIdClean))) {
-                        return await getDownloadURL(itemRef);
-                    }
-                }
-                
-                // If no match, use the first image file
-                for (const itemRef of result.items) {
-                    const fileName = itemRef.name.toLowerCase();
-                    if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || 
-                        fileName.endsWith('.png') || fileName.endsWith('.webp')) {
-                        return await getDownloadURL(itemRef);
-                    }
-                }
-            }
-        } catch (error) {
-            console.log(`Could not list files in ${folderPath}:`, error);
-        }
-    } catch (error) {
-        console.log('Error loading payment proof:', error);
-    }
-    
-    return null;
 }
 
 function viewOrderDetails(orderId) {
@@ -3032,27 +3389,128 @@ async function verifyPayment(orderId) {
             }
             
             // Show payment history if available
-            if (order.paymentProofHistory && order.paymentProofHistory.length > 1) {
+            if (order.paymentProofHistory && order.paymentProofHistory.length > 0) {
                 const historyContainer = document.getElementById('paymentHistoryContainer');
                 if (historyContainer) {
+                    const currentVersion = order.paymentProofVersion || order.paymentProofHistory.length;
+                    const currentProofInHistory = order.paymentProofHistory.find(p => p.version === currentVersion);
+                    
+                    // Build history HTML with images
                     const historyHtml = `
-                        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
-                            <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600;">Payment History</h4>
-                            <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
-                                Current: Version ${order.paymentProofVersion || 1}
+                        <div style="margin-top: 25px; padding-top: 25px; border-top: 2px solid #ddd;">
+                            <h4 style="margin-bottom: 15px; font-size: 16px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-history"></i> Payment Proof History
+                            </h4>
+                            
+                            <!-- Current Version Indicator -->
+                            <div style="font-size: 13px; color: #666; margin-bottom: 15px; padding: 10px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4caf50;">
+                                <strong style="color: #2e7d32;">📸 Currently Viewing:</strong> Version ${currentVersion} 
+                                ${order.paymentProofPath || order.paymentProofUrl ? '(Active - Shown Above)' : '(Pending Resubmission)'}
                             </div>
-                            <details style="margin-top: 10px;">
-                                <summary style="cursor: pointer; color: #7E2021; font-weight: 500;">View Previous Attempts (${order.paymentProofHistory.length - 1})</summary>
-                                <div style="margin-top: 10px;">
-                                    ${order.paymentProofHistory.slice(0, -1).reverse().map((proof, index) => `
-                                        <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
-                                            <div style="font-weight: 500; margin-bottom: 5px;">Version ${proof.version || (order.paymentProofHistory.length - index)}</div>
-                                            ${proof.declinedAt ? `<div style="color: #dc3545; font-size: 11px;">Declined: ${proof.declineReason || 'N/A'}</div>` : ''}
-                                            ${proof.uploadedAt ? `<div style="color: #666; font-size: 11px;">Uploaded: ${new Date(proof.uploadedAt.seconds * 1000).toLocaleString()}</div>` : ''}
-                                        </div>
-                                    `).join('')}
+                            
+                            ${order.paymentProofHistory.length > 1 ? `
+                                <details style="margin-top: 10px;" open>
+                                    <summary style="cursor: pointer; color: #7E2021; font-weight: 600; font-size: 14px; padding: 10px; background: #f5f5f5; border-radius: 6px; user-select: none;">
+                                        <i class="fas fa-images"></i> View All Previous Attempts (${order.paymentProofHistory.length - 1})
+                                    </summary>
+                                    <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 20px; max-height: 600px; overflow-y: auto; padding-right: 5px;">
+                                        ${order.paymentProofHistory.slice().reverse().map((proof, index) => {
+                                            const isCurrent = proof.version === currentVersion;
+                                            const isDeclined = proof.declinedAt;
+                                            const proofImageUrl = proof.paymentProofUrl || '';
+                                            
+                                            return `
+                                                <div style="padding: 15px; background: ${isDeclined ? '#fff3cd' : isCurrent ? '#e3f2fd' : '#f8f9fa'}; 
+                                                           border-radius: 8px; border-left: 5px solid ${isDeclined ? '#ffc107' : isCurrent ? '#2196f3' : '#6c757d'}; 
+                                                           box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                                    
+                                                    <!-- Version Header -->
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                                                        <div style="font-weight: 600; font-size: 14px; color: #333;">
+                                                            <i class="fas fa-receipt"></i> Version ${proof.version || (order.paymentProofHistory.length - index)}
+                                                            ${isCurrent ? '<span style="background: #4caf50; color: white; padding: 3px 10px; border-radius: 4px; font-size: 11px; margin-left: 8px; font-weight: 600;">CURRENT</span>' : ''}
+                                                            ${isDeclined ? '<span style="background: #dc3545; color: white; padding: 3px 10px; border-radius: 4px; font-size: 11px; margin-left: 8px; font-weight: 600;">DECLINED</span>' : ''}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Decline Info -->
+                                                    ${isDeclined ? `
+                                                        <div style="color: #856404; font-size: 12px; margin-bottom: 12px; padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ffc107;">
+                                                            <strong style="color: #dc3545;">❌ Decline Reason:</strong> ${proof.declineReason || 'N/A'}<br>
+                                                            ${proof.declinedBy ? `<small style="color: #666;">Declined by: ${proof.declinedBy}</small>` : ''}
+                                                            ${proof.declinedAt ? `
+                                                                <br><small style="color: #666;">Declined on: ${(() => {
+                                                                    if (proof.declinedAt instanceof Date) {
+                                                                        return proof.declinedAt.toLocaleString();
+                                                                    } else if (proof.declinedAt.seconds) {
+                                                                        return new Date(proof.declinedAt.seconds * 1000).toLocaleString();
+                                                                    } else if (typeof proof.declinedAt.toDate === 'function') {
+                                                                        return proof.declinedAt.toDate().toLocaleString();
+                                                                    } else if (typeof proof.declinedAt === 'number') {
+                                                                        return new Date(proof.declinedAt).toLocaleString();
+                                                                    }
+                                                                    return 'N/A';
+                                                                })()}</small>
+                                                            ` : ''}
+                                                        </div>
+                                                    ` : ''}
+                                                    
+                                                    <!-- Upload Info -->
+                                                    ${proof.uploadedAt ? `
+                                                        <div style="color: #666; font-size: 11px; margin-bottom: 12px;">
+                                                            <i class="fas fa-clock"></i> Uploaded: ${(() => {
+                                                                if (proof.uploadedAt instanceof Date) {
+                                                                    return proof.uploadedAt.toLocaleString();
+                                                                } else if (proof.uploadedAt.seconds) {
+                                                                    return new Date(proof.uploadedAt.seconds * 1000).toLocaleString();
+                                                                } else if (typeof proof.uploadedAt.toDate === 'function') {
+                                                                    return proof.uploadedAt.toDate().toLocaleString();
+                                                                } else if (typeof proof.uploadedAt === 'number') {
+                                                                    return new Date(proof.uploadedAt).toLocaleString();
+                                                                }
+                                                                return 'N/A';
+                                                            })()}
+                                                        </div>
+                                                    ` : ''}
+                                                    
+                                                    <!-- Screenshot Image -->
+                                                    ${proofImageUrl ? `
+                                                        <div style="margin-top: 12px; position: relative;">
+                                                            <div style="font-size: 11px; color: #666; margin-bottom: 6px; font-weight: 500;">
+                                                                <i class="fas fa-image"></i> Screenshot:
+                                                            </div>
+                                                            <img src="${proofImageUrl}" 
+                                                                 alt="Payment Proof Version ${proof.version}" 
+                                                                 style="max-width: 100%; height: auto; border-radius: 6px; border: 2px solid ${isDeclined ? '#ffc107' : isCurrent ? '#2196f3' : '#ddd'}; 
+                                                                        cursor: pointer; transition: transform 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"
+                                                                 onclick="window.open('${proofImageUrl}', '_blank')"
+                                                                 onmouseover="this.style.transform='scale(1.02)'"
+                                                                 onmouseout="this.style.transform='scale(1)'"
+                                                                 title="Click to view full size in new tab">
+                                                            <div style="font-size: 10px; color: #999; margin-top: 4px; text-align: center;">
+                                                                Click image to view full size
+                                                            </div>
+                                                        </div>
+                                                    ` : proof.paymentProofPath ? `
+                                                        <div style="margin-top: 12px; padding: 12px; background: #fff; border-radius: 4px; color: #666; font-size: 12px; border: 1px dashed #ccc;">
+                                                            <i class="fas fa-exclamation-triangle"></i> Image path: ${proof.paymentProofPath}<br>
+                                                            <small style="color: #999;">(Image may have been deleted or is no longer accessible)</small>
+                                                        </div>
+                                                    ` : `
+                                                        <div style="margin-top: 12px; padding: 12px; background: #fff; border-radius: 4px; color: #999; font-size: 12px; border: 1px dashed #ccc; text-align: center;">
+                                                            <i class="fas fa-image"></i> No image available
+                                                        </div>
+                                                    `}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </details>
+                            ` : `
+                                <div style="padding: 15px; background: #f8f9fa; border-radius: 6px; color: #666; font-size: 13px; text-align: center;">
+                                    <i class="fas fa-info-circle"></i> This is the first payment proof submission for this order.
                                 </div>
-                            </details>
+                            `}
                         </div>
                     `;
                     historyContainer.innerHTML = historyHtml;
@@ -3107,6 +3565,26 @@ function closePaymentReceiptModal() {
     }
 }
 
+// Helper function to get current staff name
+function getCurrentStaffName() {
+    const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+    if (session) {
+        try {
+            const staffSession = JSON.parse(session);
+            if (staffSession.firstName && staffSession.lastName) {
+                return `${staffSession.firstName} ${staffSession.lastName}`;
+            } else if (staffSession.email) {
+                return staffSession.email;
+            } else if (staffSession.staffId) {
+                return staffSession.staffId;
+            }
+        } catch (e) {
+            console.warn('Could not parse staff session:', e);
+        }
+    }
+    return 'Admin';
+}
+
 async function verifyPaymentConfirm() {
     if (!currentVerifyingOrderId) {
         showNotification('No order selected for payment verification.', 'error');
@@ -3154,7 +3632,26 @@ async function verifyPaymentConfirm() {
     }
 }
 
-async function declinePayment() {
+// Initialize payment decline modal event listeners (called once on page load)
+function initPaymentDeclineModal() {
+    const reasonSelect = document.getElementById('paymentDeclineReasonSelect');
+    const reasonText = document.getElementById('paymentDeclineReasonText');
+    
+    if (reasonSelect && reasonText) {
+        reasonSelect.addEventListener('change', function() {
+            if (this.value === 'other') {
+                reasonText.style.display = 'block';
+                reasonText.required = false; // Optional
+            } else {
+                reasonText.style.display = 'none';
+                reasonText.value = '';
+            }
+        });
+    }
+}
+
+// Open payment decline modal
+function openPaymentDeclineModal() {
     if (!currentVerifyingOrderId) {
         showNotification('No order selected for payment decline.', 'error');
         return;
@@ -3166,41 +3663,506 @@ async function declinePayment() {
         return;
     }
     
-    if (confirm(`Decline payment for order ${order.trackingId || currentVerifyingOrderId}? This will change the order status to 'declined' with reason "Payment Verification Failed".`)) {
+    const modal = document.getElementById('paymentDeclineModal');
+    if (!modal) {
+        showNotification('Payment decline modal not found.', 'error');
+        return;
+    }
+    
+    // Reset form
+    const reasonSelect = document.getElementById('paymentDeclineReasonSelect');
+    const reasonText = document.getElementById('paymentDeclineReasonText');
+    if (reasonSelect) reasonSelect.value = '';
+    if (reasonText) {
+        reasonText.value = '';
+        reasonText.style.display = 'none';
+    }
+    
+    // Show modal
+    modal.style.display = 'block';
+}
+
+// Close payment decline modal
+function closePaymentDeclineModal() {
+    const modal = document.getElementById('paymentDeclineModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Close modal when clicking outside (attach once)
+(function() {
+    let clickHandlerAttached = false;
+    if (!clickHandlerAttached) {
+        document.addEventListener('click', function(event) {
+            const modal = document.getElementById('paymentDeclineModal');
+            if (modal && modal.style.display === 'block' || modal.style.display === 'flex') {
+                const modalContent = modal.querySelector('.modal-content');
+                // Close if clicking on the modal backdrop (not on content)
+                if (event.target === modal && !modalContent.contains(event.target)) {
+                    closePaymentDeclineModal();
+                }
+            }
+        });
+        clickHandlerAttached = true;
+    }
+})();
+
+// Confirm payment decline with selected reason
+async function confirmPaymentDecline() {
+    const reasonSelect = document.getElementById('paymentDeclineReasonSelect');
+    const reasonText = document.getElementById('paymentDeclineReasonText');
+    
+    if (!reasonSelect || !reasonSelect.value) {
+        showNotification('Please select a reason for declining', 'error');
+        return;
+    }
+    
+    // Map reason values to display text
+    let declineReason = '';
+    if (reasonSelect.value === 'wrong_screenshot') {
+        declineReason = 'Wrong Screenshot';
+    } else if (reasonSelect.value === 'credentials_mismatch') {
+        declineReason = 'Account Credentials Do not Match';
+    } else if (reasonSelect.value === 'other') {
+        if (reasonText && reasonText.value.trim()) {
+            declineReason = reasonText.value.trim();
+        } else {
+            showNotification('Please provide additional details for "Other" reason', 'error');
+            return;
+        }
+    } else {
+        declineReason = reasonSelect.options[reasonSelect.selectedIndex].text;
+    }
+    
+    if (!declineReason || !declineReason.trim()) {
+        showNotification('Please provide a reason for declining', 'error');
+        return;
+    }
+    
+    // Close modal
+    closePaymentDeclineModal();
+    
+    // Proceed with decline using the selected reason
+    await processPaymentDecline(declineReason.trim());
+}
+
+// Process payment decline (extracted from original declinePayment function)
+async function processPaymentDecline(declineReason) {
+    if (!currentVerifyingOrderId) {
+        showNotification('No order selected for payment decline.', 'error');
+        return;
+    }
+    
+    const order = ordersState.find(o => o.id === currentVerifyingOrderId);
+    if (!order) {
+        showNotification('Order not found.', 'error');
+        return;
+    }
+    
+    try {
+        if (!isFirestoreReady()) {
+            showNotification('Database is not ready. Please try again.', 'error');
+            return;
+        }
+        
+        const fns = window.firestoreFunctions;
+        const orderRef = fns.doc(window.db, 'orders', currentVerifyingOrderId);
+        
+        // Get current order data to build history entry
+        const orderDoc = await fns.getDoc(orderRef);
+        const orderData = orderDoc.exists() ? orderDoc.data() : {};
+        
+        // Get current payment proof info
+        const currentProofPath = order.paymentProofPath || orderData.paymentProofPath || '';
+        const currentProofUrl = order.paymentProofUrl || orderData.paymentProofUrl || '';
+        const currentVersion = order.paymentProofVersion || orderData.paymentProofVersion || 1;
+        
+        // Build history entry for the declined proof
+        // Note: Cannot use serverTimestamp() inside arrays, so use Timestamp.now() instead
+        const now = fns.Timestamp ? fns.Timestamp.now() : new Date();
+        const declinedProofEntry = {
+            version: currentVersion,
+            paymentProofPath: currentProofPath,
+            paymentProofUrl: currentProofUrl,
+            declinedAt: now,
+            declineReason: declineReason.trim(),
+            declinedBy: getCurrentStaffName(),
+            uploadedAt: orderData.paymentProofUploadedAt || order.createdAt || now
+        };
+        
+        // Get existing history or create new array
+        const existingHistory = Array.isArray(orderData.paymentProofHistory) ? orderData.paymentProofHistory : [];
+        
+        // If current proof is not already in history, add it
+        // Otherwise, update the last entry with decline info
+        let updatedHistory = [...existingHistory];
+        const lastEntry = updatedHistory.length > 0 ? updatedHistory[updatedHistory.length - 1] : null;
+        
+        if (!lastEntry || lastEntry.version !== currentVersion) {
+            // Add new entry to history
+            updatedHistory.push(declinedProofEntry);
+        } else {
+            // Update last entry with decline info
+            updatedHistory[updatedHistory.length - 1] = {
+                ...lastEntry,
+                declinedAt: declinedProofEntry.declinedAt,
+                declineReason: declinedProofEntry.declineReason,
+                declinedBy: declinedProofEntry.declinedBy
+            };
+        }
+        
+        // Update order: mark as declined, clear current proof, increment version for next submission
+        const updateData = {
+            status: 'declined',
+            declineReason: declineReason.trim(),
+            declinedAt: fns.serverTimestamp(),
+            declinedBy: getCurrentStaffName(),
+            // Keep history
+            paymentProofHistory: updatedHistory,
+            // Clear current proof fields (customer will need to resubmit)
+            paymentProofPath: fns.deleteField(),
+            paymentProofUrl: fns.deleteField(),
+            paymentVerified: false,
+            // Increment version for next resubmission
+            paymentProofVersion: currentVersion + 1,
+            updatedAt: fns.serverTimestamp()
+        };
+        
+        await fns.updateDoc(orderRef, updateData);
+        
+        // Update local state
+        const orderIndex = ordersState.findIndex(o => o.id === currentVerifyingOrderId);
+        if (orderIndex !== -1) {
+            ordersState[orderIndex].status = 'declined';
+            ordersState[orderIndex].declineReason = declineReason.trim();
+            ordersState[orderIndex].paymentProofHistory = updatedHistory;
+            ordersState[orderIndex].paymentProofVersion = currentVersion + 1;
+            ordersState[orderIndex].paymentProofPath = null;
+            ordersState[orderIndex].paymentProofUrl = null;
+            ordersState[orderIndex].paymentVerified = false;
+        }
+        
+        // Refresh the orders table
+        renderOrdersTable(ordersState);
+        
+        showNotification(`Payment declined for order ${order.trackingId || currentVerifyingOrderId}. Customer can resubmit.`, 'success');
+        closePaymentReceiptModal();
+    } catch (error) {
+        console.error('Error declining payment:', error);
+        showNotification('Failed to decline payment. Please try again.', 'error');
+    }
+}
+
+// Make functions available globally
+window.declinePayment = openPaymentDeclineModal;
+window.openPaymentDeclineModal = openPaymentDeclineModal;
+window.closePaymentDeclineModal = closePaymentDeclineModal;
+window.confirmPaymentDecline = confirmPaymentDecline;
+
+/**
+ * Automated payment verification function
+ * Verifies payments that meet safe criteria, leaves edge cases for manual review
+ */
+async function attemptAutomatedPaymentVerification(order) {
+    // Only process GCash orders
+    const paymentModeLower = (order.paymentMode || '').toLowerCase();
+    const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
+    if (!isGCashOrder) {
+        return { verified: false, reason: 'Not a GCash order' };
+    }
+    
+    // Skip if already verified
+    if (order.paymentVerified === true) {
+        return { verified: false, reason: 'Already verified' };
+    }
+    
+    // Skip if order is not pending
+    const currentStatus = (order.status || '').toLowerCase().trim();
+    if (currentStatus !== 'pending' && currentStatus !== 'new') {
+        return { verified: false, reason: 'Order not in pending status' };
+    }
+    
+    // Edge case: Multiple payment proof versions (resubmission) - requires manual review
+    if (order.paymentProofVersion && order.paymentProofVersion > 1) {
+        return { verified: false, reason: 'Requires manual review: Payment resubmission', requiresReview: true };
+    }
+    
+    // TIME/DATE VALIDATION 1: Check order age
+    if (order.createdAt && order.createdAt instanceof Date) {
+        const now = new Date();
+        const hoursDiff = (now.getTime() - order.createdAt.getTime()) / (1000 * 60 * 60);
+        
+        // Order too old - suspicious
+        if (hoursDiff > 24) {
+            return { verified: false, reason: 'Requires manual review: Order too old (>24 hours)', requiresReview: true };
+        }
+        
+        // Order too new - might be created before payment (allow 5 minutes grace period)
+        if (hoursDiff < 0) {
+            return { verified: false, reason: 'Requires manual review: Order timestamp in future', requiresReview: true };
+        }
+    }
+    
+    // TIME/DATE VALIDATION 2: Check payment proof upload time from filename
+    if (order.paymentProofPath) {
+        try {
+            // Extract timestamp from path (format: paymentProofs/userId/1234567890-filename.jpg)
+            const pathParts = order.paymentProofPath.split('/');
+            const fileName = pathParts[pathParts.length - 1];
+            const timestampMatch = fileName.match(/^(\d+)-/);
+            
+            if (timestampMatch) {
+                const uploadTimestamp = parseInt(timestampMatch[1], 10);
+                const uploadDate = new Date(uploadTimestamp);
+                
+                if (order.createdAt && order.createdAt instanceof Date) {
+                    const timeDiffMs = Math.abs(uploadDate.getTime() - order.createdAt.getTime());
+                    const timeDiffMinutes = timeDiffMs / (1000 * 60);
+                    
+                    // Payment proof should be uploaded within 30 minutes of order creation
+                    if (timeDiffMinutes > 30) {
+                        return { 
+                            verified: false, 
+                            reason: `Requires manual review: Payment proof uploaded ${Math.round(timeDiffMinutes)} minutes after order creation (suspicious timing)`, 
+                            requiresReview: true 
+                        };
+                    }
+                    
+                    // Payment proof uploaded before order creation (shouldn't happen)
+                    if (uploadDate < order.createdAt) {
+                        const diffBefore = (order.createdAt.getTime() - uploadDate.getTime()) / (1000 * 60);
+                        if (diffBefore > 5) { // Allow 5 minute clock skew
+                            return { 
+                                verified: false, 
+                                reason: `Requires manual review: Payment proof uploaded ${Math.round(diffBefore)} minutes before order creation`, 
+                                requiresReview: true 
+                            };
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Could not extract timestamp from payment proof path:', error);
+            // Don't fail verification if we can't parse the timestamp
+        }
+    }
+    
+    // TIME/DATE VALIDATION 3: If payment timestamp is collected from customer, validate it
+    if (order.paymentTimestamp) {
+        try {
+            const paymentDate = order.paymentTimestamp instanceof Date ? order.paymentTimestamp : new Date(order.paymentTimestamp);
+            
+            if (order.createdAt && order.createdAt instanceof Date) {
+                const timeDiffMs = Math.abs(paymentDate.getTime() - order.createdAt.getTime());
+                const timeDiffMinutes = timeDiffMs / (1000 * 60);
+                
+                // Payment should be made within 15 minutes of order creation
+                if (timeDiffMinutes > 15) {
+                    return { 
+                        verified: false, 
+                        reason: `Requires manual review: Payment timestamp (${paymentDate.toLocaleString()}) is ${Math.round(timeDiffMinutes)} minutes from order creation`, 
+                        requiresReview: true 
+                    };
+                }
+                
+                // Payment made before order (shouldn't happen)
+                if (paymentDate < order.createdAt) {
+                    const diffBefore = (order.createdAt.getTime() - paymentDate.getTime()) / (1000 * 60);
+                    if (diffBefore > 2) { // Allow 2 minute clock skew
+                        return { 
+                            verified: false, 
+                            reason: `Requires manual review: Payment timestamp is ${Math.round(diffBefore)} minutes before order creation`, 
+                            requiresReview: true 
+                        };
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Could not parse payment timestamp:', error);
+            // If timestamp is invalid format, flag for review
+            return { verified: false, reason: 'Requires manual review: Invalid payment timestamp format', requiresReview: true };
+        }
+    }
+    
+    // CRITICAL CHECK 1: Verify all three required fields exist
+    const hasReferenceNumber = !!(order.paymentReferenceNumber && order.paymentReferenceNumber.trim());
+    const hasProofPath = !!(order.paymentProofPath && order.paymentProofPath.trim());
+    const hasProofUrl = !!(order.paymentProofUrl && order.paymentProofUrl.trim());
+    
+    if (!hasReferenceNumber) {
+        return { verified: false, reason: 'Requires manual review: Missing reference number', requiresReview: true };
+    }
+    
+    if (!hasProofPath) {
+        return { verified: false, reason: 'Requires manual review: Missing payment proof path', requiresReview: true };
+    }
+    
+    if (!hasProofUrl) {
+        return { verified: false, reason: 'Requires manual review: Missing payment proof URL', requiresReview: true };
+    }
+    
+    // CRITICAL CHECK 2: Verify reference number is unique (not used in another verified order)
+    const referenceNumber = order.paymentReferenceNumber.trim().toUpperCase();
+    const duplicateOrder = ordersState.find(o => 
+        o.id !== order.id && 
+        o.paymentReferenceNumber && 
+        o.paymentReferenceNumber.trim().toUpperCase() === referenceNumber &&
+        o.paymentVerified === true
+    );
+    
+    if (duplicateOrder) {
+        return { 
+            verified: false, 
+            reason: `Requires manual review: Reference number ${referenceNumber} already used in order ${duplicateOrder.trackingId || duplicateOrder.id}`, 
+            requiresReview: true 
+        };
+    }
+    
+    // CRITICAL CHECK 3: Verify payment proof image exists and is accessible
+    let proofExists = false;
+    let proofAccessible = false;
+    try {
+        if (!window.storage || !window.storageFunctions) {
+            await waitForFirebaseReady();
+        }
+        
+        if (window.storage && window.storageFunctions) {
+            const { ref, getDownloadURL } = window.storageFunctions;
+            const storage = window.storage;
+            
+            // Try using the path first
+            const path = order.paymentProofPath.startsWith('paymentProofs/') 
+                ? order.paymentProofPath 
+                : `paymentProofs/${order.paymentProofPath}`;
+            
+            try {
+                const imageRef = ref(storage, path);
+                const urlFromPath = await getDownloadURL(imageRef);
+                proofExists = true;
+                // Verify the URL matches (or is accessible)
+                if (urlFromPath) {
+                    proofAccessible = true;
+                    // Optional: Verify URL matches stored URL (within reason - URLs might have tokens)
+                    if (order.paymentProofUrl && !order.paymentProofUrl.includes(urlFromPath.split('?')[0])) {
+                        console.warn('URL mismatch between stored URL and path-derived URL');
+                    }
+                }
+            } catch (error) {
+                // Proof file doesn't exist or is inaccessible via path
+                return { verified: false, reason: 'Requires manual review: Payment proof not accessible via path', requiresReview: true };
+            }
+            
+            // Also verify URL is accessible (optional but recommended)
+            if (order.paymentProofUrl) {
+                try {
+                    const response = await fetch(order.paymentProofUrl, { method: 'HEAD' });
+                    if (response.ok) {
+                        proofAccessible = true;
+                    } else {
+                        console.warn('Payment proof URL not accessible:', response.status);
+                    }
+                } catch (error) {
+                    console.warn('Could not verify payment proof URL accessibility:', error);
+                    // Don't fail verification if URL check fails, path check is primary
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error checking payment proof:', error);
+        return { verified: false, reason: 'Requires manual review: Error checking payment proof', requiresReview: true };
+    }
+    
+    // CRITICAL CHECK 4: Validate reference number format (GCash refs are typically alphanumeric, 8-15 chars)
+    const refFormatValid = /^[A-Z0-9]{8,15}$/i.test(referenceNumber);
+    if (!refFormatValid) {
+        return { verified: false, reason: 'Requires manual review: Invalid reference number format', requiresReview: true };
+    }
+    
+    // All checks passed - safe to auto-verify
+    if (proofExists && proofAccessible) {
         try {
             if (!isFirestoreReady()) {
-                showNotification('Database is not ready. Please try again.', 'error');
-                return;
+                return { verified: false, reason: 'Database not ready' };
             }
             
             const fns = window.firestoreFunctions;
-            const orderRef = fns.doc(window.db, 'orders', currentVerifyingOrderId);
+            const orderRef = fns.doc(window.db, 'orders', order.id);
             
             await fns.updateDoc(orderRef, {
-                status: 'declined',
-                declineReason: 'Payment Verification Failed',
-                declinedAt: fns.serverTimestamp(),
+                paymentVerified: true,
+                paymentVerifiedAt: fns.serverTimestamp(),
+                paymentAutoVerified: true, // Flag to indicate automated verification
+                paymentVerificationMethod: 'automated', // Track verification method
                 updatedAt: fns.serverTimestamp()
             });
             
             // Update local state
-            const orderIndex = ordersState.findIndex(o => o.id === currentVerifyingOrderId);
+            const orderIndex = ordersState.findIndex(o => o.id === order.id);
             if (orderIndex !== -1) {
-                ordersState[orderIndex].status = 'declined';
-                ordersState[orderIndex].declineReason = 'Payment Verification Failed';
-                ordersState[orderIndex].declinedAt = new Date();
+                ordersState[orderIndex].paymentVerified = true;
+                ordersState[orderIndex].paymentVerifiedAt = new Date();
+                ordersState[orderIndex].paymentAutoVerified = true;
+                ordersState[orderIndex].paymentVerificationMethod = 'automated';
             }
             
-            // Refresh the orders table
-            renderOrdersTable(ordersState);
-            
-            showNotification(`Payment declined for order ${order.trackingId || currentVerifyingOrderId}. Order status changed to 'declined'.`, 'success');
-            closePaymentReceiptModal();
+            console.log(`✓ Auto-verified payment for order ${order.trackingId || order.id} (Ref: ${referenceNumber})`);
+            return { verified: true, reason: 'Auto-verified: All checks passed' };
         } catch (error) {
-            console.error('Error declining payment:', error);
-            showNotification('Failed to decline payment. Please try again.', 'error');
+            console.error('Error auto-verifying payment:', error);
+            return { verified: false, reason: 'Error during auto-verification' };
         }
     }
+    
+    return { verified: false, reason: 'Payment proof validation failed' };
+}
+
+/**
+ * Process new orders for automated payment verification
+ * Called when orders are updated via subscription
+ */
+async function processOrdersForAutoVerification(previousOrders, currentOrders) {
+    // Track which orders we've already processed to avoid duplicate processing
+    if (!window.processedOrdersForAutoVerification) {
+        window.processedOrdersForAutoVerification = new Set();
+    }
+    
+    // Find new or updated GCash orders that need verification
+    const ordersToCheck = currentOrders.filter(order => {
+        const paymentModeLower = (order.paymentMode || '').toLowerCase();
+        const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
+        const isPending = (order.status || '').toLowerCase().trim() === 'pending' || 
+                        (order.status || '').toLowerCase().trim() === 'new';
+        const notVerified = order.paymentVerified !== true;
+        const notProcessed = !window.processedOrdersForAutoVerification.has(order.id);
+        
+        return isGCashOrder && isPending && notVerified && notProcessed;
+    });
+    
+    // Process each order
+    for (const order of ordersToCheck) {
+        // Mark as processed immediately to avoid duplicate attempts
+        window.processedOrdersForAutoVerification.add(order.id);
+        
+        // Small delay to avoid overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const result = await attemptAutomatedPaymentVerification(order);
+        
+        if (result.verified) {
+            // Successfully auto-verified - refresh the table
+            renderOrdersTable(ordersState);
+            console.log(`Auto-verified payment for order ${order.trackingId || order.id}`);
+        } else if (result.requiresReview) {
+            // Edge case detected - flag for manual review
+            console.log(`Order ${order.trackingId || order.id} requires manual review: ${result.reason}`);
+            // Optional: You could add a flag to highlight these orders in the UI
+        }
+    }
+    
+    // Clean up old processed orders (older than 1 hour) to prevent memory buildup
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    // Note: This is a simple cleanup - in production you might want more sophisticated tracking
 }
 
 async function reopenOrder(orderId) {
@@ -5279,33 +6241,34 @@ function getMenuServingInfo(item) {
     const maxServings = item.maxServingsPerDay;
     const todayCount = todayServingsCache[item.id] || 0;
     
-    if (!maxServings || maxServings === 0) {
+    // Default to 0 (unavailable) if maxServings is null/undefined/0
+    const effectiveMaxServings = maxServings !== null && maxServings !== undefined && maxServings > 0 ? maxServings : 0;
+    
+    if (effectiveMaxServings === 0) {
         return {
-            remaining: null,
-            maxServings: null,
+            remaining: 0,
+            maxServings: 0,
             todayCount: todayCount,
-            label: 'Unlimited',
-            className: 'available'
+            label: 'Unavailable',
+            className: 'unavailable'
         };
     }
     
-    const remaining = Math.max(0, maxServings - todayCount);
+    const remaining = Math.max(0, effectiveMaxServings - todayCount);
     
+    // Status: "Out of Stock" when remaining = 0, otherwise "Available"
     let label, className;
     if (remaining <= 0) {
-        label = 'Limit Reached';
+        label = 'Out of Stock';
         className = 'unavailable';
-    } else if (remaining <= maxServings * 0.2) {
-        label = `Low (${remaining} left)`;
-        className = 'low-stock';
     } else {
-        label = `Available (${remaining} left)`;
+        label = 'Available';
         className = 'available';
     }
     
     return {
         remaining: remaining,
-        maxServings: maxServings,
+        maxServings: effectiveMaxServings,
         todayCount: todayCount,
         label: label,
         className: className
@@ -5467,6 +6430,13 @@ async function renderMenuListTable() {
     const tableBody = document.getElementById('menuListTableBody');
     if (!tableBody) return;
     
+    // Update reset time in header
+    const resetTimeHeader = document.getElementById('resetTimeHeader');
+    if (resetTimeHeader) {
+        const resetInfo = getNextResetTime();
+        resetTimeHeader.textContent = `(Resets: ${resetInfo.resetTime})`;
+    }
+    
     // Refresh serving cache for all menu items
     if (menuState && menuState.length > 0) {
         const menuItemIds = menuState.map(item => item.id);
@@ -5476,7 +6446,7 @@ async function renderMenuListTable() {
     tableBody.innerHTML = '';
 
     if (!menuState || !menuState.length) {
-        tableBody.innerHTML = '<tr><td colspan="7" class="empty-table">No menu items found.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" class="empty-table">No menu items found.</td></tr>';
         return;
     }
 
@@ -5484,7 +6454,7 @@ async function renderMenuListTable() {
     let visibleItems = filterMenuListItems(menuState);
     
     if (!visibleItems.length) {
-        tableBody.innerHTML = '<tr><td colspan="7" class="empty-table">No menu items found matching the filters.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" class="empty-table">No menu items found matching the filters.</td></tr>';
         return;
     }
 
@@ -5499,6 +6469,9 @@ async function renderMenuListTable() {
         const hasVariations = Array.isArray(item.variations) && item.variations.length > 0;
         const variationCount = hasVariations ? item.variations.length : 0;
         const ordersCount = getMenuItemOrderCount(item);
+        
+        // Store maxServingsPerDay at the start to ensure it doesn't change during rendering
+        const maxServingsPerDay = item.maxServingsPerDay !== null && item.maxServingsPerDay !== undefined ? item.maxServingsPerDay : 0;
         
         // Only show parent/child structure if there are 2+ variations
         // If there's only 1 variation, show it as a single row (no parent)
@@ -5540,17 +6513,11 @@ async function renderMenuListTable() {
             const parentRow = document.createElement('tr');
             parentRow.className = 'menu-list-parent-row';
             
-            // Use serving info for status (already defined above)
-            const parentStockStatus = hasAnyStock
-                ? { label: parentServingInfo.label, className: parentServingInfo.className } 
-                : { label: 'Limit Reached', className: 'unavailable' };
+            // Use getMenuItemStatus for status (Available/Unavailable only)
+            const parentStockStatus = getMenuItemStatus(item);
             
-            // Format remaining servings display
-            const remainingDisplay = parentServingInfo.remaining !== null 
-                ? (parentServingInfo.maxServings !== null 
-                    ? `${parentServingInfo.remaining} / ${parentServingInfo.maxServings}` 
-                    : parentServingInfo.remaining.toString())
-                : 'Unlimited';
+            // Format remaining servings display: show only remaining number
+            const remainingDisplay = parentServingInfo.remaining;
             
             const imageUrl = item.imageDataUrl || '';
             const imageCell = imageUrl 
@@ -5564,23 +6531,18 @@ async function renderMenuListTable() {
                     <span class="menu-list-parent-name">${escapeHtml(baseDisplayName)}</span>
                     <span class="menu-list-variation-count">(${variationCount} variations)</span>
                 </td>
-                <td class="menu-list-quantity" title="Remaining Servings Today">
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
-                            <span>${remainingDisplay}</span>
-                            <button type="button" class="btn btn-sm btn-link" 
-                                    onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(baseDisplayName)}', ${item.maxServingsPerDay !== null && item.maxServingsPerDay !== undefined ? item.maxServingsPerDay : 'null'})" 
-                                    title="Edit Daily Serving Limit"
-                                    style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                        </div>
-                        ${item.maxServingsPerDay ? `<small style="color: #6c757d; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap;">
-                            <i class="fas fa-clock" style="font-size: 0.7rem;"></i>
-                            <span>Resets: ${getNextResetTime().resetTime}</span>
-                        </small>` : ''}
+                <td class="menu-list-quantity" title="Remaining Servings">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
+                        <span>${remainingDisplay}</span>
+                        <button type="button" class="btn btn-sm btn-link" 
+                                onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(baseDisplayName)}', ${item.maxServingsPerDay !== null && item.maxServingsPerDay !== undefined ? item.maxServingsPerDay : 'null'})" 
+                                title="Edit Daily Serving Limit"
+                                style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
+                            <i class="fas fa-edit"></i>
+                        </button>
                     </div>
                 </td>
+                <td class="menu-list-daily-servings">${maxServingsPerDay}</td>
                 <td class="menu-list-status"><span class="status ${parentStockStatus.className}">${parentStockStatus.label}</span></td>
                 <td class="menu-list-price">PHP ${parentPriceDisplay}</td>
                 <td class="menu-list-actions">
@@ -5615,16 +6577,11 @@ async function renderMenuListTable() {
                 const variationQuantity = getMenuQuantity(item, variation);
                 // Get serving info for variation (use parent item's serving limit)
                 const variationServingInfo = getMenuServingInfo(item);
-                const stockStatus = variationQuantity > 0 || variationQuantity === null
-                    ? { label: variationServingInfo.label, className: variationServingInfo.className } 
-                    : { label: 'Limit Reached', className: 'unavailable' };
+                // Use getMenuItemStatus for status (Available/Unavailable only)
+                const stockStatus = getMenuItemStatus(item);
                 
-                // Format remaining servings display for variation
-                const varRemainingDisplay = variationServingInfo.remaining !== null 
-                    ? (variationServingInfo.maxServings !== null 
-                        ? `${variationServingInfo.remaining} / ${variationServingInfo.maxServings}` 
-                        : variationServingInfo.remaining.toString())
-                    : 'Unlimited';
+                // Format remaining servings display for variation: show only remaining number
+                const varRemainingDisplay = variationServingInfo.remaining;
                 
                 const variationImageUrl = item.imageDataUrl || '';
                 const variationImageCell = variationImageUrl 
@@ -5641,23 +6598,18 @@ async function renderMenuListTable() {
                         <span class="menu-list-variation-indicator">└─</span>
                         <span class="menu-list-variation-name">${escapeHtml(variationName)}</span>
                     </td>
-                    <td class="menu-list-quantity" title="Remaining Servings Today">
-                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-                            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
-                                <span>${varRemainingDisplay}</span>
-                                <button type="button" class="btn btn-sm btn-link" 
-                                        onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(variationName)}', ${variationServingInfo.maxServings !== null ? variationServingInfo.maxServings : 'null'})" 
-                                        title="Edit Daily Serving Limit"
-                                        style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                            </div>
-                            ${variationServingInfo.maxServings ? `<small style="color: #6c757d; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap;">
-                                <i class="fas fa-clock" style="font-size: 0.7rem;"></i>
-                                <span>Resets: ${getNextResetTime().resetTime}</span>
-                            </small>` : ''}
+                    <td class="menu-list-quantity" title="Remaining Servings">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
+                            <span>${varRemainingDisplay}</span>
+                            <button type="button" class="btn btn-sm btn-link" 
+                                    onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(variationName)}', ${variationServingInfo.maxServings !== null ? variationServingInfo.maxServings : 'null'})" 
+                                    title="Edit Daily Serving Limit"
+                                    style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
+                                <i class="fas fa-edit"></i>
+                            </button>
                         </div>
                     </td>
+                    <td class="menu-list-daily-servings">${maxServingsPerDay}</td>
                     <td class="menu-list-status"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
                     <td class="menu-list-price">PHP ${variationPrice.toFixed(2)}</td>
                     <td class="menu-list-actions">
@@ -5690,16 +6642,11 @@ async function renderMenuListTable() {
             const variationQuantity = getMenuQuantity(item, variation);
             // Get serving info for single variation
             const variationServingInfo = getMenuServingInfo(item);
-            const stockStatus = variationQuantity > 0 || variationQuantity === null
-                ? { label: variationServingInfo.label, className: variationServingInfo.className } 
-                : { label: 'Limit Reached', className: 'unavailable' };
+            // Use getMenuItemStatus for status (Available/Unavailable only)
+            const stockStatus = getMenuItemStatus(item);
             
-            // Format remaining servings display
-            const varRemainingDisplay = variationServingInfo.remaining !== null 
-                ? (variationServingInfo.maxServings !== null 
-                    ? `${variationServingInfo.remaining} / ${variationServingInfo.maxServings}` 
-                    : variationServingInfo.remaining.toString())
-                : 'Unlimited';
+            // Format remaining servings display: show only remaining number
+            const varRemainingDisplay = variationServingInfo.remaining;
                 
             const row = document.createElement('tr');
             row.className = 'menu-list-item-row';
@@ -5716,23 +6663,18 @@ async function renderMenuListTable() {
                 ${variationImageCell}
                 <td class="menu-list-id">${escapeHtml(childId)}</td>
                 <td class="menu-list-name">${escapeHtml(variationName)}</td>
-                <td class="menu-list-quantity" title="Remaining Servings Today">
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
-                            <span>${varRemainingDisplay}</span>
-                            <button type="button" class="btn btn-sm btn-link" 
-                                    onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(variationName)}', ${variationServingInfo.maxServings !== null ? variationServingInfo.maxServings : 'null'})" 
-                                    title="Edit Daily Serving Limit"
-                                    style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                        </div>
-                        ${variationServingInfo.maxServings ? `<small style="color: #6c757d; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap;">
-                            <i class="fas fa-clock" style="font-size: 0.7rem;"></i>
-                            <span>Resets: ${getNextResetTime().resetTime}</span>
-                        </small>` : ''}
+                <td class="menu-list-quantity" title="Remaining Servings">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
+                        <span>${varRemainingDisplay}</span>
+                        <button type="button" class="btn btn-sm btn-link" 
+                                onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(variationName)}', ${variationServingInfo.maxServings !== null ? variationServingInfo.maxServings : 'null'})" 
+                                title="Edit Daily Serving Limit"
+                                style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
+                            <i class="fas fa-edit"></i>
+                        </button>
                     </div>
                 </td>
+                <td class="menu-list-daily-servings">${maxServingsPerDay}</td>
                 <td class="menu-list-status"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
                 <td class="menu-list-price">PHP ${variationPrice.toFixed(2)}</td>
                 <td class="menu-list-actions">
@@ -5754,17 +6696,15 @@ async function renderMenuListTable() {
             const quantity = getMenuQuantity(item);
             // Get serving info for item
             const servingInfo = getMenuServingInfo(item);
-            const stockStatus = quantity > 0 || quantity === null
-                ? { label: servingInfo.label, className: servingInfo.className } 
-                : { label: 'Limit Reached', className: 'unavailable' };
+            // Use getMenuItemStatus for status (Available/Unavailable only)
+            const stockStatus = getMenuItemStatus(item);
             const price = getMenuItemDisplayPrice(item).toFixed(2);
             
-            // Format remaining servings display
-            const remainingDisplay = servingInfo.remaining !== null 
-                ? (servingInfo.maxServings !== null 
-                    ? `${servingInfo.remaining} / ${servingInfo.maxServings}` 
-                    : servingInfo.remaining.toString())
-                : 'Unlimited';
+            // Store maxServingsPerDay at the start to ensure it doesn't change during rendering
+            const maxServingsPerDay = item.maxServingsPerDay !== null && item.maxServingsPerDay !== undefined ? item.maxServingsPerDay : 0;
+            
+            // Format remaining servings display: show only remaining number
+            const remainingDisplay = servingInfo.remaining;
             
             const itemImageUrl = item.imageDataUrl || '';
             const itemImageCell = itemImageUrl 
@@ -5775,23 +6715,18 @@ async function renderMenuListTable() {
                 ${itemImageCell}
                 <td class="menu-list-id">${menuId}</td>
                 <td class="menu-list-name">${escapeHtml(baseDisplayName)}</td>
-                <td class="menu-list-quantity" title="Remaining Servings Today">
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
-                            <span>${remainingDisplay}</span>
-                            <button type="button" class="btn btn-sm btn-link" 
-                                    onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(baseDisplayName)}', ${servingInfo.maxServings !== null ? servingInfo.maxServings : 'null'})" 
-                                    title="Edit Daily Serving Limit"
-                                    style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                        </div>
-                        ${servingInfo.maxServings ? `<small style="color: #6c757d; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap;">
-                            <i class="fas fa-clock" style="font-size: 0.7rem;"></i>
-                            <span>Resets: ${getNextResetTime().resetTime}</span>
-                        </small>` : ''}
+                <td class="menu-list-quantity" title="Remaining Servings">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
+                        <span>${remainingDisplay}</span>
+                        <button type="button" class="btn btn-sm btn-link" 
+                                onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(baseDisplayName)}', ${servingInfo.maxServings !== null ? servingInfo.maxServings : 'null'})" 
+                                title="Edit Daily Serving Limit"
+                                style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
+                            <i class="fas fa-edit"></i>
+                        </button>
                     </div>
                 </td>
+                <td class="menu-list-daily-servings">${maxServingsPerDay}</td>
                 <td class="menu-list-status"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
                 <td class="menu-list-price">PHP ${price}</td>
                 <td class="menu-list-actions">
@@ -6204,7 +7139,7 @@ function showMenuListDetail(itemId) {
             </div>
             <div class="menu-list-detail-row">
                 <span class="menu-list-detail-label">Remaining Servings Today:</span>
-                <span class="menu-list-detail-value">${servingInfo.remaining !== null ? (servingInfo.maxServings !== null ? `${servingInfo.remaining} / ${servingInfo.maxServings}` : servingInfo.remaining) : 'Unlimited'}</span>
+                <span class="menu-list-detail-value">${servingInfo.maxServings > 0 ? `${servingInfo.remaining} / ${servingInfo.maxServings}` : '0'}</span>
             </div>
             <div class="menu-list-detail-row">
                 <span class="menu-list-detail-label">Status:</span>
@@ -6250,7 +7185,7 @@ function showMenuListDetail(itemId) {
                                </div>
                                <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #ddd;">
                                    <span style="color: #666;">Remaining Today:</span>
-                                   <strong style="color: ${servingInfo.remaining !== null && servingInfo.remaining > 0 ? '#28a745' : '#dc3545'};">${servingInfo.remaining !== null ? servingInfo.remaining : 'Unlimited'}</strong>
+                                   <strong style="color: ${servingInfo.remaining > 0 ? '#28a745' : '#dc3545'};">${servingInfo.remaining}</strong>
                                </div>
                            </div>`
                         : `<label for="menuListDetailLimitInput">Max Servings Per Day (0 = Unlimited):</label>
@@ -6276,7 +7211,7 @@ function showMenuListDetail(itemId) {
                                </div>
                                <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #ddd;">
                                    <span style="color: #666;">Remaining Today:</span>
-                                   <strong style="color: ${servingInfo.remaining !== null && servingInfo.remaining > 0 ? '#28a745' : '#dc3545'};">${servingInfo.remaining !== null ? servingInfo.remaining : 'Unlimited'}</strong>
+                                   <strong style="color: ${servingInfo.remaining > 0 ? '#28a745' : '#dc3545'};">${servingInfo.remaining}</strong>
                                </div>
                            </div>`
                     }
@@ -6807,23 +7742,30 @@ function getMenuItemStatus(menuItem) {
     
     // Check if item has expired (past limitedEndDate)
     if (menuItem && !isMenuItemTimeAvailable(menuItem)) {
-        return { label: 'Inactive', className: 'inactive' };
+        return { label: 'Unavailable', className: 'unavailable' };
     }
     
     if (menuItem && menuItem.isActive === false) {
-        return { label: 'Inactive', className: 'inactive' };
+        return { label: 'Unavailable', className: 'unavailable' };
     }
     
     // Recipe-based: check daily serving limit
+    // Default to 0 (unavailable) if maxServings is null/undefined/0
     const maxServings = menuItem.maxServingsPerDay;
-    if (maxServings && maxServings > 0) {
-        const todayCount = todayServingsCache[menuItem.id] || 0;
-        if (todayCount >= maxServings) {
-            return { label: 'Sold Out Today', className: 'no-stock' };
-        }
+    const effectiveMaxServings = maxServings !== null && maxServings !== undefined && maxServings > 0 ? maxServings : 0;
+    
+    if (effectiveMaxServings === 0) {
+        return { label: 'Unavailable', className: 'unavailable' };
     }
     
-    return { label: 'Active', className: 'active' };
+    const todayCount = todayServingsCache[menuItem.id] || 0;
+    const remaining = Math.max(0, effectiveMaxServings - todayCount);
+    
+    if (remaining <= 0) {
+        return { label: 'Out of Stock', className: 'unavailable' };
+    }
+    
+    return { label: 'Available', className: 'available' };
 }
 
 function getMenuItemDisplayPrice(menuItem) {
@@ -7069,6 +8011,8 @@ function renderMenuDetailsCarousel() {
     if (menuIdEl) menuIdEl.textContent = item.menuId || item.id || '—';
     if (ordersCountEl) ordersCountEl.textContent = String(ordersCount || 0);
     if (descriptionEl) descriptionEl.textContent = item.description || '—';
+    if (caloriesEl) caloriesEl.textContent = item.calories ? `${item.calories} kcal` : '—';
+    if (caloriesInput) caloriesInput.value = item.calories || '';
     
     // Show/hide edit button in Menu Variation tab based on active status
     const menuVariationEditActions = document.getElementById('menuVariationEditActions');
@@ -7440,6 +8384,8 @@ async function saveMenuDetailChanges() {
     const categoryInput = document.getElementById('menuDetailCategoryInput');
     const descriptionInput = document.getElementById('menuDetailDescriptionInput');
     const allergensInput = document.getElementById('menuDetailAllergensInput');
+    const caloriesInput = document.getElementById('menuDetailCaloriesInput');
+    const caloriesEl = document.getElementById('menuDetailCalories');
 
     const priceValue = parseFloat(priceInput?.value || '0');
     const availabilityValue = availabilityInput?.value === 'true';
@@ -7532,6 +8478,7 @@ async function saveMenuDetailChanges() {
             deliveryCharge: 0, // Set to 0 since delivery charge field is removed
             description: descriptionValue,
             allergens: allergensValue,
+            calories: caloriesValue,
             variations: variations,
             ingredients: ingredients,
             imageDataUrl: newImageUrl
@@ -7849,7 +8796,8 @@ function setMenuDetailEditMode(isEditing) {
         ['menuDetailAvailability', 'menuDetailAvailabilityInput'],
         ['menuDetailCategory', 'menuDetailCategoryInputWrapper'],
         ['menuDetailDescription', 'menuDetailDescriptionInput'],
-        ['menuDetailAllergens', 'menuDetailAllergensInput']
+        ['menuDetailAllergens', 'menuDetailAllergensInput'],
+        ['menuDetailCalories', 'menuDetailCaloriesInput']
     ];
     pairs.forEach(([textId, inputId]) => {
         const textEl = document.getElementById(textId);
@@ -8260,6 +9208,8 @@ async function handleMenuFormSubmit(event) {
     const priceValue = parseFloat(form.querySelector('#price')?.value || '0');
     const quantityRaw = form.querySelector('#quantity')?.value || '';
     const quantityValue = quantityRaw === '' ? 0 : parseInt(quantityRaw, 10);
+    const caloriesRaw = form.querySelector('#calories')?.value || '';
+    const caloriesValue = caloriesRaw === '' ? null : parseInt(caloriesRaw, 10);
     const description = (form.querySelector('#description')?.value || '').trim();
 
     const hasFormVariations = addFormVariations.length > 0;
@@ -8275,7 +9225,7 @@ async function handleMenuFormSubmit(event) {
     }
 
     if (Number.isNaN(quantityValue) || quantityValue < 0) {
-        showNotification('Quantity must be zero or a positive whole number.', 'error');
+        showNotification('Default daily serving limit must be zero or a positive whole number.', 'error');
         return;
     }
 
@@ -8518,7 +9468,9 @@ async function handleMenuFormSubmit(event) {
                 displayName: formattedName, // Customer-facing name uses the same value
                 category,
                 price: finalBasePrice, // Set to smallest variation price if variations exist
-                quantity: quantityValue,
+                quantity: quantityValue, // Keep for backward compatibility
+                maxServingsPerDay: quantityValue, // Set default daily serving limit from quantity field
+                calories: caloriesValue,
                 deliveryCharge: 0, // Set to 0 since delivery charge field is removed
                 description,
                 allergens: (document.getElementById('allergens')?.value || '').trim() || null,
@@ -9465,11 +10417,25 @@ function formatOrderStatusBadge(status, order = null) {
         className = 'process';
         label = 'On the Way';
     } else if (normalized === 'pending' || normalized === 'new') {
-        className = 'pending';
         // Check if this is a resubmitted order
         if (order && order.paymentProofVersion && order.paymentProofVersion > 1) {
+            className = 'pending';
             label = 'Resubmitted';
+        } else if (order) {
+            // Check if this is an unverified GCash order that needs verification
+            const paymentModeLower = (order.paymentMode || '').toLowerCase();
+            const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
+            const isPaymentVerified = order.paymentVerified === true;
+            
+            if (isGCashOrder && !isPaymentVerified) {
+                className = 'pending';
+                label = 'Verify';
+            } else {
+                className = 'pending';
+                label = 'NEW ORDER';
+            }
         } else {
+            className = 'pending';
             label = 'NEW ORDER';
         }
     } else {
@@ -11125,6 +12091,7 @@ function populateMenuEditForm(menuItem) {
     const categorySelect = form.querySelector('#menuEditCategory');
     const priceInput = form.querySelector('#menuEditPrice');
     const quantityInput = form.querySelector('#menuEditQuantity');
+    const caloriesInput = form.querySelector('#menuEditCalories');
     const descriptionInput = form.querySelector('#menuEditDescription');
     const allergensInput = form.querySelector('#menuEditAllergens');
     const statusBadge = document.getElementById('menuEditStatusBadge');
@@ -11154,6 +12121,7 @@ function populateMenuEditForm(menuItem) {
     if (priceInput) priceInput.value = Number(menuItem.price || 0).toFixed(2);
     if (allergensInput) allergensInput.value = menuItem.allergens || '';
     if (quantityInput) quantityInput.value = menuItem.quantity != null ? Number(menuItem.quantity) : 0;
+    if (caloriesInput) caloriesInput.value = menuItem.calories != null ? Number(menuItem.calories) : '';
     if (descriptionInput) descriptionInput.value = menuItem.description || '';
 
     if (statusBadge) {
@@ -11255,6 +12223,8 @@ async function handleMenuEditSubmit(event) {
     const priceValue = parseFloat(form.querySelector('#menuEditPrice')?.value || '0');
     const quantityRaw = form.querySelector('#menuEditQuantity')?.value || '';
     const quantityValue = quantityRaw === '' ? 0 : parseInt(quantityRaw, 10);
+    const caloriesRaw = form.querySelector('#menuEditCalories')?.value || '';
+    const caloriesValue = caloriesRaw === '' ? null : parseInt(caloriesRaw, 10);
     const descriptionValue = (form.querySelector('#menuEditDescription')?.value || '').trim();
     const allergensValue = (form.querySelector('#menuEditAllergens')?.value || '').trim() || null;
     
@@ -11304,6 +12274,7 @@ async function handleMenuEditSubmit(event) {
             category: categoryValue,
             price: +Number(priceValue).toFixed(2),
             quantity: quantityValue,
+            calories: caloriesValue,
             deliveryCharge: 0, // Set to 0 since delivery charge field is removed
             description: descriptionValue,
             allergens: allergensValue,
@@ -11693,8 +12664,11 @@ function toggleReviewOptions(reviewId) {
 
 // Initialize page-specific functionality
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize payment decline modal
+    initPaymentDeclineModal();
+    
     // Set active navigation item based on current page
-    const currentPage = window.location.pathname.split('/').pop() || 'admin-index.html';
+    const currentPage = window.location.pathname.split('/').pop() || 'index.html';
     const navItems = document.querySelectorAll('.nav-item');
     
     navItems.forEach(item => {
@@ -11974,7 +12948,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initialize drivers page
         initDriversDashboard();
         console.log('Drivers page loaded');
-    } else if (currentPage === 'admin-index.html' || window.location.pathname.includes('admin-index.html')) {
+    } else if (currentPage === 'index.html' || window.location.pathname.includes('index.html')) {
         // Backfill for_delivery documents for existing orders with drivers
         setTimeout(() => {
             backfillForDeliveryDocuments();
@@ -14460,526 +15434,170 @@ function filterDrivers() {
     }
 }
 
-// ==================== DRIVER CLOCK-IN SYSTEM ====================
-
-// QR Code Management
-let currentQRCodes = {
-    clock_in: null,
-    clock_out: null
-};
-let qrCodeTimers = {
-    clock_in: null,
-    clock_out: null
-};
-
-const QR_CODE_DURATION = 60 * 60 * 1000; // 1 hour
-
-// QRCode library removed; using numeric codes only
-
-// Switch between Drivers and Clock-In System tabs
-function switchDriverTab(tab) {
-    const driversTab = document.getElementById('driversTabContent');
-    const clockinTab = document.getElementById('clockinTabContent');
-    const driversTabBtn = document.getElementById('driversTabBtn');
-    const clockinTabBtn = document.getElementById('clockinTabBtn');
-    
-    if (tab === 'drivers') {
-        driversTab.style.display = 'block';
-        clockinTab.style.display = 'none';
-        driversTabBtn?.classList.add('active');
-        clockinTabBtn?.classList.remove('active');
-    } else if (tab === 'clockin') {
-        driversTab.style.display = 'none';
-        clockinTab.style.display = 'block';
-        driversTabBtn?.classList.remove('active');
-        clockinTabBtn?.classList.add('active');
-        
-        // Load codes when tab is opened
-        loadCurrentQRCodes();
-    }
-}
-
-// Switch between Clock-In and Clock-Out QR codes
-function switchQRType(type) {
-    const clockInDisplay = document.getElementById('clockInQRDisplay');
-    const clockOutDisplay = document.getElementById('clockOutQRDisplay');
-    const qrTabBtns = document.querySelectorAll('.qr-tab-btn');
-    
-    qrTabBtns.forEach(btn => btn.classList.remove('active'));
-    
-    if (type === 'clock_in') {
-        clockInDisplay.style.display = 'block';
-        clockOutDisplay.style.display = 'none';
-        qrTabBtns[0]?.classList.add('active');
-    } else if (type === 'clock_out') {
-        clockInDisplay.style.display = 'none';
-        clockOutDisplay.style.display = 'block';
-        qrTabBtns[1]?.classList.add('active');
-    }
-}
-
-// Generate random secret for QR code security
-function generateRandomSecret() {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-}
-
-// Generate alphanumeric access code (letters + numbers, excludes ambiguous chars)
-function generateAccessCode(length = 8) {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
-// Generate QR code
-async function generateQRCode(type = 'clock_in') {
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-        
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        
-        if (!fns || !db) {
-            showNotification('Database not ready. Please try again.', 'error');
-            return;
-        }
-        
-        // Create QR code meta (store in DB); keep QR text short to avoid "Too long data" errors
-        const codeData = {
-            type: type,
-            restaurantId: 'pablo-peri-peri',
-            validUntil: Date.now() + QR_CODE_DURATION,
-            secret: generateRandomSecret()
-        };
-        
-        // Generate QR code container
-        const canvasId = type === 'clock_in' ? 'clockInQRCanvas' : 'clockOutQRCanvas';
-        const container = document.getElementById(canvasId);
-        
-        if (!container) {
-            throw new Error(`QR container element not found: ${canvasId}`);
-        }
-
-        // Create doc id first so we can embed it in the QR text while still passing Firestore rules on create
-        const qrCodeDocRef = fns.doc(fns.collection(db, 'clockInCodes'));
-
-        // Alphanumeric code (8 chars) - no QR library needed
-        const qrText = generateAccessCode(8);
-
-        // Create the document with required fields (rules require `code`, `type`, `restaurantId`, `validUntil`, `isActive`)
-        await fns.setDoc(qrCodeDocRef, {
-            code: qrText,
-            type: type,
-            restaurantId: codeData.restaurantId,
-            validUntil: fns.Timestamp.fromMillis(codeData.validUntil),
-            createdAt: fns.serverTimestamp(),
-            usedBy: [],
-            currentUses: 0,
-            isActive: true,
-            maxUses: null // null = unlimited uses
-        });
-
-        // Render numeric code
-        container.innerHTML = '';
-        container.style.width = '220px';
-        container.style.height = '120px';
-        container.style.display = 'flex';
-        container.style.alignItems = 'center';
-        container.style.justifyContent = 'center';
-        container.style.fontSize = '42px';
-        container.style.fontWeight = '700';
-        container.style.letterSpacing = '4px';
-        container.style.border = '1px solid #ccc';
-        container.style.borderRadius = '8px';
-        container.style.background = '#f7f7f7';
-        container.textContent = qrText;
-        
-        // Store current QR code
-        currentQRCodes[type] = {
-            id: qrCodeDocRef.id,
-            code: qrText
-        };
-        
-        // Update UI
-        updateQRCodeInfo(type, codeData);
-        startExpiryTimer(type, codeData.validUntil);
-        
-        showNotification(`${type === 'clock_in' ? 'Clock-In' : 'Clock-Out'} QR code generated successfully`, 'success');
-        
-        // Load recent clock-ins
-        loadRecentClockIns();
-    } catch (error) {
-        console.error(`Error generating QR code (${type}):`, error);
-        const errorMessage = error.message || error.toString();
-        console.error('Full error details:', error);
-        showNotification(`Failed to generate QR code: ${errorMessage}`, 'error');
-    }
-}
-
-// Update QR code info display
-function updateQRCodeInfo(type, codeData) {
-    const expiryTime = new Date(codeData.validUntil);
-    const expiryTimeStr = expiryTime.toLocaleTimeString();
-    
-    const expiryElementId = type === 'clock_in' ? 'clockInExpiryTime' : 'clockOutExpiryTime';
-    const expiryElement = document.getElementById(expiryElementId);
-    if (expiryElement) {
-        expiryElement.textContent = expiryTimeStr;
-    }
-    
-    // Update status
-    const statusElementId = type === 'clock_in' ? 'clockInStatus' : 'clockOutStatus';
-    const statusElement = document.getElementById(statusElementId);
-    if (statusElement) {
-        statusElement.innerHTML = '<i class="fas fa-check-circle"></i> <span>Active</span>';
-        statusElement.className = 'qr-status';
-    }
-}
-
-// Start expiry countdown timer
-function startExpiryTimer(type, validUntil) {
-    // Clear existing timer
-    if (qrCodeTimers[type]) {
-        clearInterval(qrCodeTimers[type]);
-    }
-    
-    const expiryElementId = type === 'clock_in' ? 'clockInExpiryTime' : 'clockOutExpiryTime';
-    const statusElementId = type === 'clock_in' ? 'clockInStatus' : 'clockOutStatus';
-    
-    // Update countdown every second
-    qrCodeTimers[type] = setInterval(() => {
-        const now = Date.now();
-        const remaining = validUntil - now;
-        
-        const expiryElement = document.getElementById(expiryElementId);
-        const statusElement = document.getElementById(statusElementId);
-        
-        if (remaining <= 0) {
-            // QR code expired
-            if (statusElement) {
-                statusElement.innerHTML = '<i class="fas fa-times-circle"></i> <span>Expired</span>';
-                statusElement.className = 'qr-status expired';
-            }
-            if (expiryElement) {
-                expiryElement.textContent = '00:00';
-            }
-            clearInterval(qrCodeTimers[type]);
-            return;
-        }
-        
-        const minutes = Math.floor(remaining / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
-        
-        if (expiryElement) {
-            expiryElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-    }, 1000);
-}
-
-// Load current active QR codes
-async function loadCurrentQRCodes() {
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-        
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        
-        if (!fns || !db) {
-            return;
-        }
-        
-        // Load clock-in QR code
-        await loadActiveQRCode('clock_in');
-        
-        // Load clock-out QR code
-        await loadActiveQRCode('clock_out');
-        
-        // Load recent clock-ins
-        loadRecentClockIns();
-        
-        // Set up real-time listeners for QR code usage updates
-        setupQRCodeListeners();
-    } catch (error) {
-        console.error('Error loading QR codes:', error);
-    }
-}
-
-// Set up real-time listeners for QR code usage
-function setupQRCodeListeners() {
-    try {
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        
-        if (!fns || !db || !fns.onSnapshot) {
-            return;
-        }
-        
-        // Listen to clockInCodes collection for updates
-        const qrCodesRef = fns.collection(db, 'clockInCodes');
-        fns.onSnapshot(qrCodesRef, (snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === 'modified') {
-                    const qrData = change.doc.data();
-                    const type = qrData.type;
-                    
-                    // Update usage count if this is the current QR code
-                    if (currentQRCodes[type] && currentQRCodes[type].id === change.doc.id) {
-                        const usageElementId = type === 'clock_in' ? 'clockInUsageCount' : 'clockOutUsageCount';
-                        const usageElement = document.getElementById(usageElementId);
-                        if (usageElement && qrData.currentUses !== undefined) {
-                            usageElement.textContent = qrData.currentUses;
-                        }
-                    }
-                }
-            });
-        });
-    } catch (error) {
-        console.error('Error setting up QR code listeners:', error);
-    }
-}
-
-// Load active QR code for a specific type
-async function loadActiveQRCode(type) {
-    try {
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        
-        const qrCodesRef = fns.collection(db, 'clockInCodes');
-        const querySnap = await fns.getDocs(
-            fns.query(
-                qrCodesRef,
-                fns.where('type', '==', type),
-                fns.where('isActive', '==', true)
-            )
-        );
-        
-        if (!querySnap.empty) {
-            // Choose the most recent valid code (by createdAt or validUntil)
-            let latest = null;
-            const deactivateIds = [];
-            querySnap.forEach(docSnap => {
-                const data = docSnap.data();
-                if (!data || !data.validUntil) return;
-                const expires = data.validUntil.toMillis();
-                if (expires <= Date.now()) return;
-                // Skip legacy/long or non-PPP codes to avoid "Too long data"
-                if (typeof data.code !== 'string' ||
-                    data.code.length > 64) {
-                    deactivateIds.push(docSnap.id);
-                    return;
-                }
-                if (!latest || expires > latest.expires) {
-                    latest = { id: docSnap.id, data, expires };
-                }
-            });
-            
-            // Deactivate any legacy long codes so they don't get reused
-            if (deactivateIds.length) {
-                try {
-                    await Promise.all(
-                        deactivateIds.map(id => {
-                            const ref = fns.doc(db, 'clockInCodes', id);
-                            return fns.updateDoc(ref, { isActive: false });
-                        })
-                    );
-                } catch (err) {
-                    console.warn('Failed to deactivate legacy QR codes:', err);
-                }
-            }
-            
-            if (latest) {
-                try {
-                    await displayQRCode(type, latest.data.code, latest.data);
-                    currentQRCodes[type] = {
-                        id: latest.id,
-                        code: latest.data.code
-                    };
-                    updateQRCodeInfo(type, { validUntil: latest.expires });
-                    startExpiryTimer(type, latest.expires);
-                    return;
-                } catch (err) {
-                    console.warn('Existing QR code unusable, regenerating...', err);
-                    // Mark it inactive to avoid reuse
-                    try {
-                        const ref = fns.doc(db, 'clockInCodes', latest.id);
-                        await fns.updateDoc(ref, { isActive: false });
-                    } catch (e2) {
-                        console.warn('Failed to deactivate unusable QR code:', e2);
-                    }
-                }
-            }
-        }
-        
-        // No active QR code found or expired - generate new one
-        await generateQRCode(type);
-    } catch (error) {
-        console.error(`Error loading ${type} QR code:`, error);
-        // Generate new one if loading fails
-        await generateQRCode(type);
-    }
-}
-
-// Display numeric code
-async function displayQRCode(type, code, qrData) {
-    const canvasId = type === 'clock_in' ? 'clockInQRCanvas' : 'clockOutQRCanvas';
-    const container = document.getElementById(canvasId);
-
-    if (!container) {
-        throw new Error(`QR container element not found: ${canvasId}`);
-    }
-
-    container.innerHTML = '';
-    container.style.width = '220px';
-    container.style.height = '120px';
-    container.style.display = 'flex';
-    container.style.alignItems = 'center';
-    container.style.justifyContent = 'center';
-    container.style.fontSize = '42px';
-    container.style.fontWeight = '700';
-    container.style.letterSpacing = '4px';
-    container.style.border = '1px solid #ccc';
-    container.style.borderRadius = '8px';
-    container.style.background = '#f7f7f7';
-    container.textContent = code;
-    
-    // Update usage count
-    const usageElementId = type === 'clock_in' ? 'clockInUsageCount' : 'clockOutUsageCount';
-    const usageElement = document.getElementById(usageElementId);
-    if (usageElement && qrData.currentUses !== undefined) {
-        usageElement.textContent = qrData.currentUses;
-    }
-}
-
-// Refresh QR code display
-function refreshQRCode(type) {
-    loadActiveQRCode(type);
-}
-
-// Load recent clock-ins
-async function loadRecentClockIns() {
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-        
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        
-        if (!fns || !db) {
-            return;
-        }
-        
-        const logsRef = fns.collection(db, 'logsStaff');
-        const query = fns.query(
-            logsRef,
-            fns.orderBy('createdAt', 'desc'),
-            fns.limit(20)
-        );
-        
-        const snapshot = await fns.getDocs(query);
-        const logsContainer = document.getElementById('recentClockIns');
-        
-        if (!logsContainer) {
-            return;
-        }
-        
-        if (snapshot.empty) {
-            logsContainer.innerHTML = '<div class="empty-message">No clock-ins yet</div>';
-            return;
-        }
-        
-        // Collect all events (clock-in and clock-out) separately
-        let events = [];
-        
-        snapshot.docs.forEach(doc => {
-            const logData = doc.data();
-            const driverName = logData.driverName || 'Unknown';
-            const startTime = logData.startTime?.toDate ? logData.startTime.toDate() : new Date(logData.startTime);
-            const endTime = logData.endTime?.toDate ? logData.endTime.toDate() : null;
-            
-            const clockInMethod = logData.clockInMethod || 'manual';
-            const clockOutMethod = logData.clockOutMethod || 'manual';
-            
-            // Add clock-in event
-            events.push({
-                type: 'clock-in',
-                typeLabel: 'Clock-In',
-                time: startTime,
-                driverName: driverName,
-                method: clockInMethod,
-                methodLabel: clockInMethod === 'qr_code' ? ' (QR Code)' : ''
-            });
-            
-            // Add clock-out event if shift has ended
-            if (endTime) {
-                events.push({
-                    type: 'clock-out',
-                    typeLabel: 'Clock-Out',
-                    time: endTime,
-                    driverName: driverName,
-                    method: clockOutMethod,
-                    methodLabel: clockOutMethod === 'qr_code' ? ' (QR Code)' : clockOutMethod === 'remote' ? ' (Remote)' : ''
-                });
-            }
-        });
-        
-        // Sort events by time (most recent first)
-        events.sort((a, b) => b.time.getTime() - a.time.getTime());
-        
-        // Limit to most recent 20 events
-        events = events.slice(0, 20);
-        
-        // Generate HTML for each event
-        let logsHTML = '';
-        events.forEach(event => {
-            const timeStr = event.time.toLocaleString();
-            logsHTML += `
-                <div class="clockin-log-item">
-                    <div class="clockin-log-info">
-                        <div class="clockin-log-driver">${escapeHtml(event.driverName)}</div>
-                        <div class="clockin-log-time">${timeStr}${event.methodLabel}</div>
-                    </div>
-                    <span class="clockin-log-type ${event.type}">${event.typeLabel}</span>
-                </div>
-            `;
-        });
-        
-        logsContainer.innerHTML = logsHTML;
-    } catch (error) {
-        console.error('Error loading recent clock-ins:', error);
-    }
-}
-
-// Make functions globally available
-window.switchDriverTab = switchDriverTab;
-window.switchQRType = switchQRType;
-window.generateQRCode = generateQRCode;
-window.refreshQRCode = refreshQRCode;
-
 // Driver functions removed - using original hardcoded structure
 
-async function assignDriverToOrder(driverId, orderId) {
-    if (!driverId || !orderId) {
-        showNotification('Driver ID or Order ID is missing.', 'error');
+// ============================================================================
+// DELIVERY BATCHING FUNCTIONS - Group nearby deliveries by barangay
+// ============================================================================
+
+/**
+ * Extract barangay name from address string
+ * Handles various Philippine address formats
+ */
+function extractBarangayFromAddress(address) {
+    if (!address || typeof address !== 'string') return '';
+    
+    const addressLower = address.toLowerCase();
+    
+    // Look for explicit barangay markers
+    const barangayPatterns = [
+        /barangay\s+([^,]+)/i,
+        /brgy\.?\s+([^,]+)/i,
+        /bgy\.?\s+([^,]+)/i,
+        /brg\.\s+([^,]+)/i
+    ];
+    
+    for (const pattern of barangayPatterns) {
+        const match = address.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+    
+    // If no explicit marker, try to extract from comma-separated parts
+    // Common format: "Street, Barangay, City" or "Barangay, City"
+    const parts = address.split(',').map(p => p.trim()).filter(p => p);
+    if (parts.length >= 2) {
+        // Second-to-last part might be barangay (before city)
+        const potentialBarangay = parts[parts.length - 2];
+        // Check if it's not a city name
+        if (!potentialBarangay.match(/^(quezon city|caloocan|manila|metro manila)$/i)) {
+            return potentialBarangay;
+        }
+    }
+    
+    return '';
+}
+
+/**
+ * Extract city name from address string
+ */
+function extractCityFromAddress(address) {
+    if (!address || typeof address !== 'string') return '';
+    
+    const parts = address.split(',').map(p => p.trim()).filter(p => p);
+    if (parts.length === 0) return '';
+    
+    const lastPart = parts[parts.length - 1].toLowerCase();
+    
+    // Check for known cities
+    if (lastPart.includes('quezon city')) {
+        return 'Quezon City';
+    }
+    if (lastPart.includes('caloocan')) {
+        return 'Caloocan City';
+    }
+    
+    // Return last part as city
+    return parts[parts.length - 1];
+}
+
+/**
+ * Find nearby orders ready for delivery in the same barangay
+ * Respects FIFO ordering - only includes orders older than or equal to primary order
+ */
+function findNearbyOrdersForBatching(primaryOrder, allReadyOrders, options = {}) {
+    const {
+        maxBatchSize = 3,
+        sameBarangayOnly = true
+    } = options;
+    
+    // Get primary order address info
+    const primaryAddress = primaryOrder.address || primaryOrder.deliveryInfo?.address || '';
+    if (!primaryAddress) {
+        return []; // No address, can't batch
+    }
+    
+    const primaryBarangay = extractBarangayFromAddress(primaryAddress);
+    const primaryCity = extractCityFromAddress(primaryAddress);
+    
+    if (!primaryBarangay) {
+        return []; // Can't determine barangay, can't batch
+    }
+    
+    // Get primary order timestamp for FIFO comparison
+    const primaryOrderTime = primaryOrder.createdAt?.toMillis?.() || 
+                            primaryOrder.createdAt || 
+                            primaryOrder.timestamp?.toMillis?.() ||
+                            primaryOrder.timestamp ||
+                            0;
+    
+    // Filter ready orders in same barangay and city
+    const sameBarangayOrders = allReadyOrders.filter(order => {
+        // Skip if same order
+        if (order.id === primaryOrder.id) return false;
+        
+        // Skip if already assigned
+        if (order.driverId) return false;
+        
+        // Skip if not delivery type
+        const serviceType = (order.deliveryInfo?.serviceType || order.serviceType || '').toLowerCase();
+        if (serviceType !== 'delivery') return false;
+        
+        // Skip if not ready for delivery
+        const orderStatus = (order.status || '').toLowerCase().trim();
+        if (orderStatus !== 'ready for delivery' && 
+            orderStatus !== 'ready_for_delivery' &&
+            orderStatus !== 'for delivery' &&
+            orderStatus !== 'for_delivery') {
+            return false;
+        }
+        
+        // Check barangay and city match
+        const orderAddress = order.address || order.deliveryInfo?.address || '';
+        if (!orderAddress) return false;
+        
+        const orderBarangay = extractBarangayFromAddress(orderAddress);
+        const orderCity = extractCityFromAddress(orderAddress);
+        
+        if (orderBarangay !== primaryBarangay || orderCity !== primaryCity) {
+            return false;
+        }
+        
+        // FIFO: Only include orders that are older than or equal to primary order
+        const orderTime = order.createdAt?.toMillis?.() || 
+                         order.createdAt || 
+                         order.timestamp?.toMillis?.() ||
+                         order.timestamp ||
+                         0;
+        
+        // Include orders that are older (smaller timestamp) or same age
+        return orderTime <= primaryOrderTime;
+    });
+    
+    // Sort by creation time (oldest first) to maintain FIFO
+    const sortedOrders = sameBarangayOrders.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || a.createdAt || a.timestamp?.toMillis?.() || a.timestamp || 0;
+        const timeB = b.createdAt?.toMillis?.() || b.createdAt || b.timestamp?.toMillis?.() || b.timestamp || 0;
+        return timeA - timeB; // Oldest first
+    });
+    
+    // Limit batch size (excluding primary order)
+    return sortedOrders.slice(0, maxBatchSize - 1);
+}
+
+/**
+ * Assign driver to multiple orders (batch assignment)
+ */
+async function assignDriverToBatch(driverId, orders) {
+    if (!driverId || !orders || !Array.isArray(orders) || orders.length === 0) {
+        showNotification('Invalid batch assignment parameters.', 'error');
         return;
     }
     
-    const driver = driversState.find(d => d.id === driverId);
-    const order = ordersState.find(o => o.id === orderId);
-    
+    const driver = driversState.find(d => d.id === driverId || d.driverId === driverId);
     if (!driver) {
         showNotification('Driver not found.', 'error');
-        return;
-    }
-    
-    if (!order) {
-        showNotification('Order not found.', 'error');
         return;
     }
     
@@ -14988,13 +15606,167 @@ async function assignDriverToOrder(driverId, orderId) {
         return;
     }
     
-    // First-come-first-serve: Only allow assigning the first available driver
+    // Check FIFO constraint - only first available driver can be assigned
     const availableDrivers = driversState.filter(d => d.availability === 'available');
     const firstAvailableDriver = availableDrivers[0];
     
     if (!firstAvailableDriver || 
         (firstAvailableDriver.id !== driverId && firstAvailableDriver.driverId !== driverId && 
          firstAvailableDriver.id !== driver.id && firstAvailableDriver.driverId !== driver.driverId)) {
+        showNotification('You can only assign the first available driver in the queue.', 'error');
+        return;
+    }
+    
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        const batch = fns.writeBatch ? fns.writeBatch(window.db) : null;
+        
+        // Create route ID for batch
+        const routeId = `route_${Date.now()}_${driverId}`;
+        const timestamp = fns.serverTimestamp ? fns.serverTimestamp() : new Date();
+        
+        // Update all orders in batch
+        for (let i = 0; i < orders.length; i++) {
+            const order = orders[i];
+            const orderRef = fns.doc(window.db, 'orders', order.id);
+            
+            const updateData = {
+                driverId: driver.driverId || driver.id,
+                routeId: routeId,
+                routeSequence: i + 1,
+                status: 'out_for_delivery',
+                assignedAt: timestamp,
+                updatedAt: timestamp
+            };
+            
+            if (batch) {
+                batch.update(orderRef, updateData);
+            } else {
+                await fns.updateDoc(orderRef, updateData);
+            }
+            
+            // Update for_delivery collection
+            const deliveryRef = fns.doc(window.db, 'for_delivery', order.id);
+            const deliveryData = {
+                deliveryId: order.id,
+                orderId: order.id,
+                driverId: driver.driverId || driver.id,
+                routeId: routeId,
+                routeSequence: i + 1,
+                timeAssigned: timestamp,
+                timeDelivered: null,
+                updatedAt: timestamp
+            };
+            
+            if (batch) {
+                batch.set(deliveryRef, deliveryData, { merge: true });
+            } else {
+                await fns.setDoc(deliveryRef, deliveryData, { merge: true });
+            }
+            
+            // Update local state
+            const orderIndex = ordersState.findIndex(o => o.id === order.id);
+            if (orderIndex !== -1) {
+                ordersState[orderIndex].driverId = driver.driverId || driver.id;
+                ordersState[orderIndex].status = 'out_for_delivery';
+                ordersState[orderIndex].routeId = routeId;
+                ordersState[orderIndex].routeSequence = i + 1;
+            }
+        }
+        
+        // Commit batch if using batch writes
+        if (batch) {
+            await batch.commit();
+        }
+        
+        // Update driver status
+        const driverIndex = driversState.findIndex(d => (d.id === driverId || d.driverId === driverId || d.id === driver.id || d.driverId === driver.driverId));
+        if (driverIndex !== -1) {
+            driversState[driverIndex].availability = 'busy';
+            driversState[driverIndex].status = 'busy';
+        }
+        
+        // Refresh UI
+        renderOrdersTable(ordersState);
+        renderDriversList();
+        
+        const orderIds = orders.map(o => o.trackingId || o.id).join(', ');
+        showNotification(`Driver ${driver.name} assigned to ${orders.length} orders: ${orderIds}`, 'success');
+        closeDriverSelectionModal();
+    } catch (error) {
+        console.error('Error assigning driver to batch:', error);
+        showNotification('Failed to assign driver to batch. Please try again.', 'error');
+    }
+}
+
+async function assignDriverToOrder(driverId, orderId) {
+    console.log('assignDriverToOrder called:', { driverId, orderId });
+    
+    if (!driverId || !orderId) {
+        console.error('assignDriverToOrder: Missing parameters', { driverId, orderId });
+        showNotification('Driver ID or Order ID is missing.', 'error');
+        return;
+    }
+    
+    const driver = driversState.find(d => 
+        d.id === driverId || 
+        d.driverId === driverId || 
+        String(d.id) === String(driverId) || 
+        String(d.driverId) === String(driverId)
+    );
+    const order = ordersState.find(o => o.id === orderId);
+    
+    console.log('assignDriverToOrder: Found driver:', driver ? driver.name : 'NOT FOUND');
+    console.log('assignDriverToOrder: Found order:', order ? order.id : 'NOT FOUND');
+    console.log('assignDriverToOrder: driversState:', driversState.map(d => ({ id: d.id, driverId: d.driverId, name: d.name })));
+    
+    if (!driver) {
+        console.error('assignDriverToOrder: Driver not found. Looking for:', driverId);
+        console.error('assignDriverToOrder: Available drivers:', driversState.map(d => ({ id: d.id, driverId: d.driverId })));
+        showNotification('Driver not found.', 'error');
+        return;
+    }
+    
+    if (!order) {
+        console.error('assignDriverToOrder: Order not found. Looking for:', orderId);
+        showNotification('Order not found.', 'error');
+        return;
+    }
+    
+    if (driver.availability !== 'available') {
+        console.warn('assignDriverToOrder: Driver not available:', driver.availability);
+        showNotification('Selected driver is not available.', 'error');
+        return;
+    }
+    
+    // First-come-first-serve: Only allow assigning the first available driver
+    const availableDrivers = driversState.filter(d => d.availability === 'available');
+    const firstAvailableDriver = availableDrivers[0];
+    
+    console.log('assignDriverToOrder: First available driver:', firstAvailableDriver ? firstAvailableDriver.name : 'NONE');
+    console.log('assignDriverToOrder: Checking FIFO constraint...');
+    
+    if (!firstAvailableDriver) {
+        showNotification('No available drivers.', 'error');
+        return;
+    }
+    
+    // Check if the selected driver is the first available driver
+    const isFirstDriver = (
+        firstAvailableDriver.id === driverId || 
+        firstAvailableDriver.driverId === driverId ||
+        firstAvailableDriver.id === driver.id ||
+        firstAvailableDriver.driverId === driver.driverId ||
+        String(firstAvailableDriver.id) === String(driverId) ||
+        String(firstAvailableDriver.driverId) === String(driverId)
+    );
+    
+    if (!isFirstDriver) {
+        console.warn('assignDriverToOrder: FIFO violation - not first driver');
         showNotification('You can only assign the first available driver in the queue. Please select the driver at the top of the list.', 'error');
         return;
     }
@@ -15101,6 +15873,10 @@ async function assignDriverToOrder(driverId, orderId) {
 // Driver profile functions removed - using original hardcoded structure
 
 window.assignDriverToOrder = assignDriverToOrder;
+window.assignDriverToBatch = assignDriverToBatch;
+window.assignBatchToDriver = assignBatchToDriver;
+window.assignSingleOrderOnly = assignSingleOrderOnly;
+window.checkForNearbyOrders = checkForNearbyOrders;
 window.openDriverSelectionForOrder = openDriverSelectionForOrder;
 window.closeDriverSelectionModal = closeDriverSelectionModal;
 window.setDriverFilter = setDriverFilter;
@@ -15491,6 +16267,573 @@ window.handleCategorySelect = handleCategorySelect;
 window.handleCategoryCustomInput = handleCategoryCustomInput;
 window.toggleOrderMeatballMenu = toggleOrderMeatballMenu;
 window.closeOrderMeatballMenu = closeOrderMeatballMenu;
+
+// ==================== CLOCK-IN SYSTEM FUNCTIONS ====================
+
+// Global variables for clock-in system
+let currentClockInCode = null;
+let currentClockOutCode = null;
+let clockInCodeInterval = null;
+let clockOutCodeInterval = null;
+
+// Switch between driver tabs
+function switchDriverTab(tab) {
+    const availabilityTab = document.getElementById('driverAvailabilityTab');
+    const clockInTab = document.getElementById('clockInSystemTab');
+    const tabButtons = document.querySelectorAll('.driver-tab-btn');
+    
+    // Remove active class from all tabs
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    
+    // Hide all tab contents
+    if (availabilityTab) availabilityTab.style.display = 'none';
+    if (clockInTab) clockInTab.style.display = 'none';
+    
+    // Show selected tab
+    if (tab === 'availability') {
+        if (availabilityTab) availabilityTab.style.display = 'block';
+        tabButtons[0]?.classList.add('active');
+    } else if (tab === 'clockin') {
+        if (clockInTab) clockInTab.style.display = 'block';
+        tabButtons[1]?.classList.add('active');
+        // Initialize clock-in system when tab is opened
+        initClockInSystem();
+    }
+}
+
+// Switch between QR code tabs (clock-in/clock-out)
+function switchQRTab(type) {
+    const clockInSection = document.getElementById('clockInQRSection');
+    const clockOutSection = document.getElementById('clockOutQRSection');
+    const qrTabButtons = document.querySelectorAll('.qr-tab-btn');
+    
+    // Remove active class from all QR tabs
+    qrTabButtons.forEach(btn => btn.classList.remove('active'));
+    
+    // Hide all QR sections
+    if (clockInSection) clockInSection.style.display = 'none';
+    if (clockOutSection) clockOutSection.style.display = 'none';
+    
+    // Show selected QR section
+    if (type === 'clockin') {
+        if (clockInSection) clockInSection.style.display = 'block';
+        qrTabButtons[0]?.classList.add('active');
+    } else if (type === 'clockout') {
+        if (clockOutSection) clockOutSection.style.display = 'block';
+        qrTabButtons[1]?.classList.add('active');
+    }
+}
+
+// Initialize clock-in system
+async function initClockInSystem() {
+    try {
+        await waitForFirebaseReady();
+        await loadActiveClockInCodes();
+        await loadClockInLogs();
+    } catch (error) {
+        console.error('Error initializing clock-in system:', error);
+        showNotification('Failed to initialize clock-in system', 'error');
+    }
+}
+
+// Load active clock-in codes from Firestore
+async function loadActiveClockInCodes() {
+    if (!isFirestoreReady()) {
+        await waitForFirebaseReady();
+    }
+    const fns = window.firestoreFunctions;
+    if (!fns?.getDocs || !fns?.collection) {
+        return;
+    }
+    
+    try {
+        const clockInCodesRef = fns.collection(window.db, 'clockInCodes');
+        const snapshot = await fns.getDocs(clockInCodesRef);
+        
+        const now = new Date();
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const validUntil = data.validUntil?.toDate ? data.validUntil.toDate() : 
+                              (data.validUntil instanceof Date ? data.validUntil : null);
+            
+            if (validUntil && validUntil > now && data.isActive === true) {
+                if (data.type === 'clock_in' && !currentClockInCode) {
+                    currentClockInCode = { id: doc.id, code: data.code, validUntil: validUntil };
+                    displayClockInCode(data.code, validUntil);
+                    startClockInCountdown(validUntil);
+                } else if (data.type === 'clock_out' && !currentClockOutCode) {
+                    currentClockOutCode = { id: doc.id, code: data.code, validUntil: validUntil };
+                    displayClockOutCode(data.code, validUntil);
+                    startClockOutCountdown(validUntil);
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error loading active clock-in codes:', error);
+    }
+}
+
+// Generate clock-in code
+async function generateClockInCode() {
+    const durationInput = document.getElementById('clockInDuration');
+    const duration = parseInt(durationInput?.value || 60);
+    
+    if (duration < 1 || duration > 1440) {
+        showNotification('Duration must be between 1 and 1440 minutes', 'error');
+        return;
+    }
+    
+    try {
+        await waitForFirebaseReady();
+        const fns = window.firestoreFunctions;
+        
+        // Generate unique code
+        const code = generateUniqueCode();
+        const now = new Date();
+        const validUntil = new Date(now.getTime() + duration * 60000);
+        
+        // Get restaurant ID (use a default or from settings)
+        const restaurantId = 'pablos_peri_peri'; // You may want to get this from settings
+        
+        // Deactivate existing clock-in codes
+        if (currentClockInCode) {
+            try {
+                const oldCodeRef = fns.doc(window.db, 'clockInCodes', currentClockInCode.id);
+                await fns.updateDoc(oldCodeRef, { isActive: false });
+            } catch (e) {
+                console.warn('Could not deactivate old code:', e);
+            }
+        }
+        
+        // Create new clock-in code document
+        const codeData = {
+            code: code,
+            type: 'clock_in',
+            restaurantId: restaurantId,
+            validUntil: fns.Timestamp.fromDate(validUntil),
+            isActive: true,
+            createdAt: fns.serverTimestamp(),
+            maxUses: null, // Unlimited uses
+            currentUses: 0,
+            usedBy: []
+        };
+        
+        const codeId = `clock_in_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const codeRef = fns.doc(window.db, 'clockInCodes', codeId);
+        await fns.setDoc(codeRef, codeData);
+        
+        currentClockInCode = { id: codeId, code: code, validUntil: validUntil };
+        displayClockInCode(code, validUntil);
+        
+        // Start countdown timer
+        startClockInCountdown(validUntil);
+        
+        showNotification('Clock-in code generated successfully', 'success');
+    } catch (error) {
+        console.error('Error generating clock-in code:', error);
+        showNotification('Failed to generate clock-in code', 'error');
+    }
+}
+
+// Generate clock-out code
+async function generateClockOutCode() {
+    const durationInput = document.getElementById('clockOutDuration');
+    const duration = parseInt(durationInput?.value || 60);
+    
+    if (duration < 1 || duration > 1440) {
+        showNotification('Duration must be between 1 and 1440 minutes', 'error');
+        return;
+    }
+    
+    try {
+        await waitForFirebaseReady();
+        const fns = window.firestoreFunctions;
+        
+        // Generate unique code
+        const code = generateUniqueCode();
+        const now = new Date();
+        const validUntil = new Date(now.getTime() + duration * 60000);
+        
+        // Get restaurant ID
+        const restaurantId = 'pablos_peri_peri';
+        
+        // Deactivate existing clock-out codes
+        if (currentClockOutCode) {
+            try {
+                const oldCodeRef = fns.doc(window.db, 'clockInCodes', currentClockOutCode.id);
+                await fns.updateDoc(oldCodeRef, { isActive: false });
+            } catch (e) {
+                console.warn('Could not deactivate old code:', e);
+            }
+        }
+        
+        // Create new clock-out code document
+        const codeData = {
+            code: code,
+            type: 'clock_out',
+            restaurantId: restaurantId,
+            validUntil: fns.Timestamp.fromDate(validUntil),
+            isActive: true,
+            createdAt: fns.serverTimestamp(),
+            maxUses: null,
+            currentUses: 0,
+            usedBy: []
+        };
+        
+        const codeId = `clock_out_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const codeRef = fns.doc(window.db, 'clockInCodes', codeId);
+        await fns.setDoc(codeRef, codeData);
+        
+        currentClockOutCode = { id: codeId, code: code, validUntil: validUntil };
+        displayClockOutCode(code, validUntil);
+        
+        // Start countdown timer
+        startClockOutCountdown(validUntil);
+        
+        showNotification('Clock-out code generated successfully', 'success');
+    } catch (error) {
+        console.error('Error generating clock-out code:', error);
+        showNotification('Failed to generate clock-out code', 'error');
+    }
+}
+
+// Generate unique code
+function generateUniqueCode() {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+// Display clock-in code and QR
+function displayClockInCode(code, validUntil) {
+    const codeDisplay = document.getElementById('clockInCodeDisplay');
+    const validUntilDisplay = document.getElementById('clockInValidUntil');
+    const statusBadge = document.getElementById('clockInStatus');
+    const clearBtn = document.getElementById('clearClockInBtn');
+    const canvas = document.getElementById('clockInQRCanvas');
+    
+    if (codeDisplay) codeDisplay.textContent = code;
+    if (validUntilDisplay) {
+        validUntilDisplay.textContent = validUntil.toLocaleString();
+    }
+    if (statusBadge) {
+        statusBadge.textContent = 'Active';
+        statusBadge.className = 'status-badge status-active';
+    }
+    if (clearBtn) clearBtn.style.display = 'inline-block';
+    
+    // Generate QR code
+    if (canvas && typeof QRCode !== 'undefined') {
+        canvas.innerHTML = '';
+        new QRCode(canvas, {
+            text: code,
+            width: 320,
+            height: 320,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    }
+}
+
+// Display clock-out code and QR
+function displayClockOutCode(code, validUntil) {
+    const codeDisplay = document.getElementById('clockOutCodeDisplay');
+    const validUntilDisplay = document.getElementById('clockOutValidUntil');
+    const statusBadge = document.getElementById('clockOutStatus');
+    const clearBtn = document.getElementById('clearClockOutBtn');
+    const canvas = document.getElementById('clockOutQRCanvas');
+    
+    if (codeDisplay) codeDisplay.textContent = code;
+    if (validUntilDisplay) {
+        validUntilDisplay.textContent = validUntil.toLocaleString();
+    }
+    if (statusBadge) {
+        statusBadge.textContent = 'Active';
+        statusBadge.className = 'status-badge status-active';
+    }
+    if (clearBtn) clearBtn.style.display = 'inline-block';
+    
+    // Generate QR code
+    if (canvas && typeof QRCode !== 'undefined') {
+        canvas.innerHTML = '';
+        new QRCode(canvas, {
+            text: code,
+            width: 320,
+            height: 320,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    }
+}
+
+// Start countdown timer for clock-in code
+function startClockInCountdown(validUntil) {
+    if (clockInCodeInterval) {
+        clearInterval(clockInCodeInterval);
+    }
+    
+    clockInCodeInterval = setInterval(() => {
+        const now = new Date();
+        const validUntilDisplay = document.getElementById('clockInValidUntil');
+        const statusBadge = document.getElementById('clockInStatus');
+        
+        if (now >= validUntil) {
+            // Code expired
+            if (validUntilDisplay) validUntilDisplay.textContent = 'Expired';
+            if (statusBadge) {
+                statusBadge.textContent = 'Expired';
+                statusBadge.className = 'status-badge status-inactive';
+            }
+            clearInterval(clockInCodeInterval);
+            currentClockInCode = null;
+        } else {
+            // Update display
+            if (validUntilDisplay) {
+                const timeLeft = Math.floor((validUntil - now) / 1000 / 60);
+                validUntilDisplay.textContent = `${validUntil.toLocaleString()} (${timeLeft} min left)`;
+            }
+        }
+    }, 60000); // Update every minute
+}
+
+// Start countdown timer for clock-out code
+function startClockOutCountdown(validUntil) {
+    if (clockOutCodeInterval) {
+        clearInterval(clockOutCodeInterval);
+    }
+    
+    clockOutCodeInterval = setInterval(() => {
+        const now = new Date();
+        const validUntilDisplay = document.getElementById('clockOutValidUntil');
+        const statusBadge = document.getElementById('clockOutStatus');
+        
+        if (now >= validUntil) {
+            // Code expired
+            if (validUntilDisplay) validUntilDisplay.textContent = 'Expired';
+            if (statusBadge) {
+                statusBadge.textContent = 'Expired';
+                statusBadge.className = 'status-badge status-inactive';
+            }
+            clearInterval(clockOutCodeInterval);
+            currentClockOutCode = null;
+        } else {
+            // Update display
+            if (validUntilDisplay) {
+                const timeLeft = Math.floor((validUntil - now) / 1000 / 60);
+                validUntilDisplay.textContent = `${validUntil.toLocaleString()} (${timeLeft} min left)`;
+            }
+        }
+    }, 60000); // Update every minute
+}
+
+// Clear clock-in code
+async function clearClockInCode() {
+    if (!currentClockInCode) return;
+    
+    try {
+        await waitForFirebaseReady();
+        const fns = window.firestoreFunctions;
+        
+        const codeRef = fns.doc(window.db, 'clockInCodes', currentClockInCode.id);
+        await fns.updateDoc(codeRef, { isActive: false });
+        
+        // Clear display
+        const codeDisplay = document.getElementById('clockInCodeDisplay');
+        const validUntilDisplay = document.getElementById('clockInValidUntil');
+        const statusBadge = document.getElementById('clockInStatus');
+        const clearBtn = document.getElementById('clearClockInBtn');
+        const canvas = document.getElementById('clockInQRCanvas');
+        
+        if (codeDisplay) codeDisplay.textContent = '—';
+        if (validUntilDisplay) validUntilDisplay.textContent = '—';
+        if (statusBadge) {
+            statusBadge.textContent = 'Not Generated';
+            statusBadge.className = 'status-badge status-inactive';
+        }
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (canvas) {
+        canvas.innerHTML = '';
+        // Also clear the parent box if it exists
+        const box = canvas.closest('.qr-code-box');
+        if (box && box.querySelector('canvas')) {
+            box.querySelector('canvas').innerHTML = '';
+        }
+    }
+        
+        if (clockInCodeInterval) {
+            clearInterval(clockInCodeInterval);
+            clockInCodeInterval = null;
+        }
+        
+        currentClockInCode = null;
+        showNotification('Clock-in code cleared', 'success');
+    } catch (error) {
+        console.error('Error clearing clock-in code:', error);
+        showNotification('Failed to clear clock-in code', 'error');
+    }
+}
+
+// Clear clock-out code
+async function clearClockOutCode() {
+    if (!currentClockOutCode) return;
+    
+    try {
+        await waitForFirebaseReady();
+        const fns = window.firestoreFunctions;
+        
+        const codeRef = fns.doc(window.db, 'clockInCodes', currentClockOutCode.id);
+        await fns.updateDoc(codeRef, { isActive: false });
+        
+        // Clear display
+        const codeDisplay = document.getElementById('clockOutCodeDisplay');
+        const validUntilDisplay = document.getElementById('clockOutValidUntil');
+        const statusBadge = document.getElementById('clockOutStatus');
+        const clearBtn = document.getElementById('clearClockOutBtn');
+        const canvas = document.getElementById('clockOutQRCanvas');
+        
+        if (codeDisplay) codeDisplay.textContent = '—';
+        if (validUntilDisplay) validUntilDisplay.textContent = '—';
+        if (statusBadge) {
+            statusBadge.textContent = 'Not Generated';
+            statusBadge.className = 'status-badge status-inactive';
+        }
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (canvas) {
+        canvas.innerHTML = '';
+        // Also clear the parent box if it exists
+        const box = canvas.closest('.qr-code-box');
+        if (box && box.querySelector('canvas')) {
+            box.querySelector('canvas').innerHTML = '';
+        }
+    }
+        
+        if (clockOutCodeInterval) {
+            clearInterval(clockOutCodeInterval);
+            clockOutCodeInterval = null;
+        }
+        
+        currentClockOutCode = null;
+        showNotification('Clock-out code cleared', 'success');
+    } catch (error) {
+        console.error('Error clearing clock-out code:', error);
+        showNotification('Failed to clear clock-out code', 'error');
+    }
+}
+
+// Load clock-in logs
+async function loadClockInLogs() {
+    if (!isFirestoreReady()) {
+        await waitForFirebaseReady();
+    }
+    const fns = window.firestoreFunctions;
+    if (!fns?.getDocs || !fns?.collection) {
+        return;
+    }
+    
+    const logsContainer = document.getElementById('clockInLogs');
+    if (!logsContainer) return;
+    
+    try {
+        logsContainer.innerHTML = '<div class="loading-message">Loading clock-in logs...</div>';
+        
+        const logsRef = fns.collection(window.db, 'logsStaff');
+        let snapshot;
+        
+        try {
+            snapshot = await fns.getDocs(fns.query(
+                logsRef,
+                fns.orderBy('startTime', 'desc')
+            ));
+        } catch (e) {
+            // Fallback if index missing
+            snapshot = await fns.getDocs(logsRef);
+        }
+        
+        const logs = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            logs.push({
+                id: doc.id,
+                driverId: data.driverId || '',
+                driverName: data.driverName || 'Unknown',
+                startTime: data.startTime?.toDate ? data.startTime.toDate() : 
+                          (data.startTime instanceof Date ? data.startTime : null),
+                endTime: data.endTime?.toDate ? data.endTime.toDate() : 
+                        (data.endTime instanceof Date ? data.endTime : null)
+            });
+        });
+        
+        // Sort by startTime descending
+        logs.sort((a, b) => {
+            if (!a.startTime) return 1;
+            if (!b.startTime) return -1;
+            return b.startTime - a.startTime;
+        });
+        
+        renderClockInLogs(logs);
+    } catch (error) {
+        console.error('Error loading clock-in logs:', error);
+        logsContainer.innerHTML = '<div class="error-message">Failed to load clock-in logs</div>';
+    }
+}
+
+// Render clock-in logs
+function renderClockInLogs(logs) {
+    const logsContainer = document.getElementById('clockInLogs');
+    if (!logsContainer) return;
+    
+    if (logs.length === 0) {
+        logsContainer.innerHTML = '<div class="empty-message">No clock-in logs found</div>';
+        return;
+    }
+    
+    logsContainer.innerHTML = logs.map(log => {
+        const startTimeStr = log.startTime ? log.startTime.toLocaleString() : 'N/A';
+        const endTimeStr = log.endTime ? log.endTime.toLocaleString() : '—';
+        const duration = log.startTime && log.endTime ? 
+            formatDuration(log.endTime - log.startTime) : 
+            (log.startTime ? 'In Progress' : 'N/A');
+        
+        return `
+            <div class="clockin-log-item">
+                <div class="clockin-log-info">
+                    <div class="clockin-log-driver">${escapeHtml(log.driverName)}</div>
+                    <div class="clockin-log-time">
+                        <strong>Start:</strong> ${startTimeStr}<br>
+                        <strong>End:</strong> ${endTimeStr}<br>
+                        <strong>Duration:</strong> ${duration}
+                    </div>
+                </div>
+                <div class="clockin-log-type ${log.endTime ? 'clock-out' : 'clock-in'}">
+                    ${log.endTime ? 'Clock-Out' : 'Clock-In'}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Format duration
+function formatDuration(ms) {
+    const hours = Math.floor(ms / 3600000);
+    const minutes = Math.floor((ms % 3600000) / 60000);
+    return `${hours}h ${minutes}m`;
+}
+
+// Refresh clock-in logs
+async function refreshClockInLogs() {
+    await loadClockInLogs();
+    showNotification('Clock-in logs refreshed', 'success');
+}
+
+// Expose functions globally
+window.switchDriverTab = switchDriverTab;
+window.switchQRTab = switchQRTab;
+window.generateClockInCode = generateClockInCode;
+window.generateClockOutCode = generateClockOutCode;
+window.clearClockInCode = clearClockInCode;
+window.clearClockOutCode = clearClockOutCode;
+window.refreshClockInLogs = refreshClockInLogs;
 
 
 

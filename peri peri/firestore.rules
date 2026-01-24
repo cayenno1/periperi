@@ -16,10 +16,6 @@ service cloud.firestore {
       return unitType in ['weight', 'count'];
     }
 
-      function isValidClockMethod(method) {
-        return method in ['manual', 'qr_code', 'remote'];
-      }
-
     function isValidBaseUnit(unitType, baseUnit) {
       return (unitType == 'count' && baseUnit == 'pcs') ||
              (unitType == 'weight' && baseUnit in ['g', 'kg']);
@@ -127,14 +123,17 @@ service cloud.firestore {
 
       allow update: if (
         request.resource.data.staffId == resource.data.staffId &&
+        // Allow password changes (admins can change passwords directly)
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['password']) ||
-         request.resource.data.password == resource.data.password) &&
+         (request.resource.data.password is string && request.resource.data.password.size() >= 6)) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['firstName']) || 
          (request.resource.data.firstName is string && request.resource.data.firstName.size() > 0)) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastName']) || 
          (request.resource.data.lastName is string && request.resource.data.lastName.size() > 0)) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email']) || 
          (request.resource.data.email is string && request.resource.data.email.matches('.*@.*\\..*'))) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['phoneNumber']) || 
+         (request.resource.data.phoneNumber is string && request.resource.data.phoneNumber.matches('^\\+63\\d{10}$'))) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) || 
          (request.resource.data.role is string && isValidRole(request.resource.data.role))) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) || 
@@ -164,6 +163,7 @@ service cloud.firestore {
              (!('ingredients' in data) || data.ingredients is list) &&
              (!('menuId' in data) || data.menuId is string) &&
              (!('slug' in data) || data.slug is string) &&
+             (!('calories' in data) || data.calories == null || (data.calories is number && data.calories >= 0)) &&
              hasValidTimestamps(data);
     }
 
@@ -190,7 +190,15 @@ service cloud.firestore {
     match /for_delivery/{deliveryId} {
       allow read: if true;
       allow create: if true;
-      allow update: if true;
+      // Allow updates including routeId and routeSequence for batch deliveries
+      allow update: if (
+        // routeId must be string if present
+        (!('routeId' in request.resource.data) || 
+         request.resource.data.routeId is string) &&
+        // routeSequence must be number > 0 if present
+        (!('routeSequence' in request.resource.data) || 
+         (request.resource.data.routeSequence is number && request.resource.data.routeSequence > 0))
+      );
       allow delete: if false;
     }
 
@@ -210,14 +218,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       // Helper function to validate order status update
       function isValidOrderStatus(status) {
-        return status in [
-          'pending', 'new', 'accepted',
-          'being-cooked', 'cooking', 'preparing',
-          'ready', 'ready for pick-up', 'ready_for_pickup', 'ready for pickup',
-          'out_for_delivery', 'out for delivery', 'out-for-delivery',
-          'delivered', 'declined',
-          'cancelled', 'canceled', 'completed'
-        ];
+        return status in ['pending', 'new', 'accepted', 'being-cooked', 'cooking', 'preparing', 'ready', 'ready for pick-up', 'ready_for_pickup', 'ready for pickup', 'out_for_delivery', 'out for delivery', 'out-for-delivery', 'delivered', 'declined', 'cancelled', 'completed', 'canceled'];
       }
 
       // Helper function to validate order update
@@ -226,59 +227,63 @@ service cloud.firestore {
       // for staff members for better security.
       function isValidOrderUpdate() {
         let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
-
-        // Allow status updates
-        let statusUpdate = !changedKeys.hasAny(['status']) ||
-                          (request.resource.data.status is string && 
-                           isValidOrderStatus(request.resource.data.status));
         
-        // Allow driver assignment
-        let driverUpdate = !changedKeys.hasAny(['driverId']) ||
-                          (request.resource.data.driverId is string || 
-                           request.resource.data.driverId == null);
+        // Status and driver updates (combined to reduce variable count)
+        let statusDriverUpdate = 
+          (!changedKeys.hasAny(['status']) || 
+           (request.resource.data.status is string && isValidOrderStatus(request.resource.data.status))) &&
+          (!changedKeys.hasAny(['driverId']) || 
+           (request.resource.data.driverId is string || request.resource.data.driverId == null));
         
-        // Allow timestamp updates (acceptedAt, updatedAt, cookingStartedAt, assignedAt, readyAt, readyForPickupAt, outForDeliveryAt, deliveredAt, declinedAt, paymentVerifiedAt)
-        let timestampUpdate = (!changedKeys.hasAny(['acceptedAt']) ||
-                               request.resource.data.acceptedAt is timestamp) &&
-                              (!changedKeys.hasAny(['updatedAt']) ||
-                               request.resource.data.updatedAt is timestamp) &&
-                              (!changedKeys.hasAny(['cookingStartedAt']) ||
-                               request.resource.data.cookingStartedAt is timestamp) &&
-                              (!changedKeys.hasAny(['assignedAt']) ||
-                               request.resource.data.assignedAt is timestamp) &&
-                              (!changedKeys.hasAny(['readyAt']) ||
-                               request.resource.data.readyAt is timestamp) &&
-                              (!changedKeys.hasAny(['readyForPickupAt']) ||
-                               request.resource.data.readyForPickupAt is timestamp) &&
-                              (!changedKeys.hasAny(['outForDeliveryAt']) ||
-                               request.resource.data.outForDeliveryAt is timestamp) &&
-                              (!changedKeys.hasAny(['deliveredAt']) ||
-                               request.resource.data.deliveredAt is timestamp) &&
-                              (!changedKeys.hasAny(['declinedAt']) ||
-                               request.resource.data.declinedAt is timestamp) &&
-                              (!changedKeys.hasAny(['paymentVerifiedAt']) ||
-                               request.resource.data.paymentVerifiedAt is timestamp);
-
-        // Allow simple flags/notes used by admin dashboard flows
-        let paymentVerifyUpdate = !changedKeys.hasAny(['paymentVerified']) ||
-                                 (request.resource.data.paymentVerified is bool);
-        let declineReasonUpdate = !changedKeys.hasAny(['declineReason']) ||
-                                 (request.resource.data.declineReason is string && request.resource.data.declineReason.size() > 0);
+        // All timestamp fields (combined)
+        let timestampUpdate = 
+          (!changedKeys.hasAny(['acceptedAt']) || request.resource.data.acceptedAt is timestamp) &&
+          (!changedKeys.hasAny(['updatedAt']) || request.resource.data.updatedAt is timestamp) &&
+          (!changedKeys.hasAny(['cookingStartedAt']) || request.resource.data.cookingStartedAt is timestamp) &&
+          (!changedKeys.hasAny(['assignedAt']) || request.resource.data.assignedAt is timestamp) &&
+          (!changedKeys.hasAny(['readyAt']) || request.resource.data.readyAt is timestamp) &&
+          (!changedKeys.hasAny(['readyForPickupAt']) || request.resource.data.readyForPickupAt is timestamp) &&
+          (!changedKeys.hasAny(['outForDeliveryAt']) || request.resource.data.outForDeliveryAt is timestamp) &&
+          (!changedKeys.hasAny(['deliveredAt']) || request.resource.data.deliveredAt is timestamp) &&
+          (!changedKeys.hasAny(['declinedAt']) || request.resource.data.declinedAt is timestamp || !('declinedAt' in request.resource.data)) &&
+          (!changedKeys.hasAny(['paymentVerifiedAt']) || request.resource.data.paymentVerifiedAt is timestamp);
         
-        // Prevent changes to critical fields
-        // For guest/walk-in orders, userId might be null, so handle that case
-        let userIdUnchanged = 
-          (!('userId' in request.resource.data) && !('userId' in resource.data)) ||
-          (request.resource.data.userId == resource.data.userId);
+        // Payment, decline, and proof fields (all combined into one variable)
+        let paymentDeclineFields = 
+          (!changedKeys.hasAny(['paymentVerified']) || request.resource.data.paymentVerified is bool) &&
+          (!changedKeys.hasAny(['declineReason']) || 
+           (request.resource.data.declineReason is string && request.resource.data.declineReason.size() > 0) || 
+           !('declineReason' in request.resource.data)) &&
+          (!changedKeys.hasAny(['declinedBy']) || 
+           (request.resource.data.declinedBy is string && request.resource.data.declinedBy.size() > 0) ||
+           !('declinedBy' in request.resource.data)) &&
+          (!changedKeys.hasAny(['paymentProofHistory']) || request.resource.data.paymentProofHistory is list) &&
+          (!changedKeys.hasAny(['paymentProofVersion']) || 
+           (request.resource.data.paymentProofVersion is number && request.resource.data.paymentProofVersion > 0)) &&
+          (!changedKeys.hasAny(['paymentProofPath']) || 
+           request.resource.data.paymentProofPath is string || 
+           !('paymentProofPath' in request.resource.data)) &&
+          (!changedKeys.hasAny(['paymentProofUrl']) || 
+           request.resource.data.paymentProofUrl is string || 
+           !('paymentProofUrl' in request.resource.data)) &&
+          // Allow nested payment fields for recomply (payment.gcashProofUrl, payment.gcashProofPath, etc.)
+          (!changedKeys.hasAny(['payment']) || request.resource.data.payment is map) &&
+          // Allow routeId and routeSequence for batch delivery assignments
+          (!changedKeys.hasAny(['routeId']) || 
+           request.resource.data.routeId is string || 
+           !('routeId' in request.resource.data)) &&
+          (!changedKeys.hasAny(['routeSequence']) || 
+           (request.resource.data.routeSequence is number && request.resource.data.routeSequence > 0) || 
+           !('routeSequence' in request.resource.data));
         
+        // Critical fields unchanged
         let criticalFieldsUnchanged = 
-          userIdUnchanged &&
+          ((!('userId' in request.resource.data) && !('userId' in resource.data)) ||
+           (request.resource.data.userId == resource.data.userId)) &&
           request.resource.data.total == resource.data.total &&
           request.resource.data.items == resource.data.items;
         
-        return statusUpdate && driverUpdate && timestampUpdate &&
-               paymentVerifyUpdate && declineReasonUpdate &&
-               criticalFieldsUnchanged;
+        return statusDriverUpdate && timestampUpdate && paymentDeclineFields && criticalFieldsUnchanged;
       }
 
       // Customers can create their own orders (requires Firebase Auth)
@@ -325,8 +330,6 @@ service cloud.firestore {
                data.driverName.size() > 0 &&
                data.startTime is timestamp &&
                (!('endTime' in data) || data.endTime is timestamp || data.endTime == null) &&
-               (!('clockInMethod' in data) || (data.clockInMethod is string && isValidClockMethod(data.clockInMethod))) &&
-               (!('clockOutMethod' in data) || (data.clockOutMethod is string && isValidClockMethod(data.clockOutMethod))) &&
                (!('createdAt' in data) || data.createdAt is timestamp) &&
                (!('updatedAt' in data) || data.updatedAt is timestamp);
       }
@@ -347,37 +350,16 @@ service cloud.firestore {
         request.resource.data.driverName == resource.data.driverName &&
         // Prevent changing startTime
         request.resource.data.startTime == resource.data.startTime &&
-        // Only allow clock-out related updates (end shift)
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'endTime',
-          'updatedAt',
-          'clockOutMethod',
-          'clockOutCode',
-          'clockOutCodeId',
-          'qrCodeId',
-          'clockOutRestaurantId',
-          'clockOutNotes'
-        ]) &&
-        // Require endTime to be set (and only set once)
-        ('endTime' in request.resource.data) &&
-        request.resource.data.endTime is timestamp &&
-        (!('endTime' in resource.data) || resource.data.endTime == null) &&
-        // Validate optional updatedAt is timestamp
-        (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp) &&
-        // Validate optional clockOutMethod
-        (!('clockOutMethod' in request.resource.data) ||
-          (request.resource.data.clockOutMethod is string && isValidClockMethod(request.resource.data.clockOutMethod))) &&
-        // Validate optional metadata fields
-        (!('clockOutCode' in request.resource.data) ||
-          (request.resource.data.clockOutCode is string && request.resource.data.clockOutCode.size() > 0)) &&
-        (!('clockOutCodeId' in request.resource.data) ||
-          (request.resource.data.clockOutCodeId is string && request.resource.data.clockOutCodeId.size() > 0)) &&
-        (!('qrCodeId' in request.resource.data) ||
-          (request.resource.data.qrCodeId is string && request.resource.data.qrCodeId.size() > 0)) &&
-        (!('clockOutRestaurantId' in request.resource.data) ||
-          (request.resource.data.clockOutRestaurantId is string && request.resource.data.clockOutRestaurantId.size() > 0)) &&
-        (!('clockOutNotes' in request.resource.data) ||
-          (request.resource.data.clockOutNotes is string && request.resource.data.clockOutNotes.size() <= 500))
+        // Only allow updating endTime, createdAt, or updatedAt
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'updatedAt']) ||
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'createdAt', 'updatedAt']))) &&
+        // Validate endTime is timestamp or null
+        (!('endTime' in request.resource.data) || 
+         request.resource.data.endTime is timestamp || 
+         request.resource.data.endTime == null) &&
+        // Validate updatedAt is timestamp
+        (!('updatedAt' in request.resource.data) || 
+         request.resource.data.updatedAt is timestamp)
       );
 
       // Prevent deletion of shift logs (for audit trail)
@@ -481,56 +463,6 @@ service cloud.firestore {
 
       // Allow deletion for managing table numbers
       allow delete: if true;
-    }
-
-    // ----- Clock-In Codes (QR Code Management) -----
-    match /clockInCodes/{codeId} {
-      // Helper function to validate clock-in code document
-      function isValidClockInCode(data) {
-        return data.keys().hasAll(['code', 'type', 'restaurantId', 'validUntil', 'isActive']) &&
-               data.code is string &&
-               data.code.size() > 0 &&
-               data.type is string &&
-               (data.type == 'clock_in' || data.type == 'clock_out') &&
-               data.restaurantId is string &&
-               data.restaurantId.size() > 0 &&
-               data.validUntil is timestamp &&
-               data.isActive is bool &&
-               (!('usedBy' in data) || data.usedBy is list) &&
-               (!('currentUses' in data) || data.currentUses is int) &&
-               (!('maxUses' in data) || data.maxUses is int || data.maxUses == null) &&
-               (!('createdAt' in data) || data.createdAt is timestamp);
-      }
-
-      // Allow creation with validation (custom session auth; open for now)
-      allow create: if isValidClockInCode(request.resource.data);
-
-      // Allow reading for validation/scanning (open for now)
-      allow read: if true;
-
-      // Allow updating usage tracking fields and `isActive`
-      allow update: if (
-        request.resource.data.code == resource.data.code &&
-        request.resource.data.type == resource.data.type &&
-        request.resource.data.restaurantId == resource.data.restaurantId &&
-        request.resource.data.validUntil == resource.data.validUntil &&
-        (!('createdAt' in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt) &&
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses', 'usedBy', 'isActive']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses', 'usedBy', 'isActive', 'maxUses']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses', 'usedBy', 'isActive', 'updatedAt']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses', 'usedBy', 'isActive', 'lastUsedAt']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses', 'usedBy', 'isActive', 'updatedAt', 'lastUsedAt']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedBy']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive'])) &&
-        (!('currentUses' in request.resource.data) || request.resource.data.currentUses is int) &&
-        (!('usedBy' in request.resource.data) || request.resource.data.usedBy is list) &&
-        (!('isActive' in request.resource.data) || request.resource.data.isActive is bool) &&
-        (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp) &&
-        (!('lastUsedAt' in request.resource.data) || request.resource.data.lastUsedAt is timestamp)
-      );
-
-      allow delete: if false;
     }
 
     // ----- Daily Servings (Daily Serving Counts) -----

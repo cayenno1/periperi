@@ -21,7 +21,7 @@ python -m http.server 8000
 python -m SimpleHTTPServer 8000
 ```
 
-3. Open your browser and go to: `http://localhost:8000/admin-index.html`
+3. Open your browser and go to: `http://localhost:8000/index.html`
 
 ### Option 2: Using Node.js (if you have it installed)
 
@@ -35,12 +35,12 @@ npm install -g http-server
 http-server -p 8000
 ```
 
-3. Open your browser and go to: `http://localhost:8000/admin-index.html`
+3. Open your browser and go to: `http://localhost:8000/index.html`
 
 ### Option 3: Using VS Code
 
 1. Install the "Live Server" extension in VS Code
-2. Right-click on `admin-index.html`
+2. Right-click on `index.html`
 3. Select "Open with Live Server"
 
 ### Option 4: Using PHP (if you have it installed)
@@ -49,7 +49,7 @@ http-server -p 8000
 php -S localhost:8000
 ```
 
-Then open: `http://localhost:8000/admin-index.html`
+Then open: `http://localhost:8000/index.html`
 
 ## Important Notes
 

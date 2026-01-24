@@ -15,8 +15,7 @@ function checkStaffSession() {
         const staffSession = JSON.parse(session);
         
         // Validate session structure
-        // Accept either docId (preferred) or staffId (legacy)
-        if ((!staffSession.docId && !staffSession.staffId) || !staffSession.email) {
+        if (!staffSession.staffId || !staffSession.email) {
             // Invalid session, clear it and redirect
             clearSession();
             redirectToLogin();
@@ -52,8 +51,7 @@ async function verifySessionWithFirebase(staffSession) {
         const { doc, getDoc } = window.firestoreFunctions;
 
         // Check if staff document still exists and is active
-        const staffDocId = staffSession.docId || staffSession.staffId;
-        const staffDocRef = doc(db, 'staff', staffDocId);
+        const staffDocRef = doc(db, 'staff', staffSession.staffId);
         const staffDocSnap = await getDoc(staffDocRef);
 
         if (!staffDocSnap.exists()) {
@@ -200,7 +198,7 @@ async function initSessionCheck() {
         const hasAccess = checkRoleAccess(session, ['Owner', 'Admin']);
         if (!hasAccess) {
             alert('Access denied. This page is only accessible to Owners and Admins.');
-            window.location.href = 'admin-index.html';
+            window.location.href = 'index.html';
             return;
         }
     }
@@ -227,7 +225,7 @@ async function initSessionCheck() {
         const hasAccess = checkRoleAccess(updatedSession, ['Owner', 'Admin']);
         if (!hasAccess) {
             alert('Access denied. This page is only accessible to Owners and Admins.');
-            window.location.href = 'admin-index.html';
+            window.location.href = 'index.html';
             return;
         }
     }
@@ -282,7 +280,7 @@ function enforceRoleRestrictions(session) {
         return true;
     }
 
-    const currentPage = window.location.pathname.split('/').pop() || 'admin-index.html';
+    const currentPage = window.location.pathname.split('/').pop() || 'index.html';
     const driverSafePages = new Set([
         'drivers.html',
         'staff-login.html',

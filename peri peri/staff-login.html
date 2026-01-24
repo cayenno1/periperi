@@ -450,8 +450,6 @@
 
                 // Store staff session
                 const staffSession = {
-                    // Firestore document id (used for session verification)
-                    docId: staffDoc.id,
                     staffId: staffData.staffId,
                     email: staffData.email,
                     firstName: staffData.firstName || '',
@@ -479,7 +477,7 @@
                         window.location.href = redirectUrl;
                     } else {
                         // Default redirect to admin dashboard
-                        window.location.href = 'admin-index.html';
+                        window.location.href = 'index.html';
                     }
                 }, 1500);
 
@@ -530,7 +528,7 @@
                 try {
                     const staffSession = JSON.parse(session);
                     // Optionally redirect if already logged in
-                    // window.location.href = 'admin-index.html';
+                    // window.location.href = 'index.html';
                 } catch (e) {
                     // Invalid session, clear it
                     localStorage.removeItem('staffSession');
