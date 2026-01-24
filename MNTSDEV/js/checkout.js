@@ -633,6 +633,35 @@
 
         clearCheckoutErrors();
 
+        // Check for recomply mode
+        const urlParams = new URLSearchParams(window.location.search);
+        const isRecomply = urlParams.get('recomply') === 'true';
+        const recomplyOrderId = localStorage.getItem('ppp_recomply_order_id');
+        const recomplyOrderDataStr = localStorage.getItem('ppp_recomply_order_data');
+        
+        if (isRecomply && recomplyOrderId && recomplyOrderDataStr) {
+            // Handle recomply - update existing order instead of creating new one
+            try {
+                await handleRecomply(recomplyOrderId, recomplyOrderDataStr);
+                return; // Exit early after recomply
+            } catch (error) {
+                console.error('Recomply failed:', error);
+                const errorMessage = error.message || 'Unable to recomply. Please try again.';
+                if (window.showAlert) {
+                    window.showAlert(errorMessage, 'error');
+                } else {
+                    alert(errorMessage);
+                }
+                // Re-enable button
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('is-processing');
+                }
+                // Don't continue to normal order flow - return early
+                return;
+            }
+        }
+
         if (typeof navigator !== 'undefined' && navigator.onLine === false) {
             if (window.showAlert) {
                 window.showAlert('You appear to be offline. Please reconnect and try again.', 'warning');
@@ -1923,6 +1952,137 @@
             });
         }
     });
+
+    // Handle recomply to declined order
+    async function handleRecomply(orderId, orderDataStr) {
+        await window.utils.waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        const auth = window.firebaseAuth;
+        if (!db || !auth || !window.doc || !window.getDoc || !window.updateDoc || !window.serverTimestamp) {
+            throw new Error('Firebase not ready for recomply');
+        }
+
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('You must be signed in to recomply');
+        }
+
+        // Parse order data
+        let orderData;
+        try {
+            orderData = JSON.parse(orderDataStr);
+        } catch (e) {
+            throw new Error('Invalid order data');
+        }
+
+        // Verify order exists and belongs to user
+        const orderRef = window.doc(db, 'orders', orderId);
+        const orderSnap = await window.getDoc(orderRef);
+        
+        if (!orderSnap.exists()) {
+            throw new Error('Order not found');
+        }
+
+        const currentOrderData = orderSnap.data();
+        const orderUserId = currentOrderData.userId;
+        const orderEmail = currentOrderData.customerInfo?.email?.toLowerCase().trim();
+        const userEmail = user.email?.toLowerCase().trim();
+        
+        // Verify ownership
+        if (orderUserId !== user.uid && orderEmail !== userEmail) {
+            throw new Error('You do not have permission to recomply to this order');
+        }
+
+        // Verify order is declined
+        if (currentOrderData.status?.toLowerCase() !== 'declined') {
+            throw new Error('This order is not declined');
+        }
+
+        // Get payment method
+        const paymentMethod = document.querySelector('input[name="payment"]:checked')?.value;
+        if (!paymentMethod || paymentMethod !== 'gcash') {
+            throw new Error('Recomply is only available for GCash orders');
+        }
+
+        // Get GCash details
+        const fileInput = document.getElementById('payment-proof');
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        const accountNameInput = document.getElementById('gcash-account-name');
+        const refInput = document.getElementById('gcash-ref');
+
+        if (!file) {
+            throw new Error('Please upload your GCash payment screenshot');
+        }
+
+        const accountName = (accountNameInput?.value || '').trim();
+        if (!accountName) {
+            throw new Error('Please enter your GCash account name');
+        }
+
+        const refNo = (refInput?.value || '').trim();
+        if (!refNo) {
+            throw new Error('Please enter your GCash reference number');
+        }
+
+        // Upload new payment proof
+        const paymentProof = await uploadPaymentProof(file);
+
+        // Get current version and history
+        // When order is declined, version is incremented, so currentVersion is the next version to use
+        const currentVersion = currentOrderData.paymentProofVersion || 1;
+        const existingHistory = Array.isArray(currentOrderData.paymentProofHistory) ? currentOrderData.paymentProofHistory : [];
+
+        // Create new proof entry for this version
+        // Note: Cannot use serverTimestamp() inside arrays, so use Timestamp.now() instead
+        const fns = window.firestoreFunctions;
+        const now = fns && fns.Timestamp ? fns.Timestamp.now() : new Date();
+        const newProofEntry = {
+            version: currentVersion,
+            paymentProofPath: paymentProof.path,
+            paymentProofUrl: paymentProof.url,
+            uploadedAt: now,
+            declinedAt: null,
+            declineReason: null
+        };
+
+        // Add to history
+        const updatedHistory = [...existingHistory, newProofEntry];
+
+        // Update order - keep same version since we're resubmitting at this version level
+        const updateData = {
+            status: 'pending',
+            paymentProofVersion: currentVersion,
+            paymentProofHistory: updatedHistory,
+            'payment.gcashProofUrl': paymentProof.url,
+            'payment.gcashProofPath': paymentProof.path,
+            'payment.gcashAccountName': accountName,
+            'payment.gcashRefNo': refNo,
+            updatedAt: fns && fns.serverTimestamp ? fns.serverTimestamp() : new Date()
+        };
+
+        // Remove decline fields if deleteField is available
+        if (fns && fns.deleteField) {
+            updateData.declineReason = fns.deleteField();
+            updateData.declinedAt = fns.deleteField();
+        }
+
+        await window.updateDoc(orderRef, updateData);
+
+        // Clear recomply data
+        localStorage.removeItem('ppp_recomply_order_id');
+        localStorage.removeItem('ppp_recomply_order_data');
+
+        // Show success and redirect
+        if (window.showAlert) {
+            window.showAlert('Payment proof resubmitted successfully! Your order is being reviewed.', 'success');
+        } else {
+            alert('Payment proof resubmitted successfully! Your order is being reviewed.');
+        }
+
+        // Redirect to order details
+        window.location.href = `order_details.html?orderId=${encodeURIComponent(orderId)}`;
+    }
 })();
 
 
