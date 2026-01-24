@@ -216,6 +216,7 @@
             );
             isSubmitting = true;
 
+            const redirectTarget = sanitizeRedirect(getRedirectParam());
             const result = await window.auth.unifiedLogin(email, password);
             isSubmitting = false;
 
@@ -224,7 +225,6 @@
                 if (result.redirect !== 'driver.html') {
                     await migrateGuestCartToUserCart();
                 }
-                const redirectTarget = sanitizeRedirect(getRedirectParam());
                 // Never override driver login redirect.
                 const finalTarget =
                     result.redirect === 'driver.html'

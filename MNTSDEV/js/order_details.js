@@ -20,9 +20,9 @@
 
   const DELIVERY_TRACKER_STEPS = [
     { key: 'pending', label: 'Pending' },
-    { key: 'preparing', label: 'Preparing' },
-    { key: 'out_for_delivery', label: 'Out for Delivery' },
-    { key: 'completed', label: 'Completed' }
+    { key: 'in_kitchen', label: 'In Kitchen' },
+    { key: 'on_the_way', label: 'On The Way' },
+    { key: 'done', label: 'Done' }
   ];
 
   async function waitForFirebaseReady(maxAttempts = 120, delayMs = 100) {
@@ -192,23 +192,32 @@
       return 'cancelled';
     }
     
-    // Map to standardized status keys (simplified to 4 statuses)
-    if (raw === 'completed' || raw === 'delivered') return 'completed';
-    if (raw === 'out_for_delivery' || raw === 'out for delivery' || 
-        raw.includes('out') && raw.includes('delivery') ||
-        raw.includes('driver') || raw.includes('rider') || raw.includes('courier') ||
-        raw.includes('on_the_way') || raw.includes('on the way') || raw.includes('on-the-way')) {
-      return 'out_for_delivery';
+    // Delivered: for both pickup and delivery, this shows "Done" in the tracker
+    if (raw === 'delivered') return 'delivered';
+    if (raw === 'completed' || raw === 'done') return 'delivered'; // Also treated as delivered/done
+    if (raw === 'ready' || raw === 'ready to pick-up' || raw === 'ready_to_pickup' ||
+        (raw.includes('ready') && raw.includes('pick'))) {
+      return 'ready_to_pickup'; // Pickup: "Ready to Pick-up" step only, NOT Done
     }
-    if (raw === 'preparing' || raw === 'being-cooked' || raw === 'cooking' || 
-        raw.includes('preparing') || raw === 'ready' || raw === 'confirmed' || 
-        raw === 'accepted' || raw === 'new') {
-      // Map ready, confirmed, accepted, new to preparing
-      return 'preparing';
+    // On the way / out for delivery (delivery only)
+    if (raw === 'out_for_delivery' || raw === 'out for delivery' || 
+        (raw.includes('out') && raw.includes('delivery')) ||
+        raw.includes('driver') || raw.includes('rider') || raw.includes('courier') ||
+        raw === 'on_the_way' || raw === 'on the way' || raw.includes('on-the-way')) {
+      return 'on_the_way';
+    }
+    // In kitchen / preparing
+    if (raw === 'in_kitchen' || raw === 'in kitchen' || raw === 'preparing' || 
+        raw === 'being-cooked' || raw === 'cooking' || raw.includes('preparing')) {
+      return 'in_kitchen';
+    }
+    // Accepted / confirmed / new → In Kitchen (Order Accepted step removed)
+    if (raw === 'order_accepted' || raw === 'order accepted' || raw === 'accepted' || 
+        raw === 'confirmed' || raw === 'new') {
+      return 'in_kitchen';
     }
     if (raw === 'pending') return 'pending';
     
-    // Default fallback
     return 'pending';
   }
 
@@ -216,10 +225,10 @@
     const trackerKey = normalizeTrackerStatus(rawStatus || 'pending');
     const labelMap = {
       pending: 'Pending',
-      preparing: 'Preparing',
-      out_for_delivery: 'Out for Delivery',
-      completed: 'Completed',
-      delivered: 'Completed',
+      in_kitchen: 'In Kitchen',
+      ready_to_pickup: 'Ready to Pick-up',
+      on_the_way: 'On The Way',
+      delivered: 'Delivered',
       cancelled: 'Cancelled',
       canceled: 'Cancelled',
       declined: 'Declined'
@@ -227,15 +236,16 @@
     return {
       trackerKey,
       label: labelMap[trackerKey] || (rawStatus ? String(rawStatus).charAt(0).toUpperCase() + String(rawStatus).slice(1) : 'Pending'),
-      isCompleted: trackerKey === 'completed' || trackerKey === 'delivered',
+      isCompleted: trackerKey === 'delivered', // Only when order is delivered/completed/done
       isCancelled: trackerKey === 'cancelled'
     };
   }
 
   const PICKUP_TRACKER_STEPS = [
     { key: 'pending', label: 'Pending' },
-    { key: 'preparing', label: 'Preparing' },
-    { key: 'completed', label: 'Completed' }
+    { key: 'in_kitchen', label: 'In Kitchen' },
+    { key: 'ready_to_pickup', label: 'Ready to Pick-up' },
+    { key: 'done', label: 'Done' }
   ];
 
   function renderDeliveryTracker(trackerEl, trackerStatusKey) {
@@ -246,14 +256,18 @@
       return;
     }
 
-    const activeIdx = Math.max(
-      0,
-      DELIVERY_TRACKER_STEPS.findIndex((step) => step.key === trackerStatusKey)
-    );
+    // Map to delivery steps (no "Delivered" step; delivered → Done)
+    let mappedKey = trackerStatusKey;
+    if (trackerStatusKey === 'ready_to_pickup') mappedKey = 'in_kitchen';
+    if (trackerStatusKey === 'order_accepted') mappedKey = 'in_kitchen';
+    if (trackerStatusKey === 'delivered') mappedKey = 'done'; // delivered = Done
 
-    // Calculate progress percentage for the progress bar
+    let activeIdx = DELIVERY_TRACKER_STEPS.findIndex((step) => step.key === mappedKey);
+    if (activeIdx < 0) activeIdx = 0;
+
+    // Progress 0–100: fill only up to the last step (matches track between first and last circle)
     const progress = activeIdx >= 0 ? ((activeIdx + 1) / DELIVERY_TRACKER_STEPS.length) * 100 : 0;
-    trackerEl.style.setProperty('--progress', `${progress}%`);
+    trackerEl.style.setProperty('--progress', String(progress));
 
     trackerEl.style.display = 'flex';
     trackerEl.innerHTML = DELIVERY_TRACKER_STEPS
@@ -263,6 +277,7 @@
         const classes = ['od-step'];
         if (isActive) classes.push('active');
         if (isCompleted) classes.push('completed');
+        if (step.key === 'done') classes.push('od-step--done');
         return `<div class="${classes.join(' ')}" data-step="${step.key}"><span>${step.label}</span></div>`;
       })
       .join('');
@@ -276,20 +291,22 @@
       return;
     }
 
-    // Map delivery statuses to pickup statuses (skip out_for_delivery)
+    // Map delivery-only or removed statuses to pickup steps
     let mappedKey = trackerStatusKey;
-    if (trackerStatusKey === 'out_for_delivery') {
-      mappedKey = 'preparing'; // For pickup, "out for delivery" maps to "preparing"
+    if (trackerStatusKey === 'on_the_way') mappedKey = 'in_kitchen'; // no "on the way" for pickup
+    if (trackerStatusKey === 'order_accepted') mappedKey = 'in_kitchen'; // step removed
+
+    let activeIdx = PICKUP_TRACKER_STEPS.findIndex((step) => step.key === mappedKey);
+    if (activeIdx < 0) activeIdx = 0;
+    // When status is delivered (for pickup, i.e. customer picked up): show "Done". "Ready to Pick-up" stays on that step.
+    if (trackerStatusKey === 'delivered') {
+      activeIdx = PICKUP_TRACKER_STEPS.findIndex((s) => s.key === 'done');
+      if (activeIdx < 0) activeIdx = PICKUP_TRACKER_STEPS.length - 1;
     }
 
-    const activeIdx = Math.max(
-      0,
-      PICKUP_TRACKER_STEPS.findIndex((step) => step.key === mappedKey)
-    );
-
-    // Calculate progress percentage for the progress bar
+    // Progress 0–100: fill only up to the last step (matches track between first and last circle)
     const progress = activeIdx >= 0 ? ((activeIdx + 1) / PICKUP_TRACKER_STEPS.length) * 100 : 0;
-    trackerEl.style.setProperty('--progress', `${progress}%`);
+    trackerEl.style.setProperty('--progress', String(progress));
 
     trackerEl.style.display = 'flex';
     trackerEl.innerHTML = PICKUP_TRACKER_STEPS
@@ -299,6 +316,7 @@
         const classes = ['od-step'];
         if (isActive) classes.push('active');
         if (isCompleted) classes.push('completed');
+        if (step.key === 'done') classes.push('od-step--done');
         return `<div class="${classes.join(' ')}" data-step="${step.key}"><span>${step.label}</span></div>`;
       })
       .join('');
@@ -452,7 +470,6 @@
     const idEl = document.getElementById('orderId');
     const dateEl = document.getElementById('orderDate');
     const totalEl = document.getElementById('orderTotal');
-    const statusEl = document.getElementById('orderStatus');
     const itemsContainer = document.getElementById('orderItems');
     const serviceSegment = document.getElementById('serviceSegment');
     const serviceDetailsEl = document.getElementById('serviceDetails');
@@ -486,11 +503,6 @@
     const rawStatus = order.status || 'pending';
     const statusInfo = deriveStatusInfo(rawStatus);
     const displayStatus = statusInfo.label.toLowerCase();
-    if (statusEl) {
-      statusEl.textContent = statusInfo.label;
-      statusEl.parentElement.classList.toggle('completed', statusInfo.isCompleted);
-    }
-
     // Total
     const numericTotal =
       typeof order.total === 'number'

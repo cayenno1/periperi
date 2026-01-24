@@ -1,5 +1,6 @@
 // Payment Settings Checker for Customer Side
 // Checks GCash availability and updates UI accordingly
+// Uses window.firebaseDb and window.doc/getDoc/onSnapshot from firebase-init.js
 
 (function() {
     'use strict';
@@ -10,7 +11,7 @@
 
     // Initialize payment settings check
     async function initPaymentSettings() {
-        if (!window.firebaseDb || !window.firestoreFunctions) {
+        if (window.utils && typeof window.utils.waitForFirebaseReady === 'function') {
             await window.utils.waitForFirebaseReady();
         }
 
@@ -20,21 +21,24 @@
         // Load QR code
         await loadQRCode();
 
-        // Subscribe to real-time updates
+        // Subscribe to real-time updates (no infinite retry)
         subscribeToPaymentSettings();
     }
 
     // Check GCash availability and update UI
     async function checkGCashAvailability() {
         try {
-            const fns = window.firestoreFunctions;
-            if (!fns || !window.db) {
+            const db = window.firebaseDb;
+            const docFn = window.doc;
+            const getDocFn = window.getDoc;
+            if (!db || !docFn || !getDocFn) {
                 console.warn('Firebase not ready for payment settings check');
+                updateGCashUI(true);
                 return;
             }
 
-            const settingsRef = fns.doc(window.db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
-            const settingsSnap = await fns.getDoc(settingsRef);
+            const settingsRef = docFn(db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
+            const settingsSnap = await getDocFn(settingsRef);
 
             let gcashEnabled = true; // Default to enabled
             if (settingsSnap.exists()) {
@@ -104,14 +108,15 @@
     // Load QR code from Firestore
     async function loadQRCode() {
         try {
-            const fns = window.firestoreFunctions;
-            if (!fns || !window.db) {
-                console.warn('Firebase not ready for QR code check');
+            const db = window.firebaseDb;
+            const docFn = window.doc;
+            const getDocFn = window.getDoc;
+            if (!db || !docFn || !getDocFn) {
                 return;
             }
 
-            const settingsRef = fns.doc(window.db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
-            const settingsSnap = await fns.getDoc(settingsRef);
+            const settingsRef = docFn(db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
+            const settingsSnap = await getDocFn(settingsRef);
 
             const qrCodeContainer = document.getElementById('gcash-qr-code-container');
             const qrCodeImage = document.getElementById('gcash-qr-code-image');
@@ -134,15 +139,13 @@
         }
     }
 
-    // Subscribe to real-time updates for payment settings
+    // Subscribe to real-time updates for payment settings.
+    // Uses window.firebaseDb, window.doc, window.onSnapshot. No infinite retry.
     function subscribeToPaymentSettings() {
-        if (!window.firebaseDb || !window.firestoreFunctions) {
-            window.utils.waitForFirebaseReady().then(() => subscribeToPaymentSettings());
-            return;
-        }
-
-        const fns = window.firestoreFunctions;
-        if (!fns || !window.db) {
+        const db = window.firebaseDb;
+        const docFn = window.doc;
+        const onSnapshotFn = window.onSnapshot;
+        if (!db || !docFn || typeof onSnapshotFn !== 'function') {
             return;
         }
 
@@ -151,40 +154,36 @@
             paymentSettingsUnsubscribe();
         }
 
-        const settingsRef = fns.doc(window.db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
+        const settingsRef = docFn(db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
 
-        if (typeof fns.onSnapshot === 'function') {
-            paymentSettingsUnsubscribe = fns.onSnapshot(
-                settingsRef,
-                (snapshot) => {
-                    let gcashEnabled = true; // Default to enabled
-                    let qrCodeUrl = null;
+        paymentSettingsUnsubscribe = onSnapshotFn(
+            settingsRef,
+            (snapshot) => {
+                let gcashEnabled = true;
+                let qrCodeUrl = null;
 
-                    if (snapshot.exists()) {
-                        const data = snapshot.data();
-                        gcashEnabled = data.gcash && data.gcash.enabled !== false;
-                        qrCodeUrl = data.gcash && data.gcash.qrCodeUrl;
-                    }
-                    updateGCashUI(gcashEnabled);
-
-                    // Update QR code display
-                    const qrCodeContainer = document.getElementById('gcash-qr-code-container');
-                    const qrCodeImage = document.getElementById('gcash-qr-code-image');
-
-                    if (qrCodeUrl && qrCodeContainer && qrCodeImage) {
-                        qrCodeImage.src = qrCodeUrl;
-                        qrCodeContainer.style.display = 'block';
-                    } else if (qrCodeContainer) {
-                        qrCodeContainer.style.display = 'none';
-                    }
-                },
-                (error) => {
-                    console.error('Error subscribing to payment settings:', error);
-                    // Default to enabled on error
-                    updateGCashUI(true);
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    gcashEnabled = data.gcash && data.gcash.enabled !== false;
+                    qrCodeUrl = data.gcash && data.gcash.qrCodeUrl;
                 }
-            );
-        }
+                updateGCashUI(gcashEnabled);
+
+                const qrCodeContainer = document.getElementById('gcash-qr-code-container');
+                const qrCodeImage = document.getElementById('gcash-qr-code-image');
+
+                if (qrCodeUrl && qrCodeContainer && qrCodeImage) {
+                    qrCodeImage.src = qrCodeUrl;
+                    qrCodeContainer.style.display = 'block';
+                } else if (qrCodeContainer) {
+                    qrCodeContainer.style.display = 'none';
+                }
+            },
+            (error) => {
+                console.error('Error subscribing to payment settings:', error);
+                updateGCashUI(true);
+            }
+        );
     }
 
     // Cleanup on page unload

@@ -1343,25 +1343,25 @@ body {
 /* Text-only order tracker */
 .order-details-page .od-tracker {
   /* Stepper sizing */
-  --od-dot: 20px;
-  --od-line: 8px;
+  --od-dot: 22px;
+  --od-line: 10px;
   --od-rail-top: 18px;
 
   /* Colors */
-  --track-bg: rgba(0,0,0,0.10);
-  --track-progress: #2e7d32; /* green */
+  --track-bg: rgba(76, 175, 80, 0.12);
+  --track-progress: #2e7d32;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  /* consistent spacing between step "slots" */
   gap: 28px;
   margin-top: 0;
   padding: 30px 28px 22px 28px;
   background: #fff;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e8f5e9;
   border-radius: 18px;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 2px 12px rgba(76, 175, 80, 0.06);
 }
 
 .order-details-page .od-step {
@@ -1375,12 +1375,12 @@ body {
   padding-top: 6px;
 }
 
-/* Track line (background + progress) */
+/* Track line: background rail */
 .order-details-page .od-tracker::before {
   content: '';
   position: absolute;
-  left: 20px;
-  right: 20px;
+  left: 22px;
+  right: 22px;
   top: calc(var(--od-rail-top) + (var(--od-dot) / 2) - (var(--od-line) / 2));
   height: var(--od-line);
   background: var(--track-bg);
@@ -1388,17 +1388,19 @@ body {
   z-index: 0;
 }
 
+/* Track line: progress fill – gradient, depth, rounded ends. Width matches track (first to last step). */
 .order-details-page .od-tracker::after {
   content: '';
   position: absolute;
-  left: 20px;
+  left: 22px;
   top: calc(var(--od-rail-top) + (var(--od-dot) / 2) - (var(--od-line) / 2));
   height: var(--od-line);
-  width: var(--progress, 0%);
-  background: linear-gradient(90deg, #2e7d32, #4caf50);
+  width: calc((100% - 44px) * (var(--progress, 0) / 100));
+  background: linear-gradient(90deg, #1b5e20 0%, #2e7d32 35%, #43a047 70%, #66bb6a 100%);
   border-radius: 999px;
-  transition: width 0.35s ease;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1;
+  box-shadow: 0 1px 4px rgba(46, 125, 50, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 /* Step dot */
@@ -1410,11 +1412,12 @@ body {
   transform: translateX(-50%);
   width: var(--od-dot);
   height: var(--od-dot);
-  border-radius: 999px;
+  border-radius: 50%;
   background: #fff;
   border: 3px solid #4caf50;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2), 0 1px 3px rgba(0, 0, 0, 0.06);
   z-index: 2;
+  transition: box-shadow 0.25s ease, background 0.25s ease, border-color 0.25s ease;
 }
 
 .order-details-page .od-step span {
@@ -1454,51 +1457,78 @@ body {
 .order-details-page .od-step.completed::before {
   border-color: #4caf50;
   background: #4caf50;
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Responsive adjustments */
+/* Done step: checkmark when active (order complete) */
+.order-details-page .od-step--done.active::before {
+  content: '\f00c';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 12px;
+  line-height: var(--od-dot);
+  text-align: center;
+  color: #fff;
+  border: none;
+  background: linear-gradient(145deg, #43a047, #2e7d32);
+  box-shadow: 0 4px 14px rgba(46, 125, 50, 0.45), 0 2px 6px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.12);
+}
+
+/* Responsive: vertical tracker on mobile */
 @media (max-width: 768px) {
   .order-details-page .od-tracker {
     flex-direction: column;
-    gap: 12px;
-    padding: 14px;
+    gap: 28px;
+    padding: 20px 12px 24px;
+    min-width: 0;
+    max-width: 100%;
   }
   
   .order-details-page .od-step {
+    display: flex;
+    align-items: center;
     width: 100%;
+    min-width: 0;
     text-align: left;
-    padding-top: 0;
-    padding-left: 28px;
+    padding: 14px 0 14px 44px;
   }
   
+  /* Vertical track: from first to last circle, don’t extend past the Done circle */
   .order-details-page .od-tracker::before,
   .order-details-page .od-tracker::after {
     left: 18px;
     right: auto;
-    top: 18px;
+    top: 28px;
+    bottom: auto;
     width: 6px;
-    height: calc(100% - 36px);
+    height: calc(100% - 60px);
     border-radius: 999px;
   }
 
   .order-details-page .od-tracker::after {
-    height: var(--progress, 0%);
+    height: calc((100% - 60px) * (var(--progress, 0) / 100));
     width: 6px;
   }
 
   .order-details-page .od-step::before {
     left: 18px;
-    top: 6px;
-    transform: none;
+    top: 50%;
+    transform: translateY(-50%);
   }
   
   .order-details-page .od-step span {
     display: block;
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     text-align: left;
     margin-top: 0;
-    padding: 10px 12px;
+    padding: 14px 16px;
     white-space: normal;
+    word-wrap: break-word;
   }
 
   .order-details-page .od-progress-head {
@@ -1513,6 +1543,7 @@ body {
 
 /* Order details overall spacing */
 .order-details-page .main-container {
+  max-width: 1480px;
   padding-top: var(--space-5);
   padding-bottom: var(--space-5);
 }
@@ -1539,7 +1570,7 @@ body {
 }
 
 .order-details-page .order-details-shell {
-  max-width: 1120px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: calc(var(--space-5) + 4px);
   border-radius: var(--radius-md);

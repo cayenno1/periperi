@@ -245,80 +245,81 @@
         }
     }
 
-    // Driver login (Firestore staff collection)
-    // Supports login with email or staffId
+    // Driver login: uses staff collection in Firestore (email, password, role)
+    // Finds staff by email or staffId; requires role "Driver" (trailing spaces trimmed) and matching password
     async function loginDriver(emailOrStaffId, password) {
         try {
-            const db = window.firebaseDb;
-            const collectionFn = window.collection;
-            const queryFn = window.query;
-            const whereFn = window.where;
-            const getDocsFn = window.getDocs;
+            await window.utils?.waitForFirebaseReady?.();
+        } catch (e) { /* non-blocking */ }
 
-            if (!db || !collectionFn || !queryFn || !whereFn || !getDocsFn) {
-                throw new Error('Driver login is not available right now. Please try again later.');
+        const db = window.firebaseDb;
+        const docFn = window.doc;
+        const collectionFn = window.collection;
+        const queryFn = window.query;
+        const whereFn = window.where;
+        const getDocsFn = window.getDocs;
+
+        if (!db || !docFn || !collectionFn || !queryFn || !whereFn || !getDocsFn) {
+            return { success: false, error: { message: 'Driver login is not available right now. Please try again later.' } };
+        }
+
+        try {
+            const input = String(emailOrStaffId || '').trim();
+            const pass = String(password || '').trim();
+            if (!input || !pass) {
+                return { success: false, error: { message: 'Invalid email or password' } };
             }
 
             const staffRef = collectionFn(db, 'staff');
             let snapshot = null;
-            let staffDoc = null;
-            let staffData = null;
 
-            // First, try to find by email
-            const emailQuery = queryFn(
-                staffRef,
-                whereFn('email', '==', emailOrStaffId)
-            );
+            // 1. Find by email (exact)
+            let emailQuery = queryFn(staffRef, whereFn('email', '==', input));
             snapshot = await getDocsFn(emailQuery);
 
-            // If not found by email, try to find by staffId
+            // 2. If not found, try email lowercased (Firestore is case-sensitive)
+            if (snapshot.empty && input.indexOf('@') !== -1) {
+                emailQuery = queryFn(staffRef, whereFn('email', '==', input.toLowerCase()));
+                snapshot = await getDocsFn(emailQuery);
+            }
+
+            // 3. If not found by email, try by staffId (e.g. "2023133729")
             if (snapshot.empty) {
-                const staffIdQuery = queryFn(
-                    staffRef,
-                    whereFn('staffId', '==', emailOrStaffId)
-                );
+                const staffIdQuery = queryFn(staffRef, whereFn('staffId', '==', input));
                 snapshot = await getDocsFn(staffIdQuery);
             }
 
             if (snapshot.empty) {
-                return {
-                    success: false,
-                    error: { message: 'Invalid email or password' }
-                };
+                return { success: false, error: { message: 'Invalid email or password' } };
             }
 
-            staffDoc = snapshot.docs[0];
-            staffData = staffDoc.data() || {};
+            const staffDoc = snapshot.docs[0];
+            const staffData = staffDoc.data() || {};
 
-            // Check if role is Driver
-            if (staffData.role !== 'Driver') {
-                return {
-                    success: false,
-                    error: { message: 'Invalid email or password' }
-                };
+            // 4. Role must be "Driver" (trim handles "Driver " with trailing space)
+            const role = String(staffData.role || '').trim();
+            if (role !== 'Driver') {
+                return { success: false, error: { message: 'This account is not authorized for driver access.' } };
             }
 
-            // Verify password
-            const storedPassword = staffData.password != null ? String(staffData.password) : '';
-            if (storedPassword !== password) {
-                return {
-                    success: false,
-                    error: { message: 'Invalid email or password' }
-                };
+            // 5. Password from staff document; compare with trimmed form password
+            const storedPassword = staffData.password != null ? String(staffData.password).trim() : '';
+            if (storedPassword !== pass) {
+                return { success: false, error: { message: 'Invalid email or password' } };
             }
 
-            // Store driver info
+            // 5. Store driver info in localStorage (same shape driver.html expects)
+            const firstName = staffData.firstName || '';
+            const lastName = staffData.lastName || '';
+            const middleName = staffData.middleName || '';
+            const suffix = staffData.suffix || '';
+            const fullName = `${firstName} ${middleName} ${lastName} ${suffix}`.trim() || null;
+
             try {
-                const firstName = staffData.firstName || '';
-                const lastName = staffData.lastName || '';
-                const middleName = staffData.middleName || '';
-                const suffix = staffData.suffix || '';
-                const fullName = `${firstName} ${middleName} ${lastName} ${suffix}`.trim() || null;
-
                 localStorage.setItem('ppp_driver', JSON.stringify({
                     id: staffDoc.id,
-                    email: staffData.email || emailOrStaffId, // Use email from document or fallback to input
-                    role: staffData.role,
+                    email: staffData.email || input,
+                    role: 'Driver',
                     firstName: firstName || null,
                     lastName: lastName || null,
                     middleName: middleName || null,
@@ -333,41 +334,25 @@
                 console.error('Error saving driver info:', e);
             }
 
-            // Update driver login timestamp and availability
+            // 6. Update lastLoginAt (staff document; drivers collection if it exists)
             try {
                 const updateDocFn = window.updateDoc;
-                const docFn = window.doc;
                 const serverTimestampFn = window.serverTimestamp;
-                
-                if (updateDocFn && docFn && serverTimestampFn) {
-                    const updateData = {
-                        lastLoginAt: serverTimestampFn(),
-                        updatedAt: serverTimestampFn()
-                    };
-
-                    // Try to update drivers collection first
+                if (updateDocFn && serverTimestampFn) {
+                    const updateData = { lastLoginAt: serverTimestampFn(), updatedAt: serverTimestampFn() };
                     try {
-                        const driverRef = docFn(db, 'drivers', staffDoc.id);
-                        await updateDocFn(driverRef, {
-                            ...updateData,
-                            availability: 'available'
-                        });
-                    } catch (driverError) {
-                        // If drivers collection doesn't exist, update staff document
-                        const staffRef = docFn(db, 'staff', staffDoc.id);
-                        await updateDocFn(staffRef, updateData);
+                        await updateDocFn(docFn(db, 'drivers', staffDoc.id), { ...updateData, availability: 'available' });
+                    } catch (_) {
+                        await updateDocFn(docFn(db, 'staff', staffDoc.id), updateData);
                     }
                 }
-            } catch (updateError) {
-                console.error('Error updating driver login timestamp:', updateError);
-                // Don't fail login if update fails
-            }
+            } catch (e) { /* non-blocking */ }
 
             return { success: true, redirect: 'driver.html' };
         } catch (error) {
             return {
                 success: false,
-                error: { message: error.message || 'An error occurred during driver login. Please try again.' }
+                error: { message: error?.message || 'An error occurred during driver login. Please try again.' }
             };
         }
     }
@@ -380,12 +365,13 @@
             return customerResult;
         }
 
-        // Fallback to driver login for certain error codes
+        // Fallback to driver login for certain error codes (e.g. staff/Driver in Firebase Auth but not a customer)
         const fallbackCodes = [
             'auth/user-not-found',
             'auth/wrong-password',
             'auth/invalid-email',
-            'auth/invalid-credential'
+            'auth/invalid-credential',
+            'auth/email-not-verified'
         ];
 
         if (customerResult.error && fallbackCodes.includes(customerResult.error.code)) {
