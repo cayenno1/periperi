@@ -60,11 +60,11 @@
 
     function getCurrentPathWithQuery() {
         try {
-            const file = (window.location.pathname.split('/').pop() || 'complete-profile.html').trim() || 'complete-profile.html';
+            const file = (window.location.pathname.split('/').pop() || 'google-account-profile.html').trim() || 'google-account-profile.html';
             const qs = window.location.search || '';
             return `${file}${qs}`;
         } catch (e) {
-            return 'complete-profile.html';
+            return 'google-account-profile.html';
         }
     }
 

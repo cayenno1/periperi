@@ -234,7 +234,7 @@
                 if (!isCustomerProfileComplete(customerData)) {
                     return {
                         success: true,
-                        redirect: `complete-profile.html?redirect=${encodeURIComponent(desiredRedirect)}`
+                        redirect: `google-account-profile.html?redirect=${encodeURIComponent(desiredRedirect)}`
                     };
                 }
             }
