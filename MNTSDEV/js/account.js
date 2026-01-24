@@ -44,7 +44,7 @@
 
             if (!complete && isGoogleProviderUser(user)) {
                 const current = (window.location.pathname.split('/').pop() || 'account.html').trim() || 'account.html';
-                window.location.href = `google-account-profile.html?redirect=${encodeURIComponent(current)}`;
+                window.location.href = `complete-profile.html?redirect=${encodeURIComponent(current)}`;
                 return false;
             }
             return true;

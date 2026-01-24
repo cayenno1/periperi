@@ -696,6 +696,21 @@
             return;
         }
 
+        // Check if GCash is enabled (if GCash is selected)
+        if (paymentMethod === 'gcash') {
+            const gcashRadio = document.getElementById('gcash-payment-radio');
+            if (gcashRadio && gcashRadio.disabled) {
+                if (window.showAlert) {
+                    window.showAlert('GCash payment is currently unavailable. Please select another payment method.', 'warning');
+                } else {
+                    alert('GCash payment is currently unavailable. Please select another payment method.');
+                }
+                flagCheckoutError(document.querySelector('.delivery-options'));
+                scrollToFirstCheckoutError();
+                return;
+            }
+        }
+
         // If GCash is selected, require screenshot, account name, and reference number
         // Cash payment doesn't require any proof
         let gcashFile = null;
@@ -1035,6 +1050,12 @@
     }
 
     function toggleGCashDetails() {
+        const gcashRadio = document.getElementById('gcash-payment-radio');
+        // Don't toggle if GCash is disabled
+        if (gcashRadio && gcashRadio.disabled) {
+            return;
+        }
+
         const gcashDetails = document.getElementById('gcash-details');
         const arrow = document.querySelector('input[name="payment"][value="gcash"]')?.closest('.delivery-option')?.querySelector('.option-arrow i');
         
@@ -1512,6 +1533,7 @@
                 if (!menuUpdates[menuId]) {
                     menuUpdates[menuId] = {
                         menuRef: menuRef,
+                        menuItemName: menuData.name || cartItem.name || 'Unknown Item',
                         currentMaxServingsPerDay: maxServingsPerDay,
                         quantity: 0
                     };
@@ -1557,6 +1579,27 @@
                 }
             }
 
+            // IMPORTANT: Firestore transactions require all reads before all writes
+            // Read all dailyServings documents first, then do all writes
+            
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+            const dailyServingsData = {}; // Store dailyServings document data
+            
+            // Read all dailyServings documents first (before any writes)
+            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
+                const dailyServingsDocId = `${today}_${menuId}`;
+                const dailyServingsRef = window.doc(db, 'dailyServings', dailyServingsDocId);
+                const dailyServingsSnap = await transaction.get(dailyServingsRef);
+                
+                dailyServingsData[menuId] = {
+                    ref: dailyServingsRef,
+                    exists: dailyServingsSnap.exists(),
+                    data: dailyServingsSnap.exists() ? dailyServingsSnap.data() : null,
+                    updateInfo: updateInfo
+                };
+            }
+
+            // Now do all writes (order document + dailyServings updates)
             // Create order document with sequential ID
             const ordersCol = window.collection(db, 'orders');
             const orderRef = window.doc(ordersCol, orderNumber);
@@ -1595,12 +1638,30 @@
 
             transaction.set(orderRef, orderDoc);
 
-            // Decrement maxServingsPerDay for each menu item that was ordered
-            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
-                const newMaxServingsPerDay = Math.max(0, updateInfo.currentMaxServingsPerDay - updateInfo.quantity);
-                transaction.update(updateInfo.menuRef, {
-                    maxServingsPerDay: newMaxServingsPerDay
-                });
+            // Update dailyServings collection instead of modifying maxServingsPerDay
+            // maxServingsPerDay should remain constant - it's the maximum limit set by admin
+            for (const [menuId, dailyData] of Object.entries(dailyServingsData)) {
+                const updateInfo = dailyData.updateInfo;
+                
+                if (dailyData.exists) {
+                    // Document exists - update count
+                    const currentCount = dailyData.data.count || 0;
+                    transaction.update(dailyData.ref, {
+                        count: currentCount + updateInfo.quantity,
+                        updatedAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
+                    });
+                } else {
+                    // Document doesn't exist - create new one
+                    transaction.set(dailyData.ref, {
+                        menuItemId: menuId,
+                        menuItemName: updateInfo.menuItemName,
+                        date: today,
+                        count: updateInfo.quantity,
+                        maxServings: updateInfo.currentMaxServingsPerDay,
+                        createdAt: window.serverTimestamp ? window.serverTimestamp() : new Date(),
+                        updatedAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
+                    });
+                }
             }
 
             return orderRef.id;
