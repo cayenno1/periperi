@@ -461,6 +461,10 @@
                 const price = `₱${basePrice.toFixed(2)}`;
                 const fav = isFavorite(item.id);
 
+                // Kcal from Firebase kcalUnit; show "--" when not set
+                const kcalVal = item.kcalUnit;
+                const kcalDisplay = (kcalVal != null && kcalVal !== '') ? `${kcalVal} kcal` : '--';
+
                 // Default rating display with stars (will be updated when ratings load)
                 const ratingHtml = `
                     <div class="card-rating">
@@ -490,6 +494,7 @@
                         <div class="card-content">
                             <h3 class="card-title">${displayName}</h3>
                             ${ratingHtml}
+                            <div class="card-kcal">${kcalDisplay}</div>
                             <div class="price-row">
                                 <div class="card-price">${price}</div>
                                 <button
@@ -534,6 +539,8 @@
                     const popular = !!item?.popular;
                     const badge = item?.badge || '';
                     const fav = isFavorite(item?.id);
+                    const cachedKcalVal = item?.kcalUnit;
+                    const cachedKcalDisplay = (cachedKcalVal != null && cachedKcalVal !== '') ? `${cachedKcalVal} kcal` : '--';
 
                     const imageHtml = hasImage
                         ? `<img src="${imgSrc}" alt="${displayName}" class="card-image" loading="lazy" decoding="async">`
@@ -557,6 +564,7 @@
                                     </div>
                                     ${popular ? '<span class="popular-tag">Popular</span>' : ''}
                                 </div>
+                                <div class="card-kcal">${cachedKcalDisplay}</div>
                             </div>
                         </div>
                     `;

@@ -2575,6 +2575,12 @@ body {
   letter-spacing: -0.5px;
 }
 
+.card-kcal {
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
 .add-plus-btn {
   background: linear-gradient(135deg, #e53935, #c62828);
   color: #fff;
@@ -2781,6 +2787,28 @@ body {
   color: #e53935;
   margin-bottom: 20px;
   letter-spacing: -0.5px;
+}
+
+.food-kcal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 0 0 18px 0;
+  background: linear-gradient(135deg, #fff8f6 0%, #fff0ed 100%);
+  border: 1px solid rgba(229, 57, 53, 0.15);
+  border-radius: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #c62828;
+  box-shadow: 0 1px 3px rgba(229, 57, 53, 0.06);
+}
+.food-kcal i {
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+.food-kcal .food-kcal-value {
+  letter-spacing: 0.02em;
 }
 
 .food-description {
@@ -8887,6 +8915,28 @@ body.food-item-page {
   letter-spacing: -0.5px;
 }
 
+.food-details .food-kcal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 0 0 14px 0;
+  background: linear-gradient(135deg, #fff8f6 0%, #fff0ed 100%);
+  border: 1px solid rgba(229, 57, 53, 0.12);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--brand, #c62828);
+  box-shadow: 0 1px 3px rgba(229, 57, 53, 0.06);
+}
+.food-details .food-kcal i {
+  font-size: 1.05rem;
+  opacity: 0.9;
+}
+.food-details .food-kcal .food-kcal-value {
+  letter-spacing: 0.02em;
+}
+
 .food-details .food-description {
   font-size: 0.9375rem;
   line-height: 1.6;
@@ -9471,6 +9521,16 @@ body.food-item-page {
     letter-spacing: -0.5px;
   }
 
+  /* Kcal badge - mobile: keep readable */
+  .food-item-page .food-details .food-kcal {
+    padding: 6px 12px;
+    font-size: 0.9375rem;
+    margin: 0 0 12px 0;
+  }
+  .food-item-page .food-details .food-kcal i {
+    font-size: 1rem;
+  }
+
   /* Food description - mobile */
   .food-item-page .food-details .food-description {
     font-size: 0.9375rem;
@@ -9920,6 +9980,17 @@ body.food-item-page {
   .food-item-page .food-details .food-price {
     font-size: 1.5rem;
     margin-bottom: 10px;
+  }
+
+  /* Kcal badge - extra small */
+  .food-item-page .food-details .food-kcal {
+    padding: 5px 10px;
+    font-size: 0.875rem;
+    margin: 0 0 10px 0;
+    gap: 6px;
+  }
+  .food-item-page .food-details .food-kcal i {
+    font-size: 0.9rem;
   }
 
   /* Food description - extra small */

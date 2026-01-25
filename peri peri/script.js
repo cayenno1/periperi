@@ -467,6 +467,8 @@ const MenuStore = (() => {
                 }))
                 : [],
             allergens: item.allergens || null,
+            // kcalUnit is stored in Firebase; normalize to calories for app use (fallback to legacy "calories")
+            calories: (v => v != null && v !== '' && !isNaN(Number(v)) ? Number(v) : null)(item.kcalUnit ?? item.calories),
             ingredients: Array.isArray(item.ingredients)
                 ? item.ingredients.map(ingredient => ({
                     ingredientId: ingredient.ingredientId,
@@ -7922,6 +7924,8 @@ function renderMenuDetailsCarousel() {
     const availabilityInput = document.getElementById('menuDetailAvailabilityInput');
     const categoryInput = document.getElementById('menuDetailCategoryInput');
     const descriptionInput = document.getElementById('menuDetailDescriptionInput');
+    const caloriesEl = document.getElementById('menuDetailCalories');
+    const caloriesInput = document.getElementById('menuDetailCaloriesInput');
 
     if (!section) return;
 
@@ -8393,6 +8397,8 @@ async function saveMenuDetailChanges() {
     const categoryValue = (categoryInput?.value || currentItem.category || 'Popular').trim();
     const descriptionValue = (descriptionInput?.value || '').trim();
     const allergensValue = (allergensInput?.value || '').trim() || null;
+    const caloriesRaw = caloriesInput?.value || '';
+    const caloriesValue = caloriesRaw === '' ? null : parseInt(caloriesRaw, 10);
 
     if (!priceValue || priceValue <= 0) {
         showNotification('Enter a price greater than zero.', 'error');
@@ -8478,7 +8484,7 @@ async function saveMenuDetailChanges() {
             deliveryCharge: 0, // Set to 0 since delivery charge field is removed
             description: descriptionValue,
             allergens: allergensValue,
-            calories: caloriesValue,
+            kcalUnit: caloriesValue,
             variations: variations,
             ingredients: ingredients,
             imageDataUrl: newImageUrl
@@ -9470,7 +9476,7 @@ async function handleMenuFormSubmit(event) {
                 price: finalBasePrice, // Set to smallest variation price if variations exist
                 quantity: quantityValue, // Keep for backward compatibility
                 maxServingsPerDay: quantityValue, // Set default daily serving limit from quantity field
-                calories: caloriesValue,
+                kcalUnit: caloriesValue,
                 deliveryCharge: 0, // Set to 0 since delivery charge field is removed
                 description,
                 allergens: (document.getElementById('allergens')?.value || '').trim() || null,
@@ -12274,7 +12280,7 @@ async function handleMenuEditSubmit(event) {
             category: categoryValue,
             price: +Number(priceValue).toFixed(2),
             quantity: quantityValue,
-            calories: caloriesValue,
+            kcalUnit: caloriesValue,
             deliveryCharge: 0, // Set to 0 since delivery charge field is removed
             description: descriptionValue,
             allergens: allergensValue,

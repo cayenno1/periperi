@@ -338,6 +338,12 @@
             }
         }
 
+        // Update kcal: use variation.kcalUnit if set, else base item's kcalUnit
+        const kcalVal = (variation.kcalUnit != null && variation.kcalUnit !== '') ? variation.kcalUnit : (baseItemData?.kcalUnit);
+        const kcalDisplay = (kcalVal != null && kcalVal !== '') ? `${kcalVal} kcal` : '--';
+        const kcalValEl = document.querySelector('#food-kcal .food-kcal-value');
+        if (kcalValEl) kcalValEl.textContent = kcalDisplay;
+
         changeQty(0);
     }
 
@@ -774,6 +780,13 @@
             if (priceEl) priceEl.textContent = priceDisplay;
             if (btnPriceEl) btnPriceEl.textContent = priceDisplay;
             if (descEl) descEl.textContent = description;
+
+            // Kcal from Firebase kcalUnit; show "--" when not set
+            const kcalValEl = document.querySelector('#food-kcal .food-kcal-value');
+            if (kcalValEl) {
+                const v = item.kcalUnit;
+                kcalValEl.textContent = (v != null && v !== '') ? `${v} kcal` : '--';
+            }
 
             const loadingSpinner = document.querySelector('.food-image-loading');
             if (loadingSpinner) {
