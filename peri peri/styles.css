@@ -9028,6 +9028,13 @@ input:checked + .toggle-slider:before {
     font-weight: 600;
 }
 
+.pos-cart-item-qty-static {
+    min-width: 50px;
+    text-align: center;
+    font-weight: 600;
+    color: #495057;
+}
+
 .pos-cart-qty-input {
     width: 50px;
     text-align: center;

@@ -306,7 +306,15 @@ service cloud.firestore {
                request.resource.data.status == 'completed';
       }
 
-      allow create: if isAuthedOrder() || isGuestOrder() || isWalkInOrder();
+      // POS/Walk-in orders: allow creation when staff is signed in with Firebase Auth
+      function isStaffWalkInOrder() {
+        return request.auth != null &&
+               request.resource.data.walkin == true &&
+               request.resource.data.isGuest == true &&
+               request.resource.data.status == 'completed';
+      }
+
+      allow create: if isAuthedOrder() || isGuestOrder() || isWalkInOrder() || isStaffWalkInOrder();
 
       // Read access is open so the admin dashboard can list orders
       allow read: if true;

@@ -12,6 +12,10 @@ let posServiceType = 'dine-in'; // Current service type: 'dine-in' or 'take-out'
 const PERI_CHICKEN_AND_RIBS_CATEGORIES = ['Peri Chicken', 'Ribs'];
 let posPendingPeriRibs = null; // { product, quantity } when sauce modal is open
 
+function generateCartLineId() {
+    return 'line_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+}
+
 // Initialize POS when page loads
 document.addEventListener('DOMContentLoaded', async function() {
     await waitForFirebaseReady();
@@ -444,8 +448,8 @@ function addToCart(productId, quantity = 1) {
         return;
     }
     
-    // Check if product already in cart
-    const existingItem = posCart.find(item => item.id === productId);
+    // Check if product already in cart (never stack paid with free sauce — extra sauce is a separate line)
+    const existingItem = posCart.find(item => item.id === productId && !item.freeWithPeriRibs);
     const newQty = existingItem ? existingItem.quantity + quantity : quantity;
     
     // Check if adding more would exceed daily serving limit (only if maxServingsPerDay > 0)
@@ -471,6 +475,7 @@ function addToCart(productId, quantity = 1) {
         existingItem.quantity += quantity;
     } else {
         posCart.push({
+            lineId: generateCartLineId(),
             id: productId,
             menuId: product.menuId,
             name: product.name,
@@ -553,6 +558,7 @@ function confirmPeriRibsWithSauce(sauceIdOrNull) {
             const effective = (avail != null ? avail : 0) - inCart;
             if (effective >= quantity) {
                 posCart.push({
+                    lineId: generateCartLineId(),
                     id: sauce.id,
                     menuId: sauce.menuId,
                     name: sauce.name,
@@ -595,6 +601,7 @@ function addToCartInternal(product, quantity) {
         existingItem.quantity += quantity;
     } else {
         posCart.push({
+            lineId: generateCartLineId(),
             id: product.id,
             menuId: product.menuId,
             name: product.name,
@@ -609,21 +616,22 @@ function addToCartInternal(product, quantity) {
     }
 }
 
-// Remove item from cart
-function removeFromCart(productId) {
-    posCart = posCart.filter(item => item.id !== productId);
+// Remove item from cart (by lineId so free and paid lines for same product stay separate)
+function removeFromCart(lineId) {
+    posCart = posCart.filter(item => item.lineId !== lineId);
     updateCart();
     updatePaymentButton();
 }
 
 // Update item quantity in cart (by increment/decrement)
-function updateCartItemQuantity(productId, change) {
-    const item = posCart.find(item => item.id === productId);
+function updateCartItemQuantity(lineId, change) {
+    const item = posCart.find(i => i.lineId === lineId);
     if (!item) return;
+    if (item.freeWithPeriRibs) return; // Free sauce qty is fixed, no +/-
     
     const newQty = item.quantity + change;
     if (newQty <= 0) {
-        removeFromCart(productId);
+        removeFromCart(lineId);
         return;
     }
     
@@ -634,7 +642,7 @@ function updateCartItemQuantity(productId, change) {
     }
     
     // Check availability (daily servings or quantity)
-    const product = posProducts.find(p => p.id === productId);
+    const product = posProducts.find(p => p.id === item.id);
     if (product) {
         // Only disable if maxServingsPerDay is 0
         if (product.maxServingsPerDay === 0) {
@@ -661,9 +669,10 @@ function updateCartItemQuantity(productId, change) {
 }
 
 // Update item quantity directly (from input field)
-function updateCartItemQuantityDirect(productId, newQtyStr) {
-    const item = posCart.find(item => item.id === productId);
+function updateCartItemQuantityDirect(lineId, newQtyStr) {
+    const item = posCart.find(i => i.lineId === lineId);
     if (!item) return;
+    if (item.freeWithPeriRibs) return; // Free sauce qty is fixed, not editable
     
     let newQty = parseInt(newQtyStr, 10);
     
@@ -681,12 +690,12 @@ function updateCartItemQuantityDirect(productId, newQtyStr) {
     }
     
     if (newQty <= 0) {
-        removeFromCart(productId);
+        removeFromCart(lineId);
         return;
     }
     
     // Check availability (daily servings or quantity)
-    const product = posProducts.find(p => p.id === productId);
+    const product = posProducts.find(p => p.id === item.id);
     if (product) {
         // Only disable if maxServingsPerDay is 0
         if (product.maxServingsPerDay === 0) {
@@ -728,9 +737,10 @@ function updateCart() {
         clearBtn.style.display = 'none';
     } else {
         cartItems.innerHTML = posCart.map(item => {
+            const lineId = item.lineId || (item.lineId = generateCartLineId());
             const itemTotal = item.price * item.quantity;
             const isFree = item.freeWithPeriRibs;
-            const nameDisplay = isFree ? `${item.name} (Free with Peri Chicken & Ribs)` : item.name;
+            const nameDisplay = item.name;
             const priceDisplay = isFree ? 'Free' : `₱${item.price.toFixed(2)} each`;
             return `
                 <div class="pos-cart-item">
@@ -740,19 +750,22 @@ function updateCart() {
                     </div>
                     <div class="pos-cart-item-controls">
                         <div class="pos-cart-item-qty">
-                            <button onclick="updateCartItemQuantity('${item.id}', -1)">-</button>
-                            <input type="number" 
-                                   class="pos-cart-qty-input" 
-                                   value="${item.quantity}" 
-                                   min="1" 
-                                   max="99" 
-                                   onchange="updateCartItemQuantityDirect('${item.id}', this.value)"
-                                   onkeydown="return event.key !== 'Enter' || (event.preventDefault(), updateCartItemQuantityDirect('${item.id}', this.value), false)"
-                                   onclick="this.select()">
-                            <button onclick="updateCartItemQuantity('${item.id}', 1)">+</button>
+                            ${isFree
+                                ? `<span class="pos-cart-item-qty-static" title="Quantity is fixed for free sauce">${item.quantity}</span>`
+                                : `<button onclick="updateCartItemQuantity('${lineId}', -1)">-</button>
+                                   <input type="number" 
+                                          class="pos-cart-qty-input" 
+                                          value="${item.quantity}" 
+                                          min="1" 
+                                          max="99" 
+                                          onchange="updateCartItemQuantityDirect('${lineId}', this.value)"
+                                          onkeydown="return event.key !== 'Enter' || (event.preventDefault(), updateCartItemQuantityDirect('${lineId}', this.value), false)"
+                                          onclick="this.select()">
+                                   <button onclick="updateCartItemQuantity('${lineId}', 1)">+</button>`
+                            }
                         </div>
                         <div class="pos-cart-item-total">${isFree ? 'Free' : '₱' + itemTotal.toFixed(2)}</div>
-                        <button class="pos-cart-item-remove" onclick="removeFromCart('${item.id}')" title="Remove">
+                        <button class="pos-cart-item-remove" onclick="removeFromCart('${lineId}')" title="Remove">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
