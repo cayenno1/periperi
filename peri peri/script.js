@@ -2129,13 +2129,18 @@ async function updateOrderStatus(orderId, newStatus) {
         errorMessage = !isPreparing ? 'Order must be preparing first.' : 
                       (!isDineIn ? 'Only dine-in orders can be marked as "Ready".' : '');
     } else if (normalizedNewStatus === 'delivered') {
-        // Can move to delivered from ready (dine-in), ready for pick-up (pick-up), or out for delivery (delivery)
+        // Can move to delivered from ready (dine-in), ready for pick-up (pickup), or out for delivery (delivery)
         const isReady = currentStatus === 'ready';
         const isReadyForPickup = currentStatus === 'ready for pick-up' || currentStatus === 'ready_for_pickup' || currentStatus === 'ready for pickup';
         const isOutForDelivery = currentStatus === 'out_for_delivery' || currentStatus === 'out-for-delivery' || 
                                  currentStatus === 'in-transit' || currentStatus === 'in_transit';
-        statusValid = isReady || isReadyForPickup || isOutForDelivery;
-        errorMessage = 'Order must be "Ready" (dine-in), "Ready for Pick-up" (pick-up), or "Out for Delivery" (delivery) before marking as delivered.';
+        
+        // Allow delivered status for dine-in (from ready), pickup (from ready for pick-up), or delivery orders (from out for delivery)
+        statusValid = (isReady && isDineIn) || (isReadyForPickup && isPickUp) || (isOutForDelivery && isDeliveryOrder);
+        
+        if (!statusValid) {
+            errorMessage = 'Order must be "Ready" (dine-in), "Ready for Pick-up" (pickup), or "Out for Delivery" (delivery) before marking as delivered.';
+        }
     } else {
         errorMessage = `Invalid status transition to "${newStatus}".`;
     }
@@ -3698,10 +3703,10 @@ function closePaymentDeclineModal() {
     if (!clickHandlerAttached) {
         document.addEventListener('click', function(event) {
             const modal = document.getElementById('paymentDeclineModal');
-            if (modal && modal.style.display === 'block' || modal.style.display === 'flex') {
+            if (modal && (modal.style.display === 'block' || modal.style.display === 'flex')) {
                 const modalContent = modal.querySelector('.modal-content');
                 // Close if clicking on the modal backdrop (not on content)
-                if (event.target === modal && !modalContent.contains(event.target)) {
+                if (event.target === modal && modalContent && !modalContent.contains(event.target)) {
                     closePaymentDeclineModal();
                 }
             }
@@ -5802,8 +5807,8 @@ function renderIngredientLogs(filterIngredientId = null, filterDate = null, filt
             <tr>
                 <td>${escapeHtml(timeStr)}</td>
                 <td>${escapeHtml(log.ingredientName || log.ingredientId || 'Unknown')}</td>
-                <td><span class="${typeClass}"><i class="fas ${typeIcon}"></i> ${typeLabel}</span></td>
-                <td>${amountStr}</td>
+                <td style="text-align: center;"><span class="${typeClass}"><i class="fas ${typeIcon}"></i> ${typeLabel}</span></td>
+                <td style="text-align: right; font-weight: 600;">${amountStr}</td>
                 <td>${escapeHtml(orderInfo)}</td>
             </tr>
         `;
@@ -6448,7 +6453,7 @@ async function renderMenuListTable() {
     tableBody.innerHTML = '';
 
     if (!menuState || !menuState.length) {
-        tableBody.innerHTML = '<tr><td colspan="8" class="empty-table">No menu items found.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="7" class="empty-table">No menu items found.</td></tr>';
         return;
     }
 
@@ -6456,7 +6461,7 @@ async function renderMenuListTable() {
     let visibleItems = filterMenuListItems(menuState);
     
     if (!visibleItems.length) {
-        tableBody.innerHTML = '<tr><td colspan="8" class="empty-table">No menu items found matching the filters.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="7" class="empty-table">No menu items found matching the filters.</td></tr>';
         return;
     }
 
@@ -6533,29 +6538,23 @@ async function renderMenuListTable() {
                     <span class="menu-list-parent-name">${escapeHtml(baseDisplayName)}</span>
                     <span class="menu-list-variation-count">(${variationCount} variations)</span>
                 </td>
-                <td class="menu-list-quantity" title="Remaining Servings">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
-                        <span>${remainingDisplay}</span>
-                        <button type="button" class="btn btn-sm btn-link" 
-                                onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(baseDisplayName)}', ${item.maxServingsPerDay !== null && item.maxServingsPerDay !== undefined ? item.maxServingsPerDay : 'null'})" 
-                                title="Edit Daily Serving Limit"
-                                style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                    </div>
+                <td class="menu-list-quantity" title="Remaining Servings" style="text-align: center;">
+                    <span>${remainingDisplay}</span>
                 </td>
-                <td class="menu-list-daily-servings">${maxServingsPerDay}</td>
-                <td class="menu-list-status"><span class="status ${parentStockStatus.className}">${parentStockStatus.label}</span></td>
+                <td class="menu-list-daily-servings" style="text-align: center;">${maxServingsPerDay}</td>
+                <td class="menu-list-status" style="text-align: center;"><span class="status ${parentStockStatus.className}">${parentStockStatus.label}</span></td>
                 <td class="menu-list-price">PHP ${parentPriceDisplay}</td>
-                <td class="menu-list-actions">
-                    <button type="button" class="btn btn-sm btn-secondary menu-list-view-btn" 
-                            onclick="showMenuListDetail('${escapeHtml(itemId)}')" 
-                            title="View Details">
-                        <i class="fas fa-eye"></i>
-                        <span class="menu-list-btn-text">View</span>
-                    </button>
-                </td>
             `;
+            
+            // Make parent row clickable
+            parentRow.style.cursor = 'pointer';
+            parentRow.onclick = function(e) {
+                // Don't trigger if clicking on a button or link
+                if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A' && !e.target.closest('button') && !e.target.closest('a')) {
+                    showMenuListDetail(itemId);
+                }
+            };
+            
             tableBody.appendChild(parentRow);
             
             // Create variation rows for each variation
@@ -6600,29 +6599,23 @@ async function renderMenuListTable() {
                         <span class="menu-list-variation-indicator">└─</span>
                         <span class="menu-list-variation-name">${escapeHtml(variationName)}</span>
                     </td>
-                    <td class="menu-list-quantity" title="Remaining Servings">
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
-                            <span>${varRemainingDisplay}</span>
-                            <button type="button" class="btn btn-sm btn-link" 
-                                    onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(variationName)}', ${variationServingInfo.maxServings !== null ? variationServingInfo.maxServings : 'null'})" 
-                                    title="Edit Daily Serving Limit"
-                                    style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                        </div>
+                    <td class="menu-list-quantity" title="Remaining Servings" style="text-align: center;">
+                        <span>${varRemainingDisplay}</span>
                     </td>
-                    <td class="menu-list-daily-servings">${maxServingsPerDay}</td>
-                    <td class="menu-list-status"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
+                    <td class="menu-list-daily-servings" style="text-align: center;">${maxServingsPerDay}</td>
+                    <td class="menu-list-status" style="text-align: center;"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
                     <td class="menu-list-price">PHP ${variationPrice.toFixed(2)}</td>
-                    <td class="menu-list-actions">
-                        <button type="button" class="btn btn-sm btn-secondary menu-list-view-btn" 
-                                onclick="showMenuListDetail('${escapeHtml(itemId)}')" 
-                                title="View Details">
-                            <i class="fas fa-eye"></i>
-                            <span class="menu-list-btn-text">View</span>
-                        </button>
-                    </td>
                 `;
+                
+                // Make variation row clickable
+                variationRow.style.cursor = 'pointer';
+                variationRow.onclick = function(e) {
+                    // Don't trigger if clicking on a button or link
+                    if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A' && !e.target.closest('button') && !e.target.closest('a')) {
+                        showMenuListDetail(itemId);
+                    }
+                };
+                
                 tableBody.appendChild(variationRow);
             });
         } else if (hasVariations && variationCount === 1) {
@@ -6665,29 +6658,22 @@ async function renderMenuListTable() {
                 ${variationImageCell}
                 <td class="menu-list-id">${escapeHtml(childId)}</td>
                 <td class="menu-list-name">${escapeHtml(variationName)}</td>
-                <td class="menu-list-quantity" title="Remaining Servings">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
-                        <span>${varRemainingDisplay}</span>
-                        <button type="button" class="btn btn-sm btn-link" 
-                                onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(variationName)}', ${variationServingInfo.maxServings !== null ? variationServingInfo.maxServings : 'null'})" 
-                                title="Edit Daily Serving Limit"
-                                style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                    </div>
+                <td class="menu-list-quantity" title="Remaining Servings" style="text-align: center;">
+                    <span>${varRemainingDisplay}</span>
                 </td>
-                <td class="menu-list-daily-servings">${maxServingsPerDay}</td>
-                <td class="menu-list-status"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
+                <td class="menu-list-daily-servings" style="text-align: center;">${maxServingsPerDay}</td>
+                <td class="menu-list-status" style="text-align: center;"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
                 <td class="menu-list-price">PHP ${variationPrice.toFixed(2)}</td>
-                <td class="menu-list-actions">
-                    <button type="button" class="btn btn-sm btn-secondary menu-list-view-btn" 
-                            onclick="showMenuListDetail('${escapeHtml(itemId)}')" 
-                            title="View Details">
-                        <i class="fas fa-eye"></i>
-                        <span class="menu-list-btn-text">View</span>
-                    </button>
-                </td>
                 `;
+                
+                // Make row clickable
+                row.style.cursor = 'pointer';
+                row.onclick = function(e) {
+                    // Don't trigger if clicking on a button or link
+                    if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A' && !e.target.closest('button') && !e.target.closest('a')) {
+                        showMenuListDetail(itemId);
+                    }
+                };
                 
                 tableBody.appendChild(row);
         } else {
@@ -6717,29 +6703,22 @@ async function renderMenuListTable() {
                 ${itemImageCell}
                 <td class="menu-list-id">${menuId}</td>
                 <td class="menu-list-name">${escapeHtml(baseDisplayName)}</td>
-                <td class="menu-list-quantity" title="Remaining Servings">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;">
-                        <span>${remainingDisplay}</span>
-                        <button type="button" class="btn btn-sm btn-link" 
-                                onclick="editMenuServingLimitInline('${escapeHtml(itemId)}', '${escapeHtml(baseDisplayName)}', ${servingInfo.maxServings !== null ? servingInfo.maxServings : 'null'})" 
-                                title="Edit Daily Serving Limit"
-                                style="padding: 2px 6px; font-size: 0.75rem; color: #007bff; flex-shrink: 0;">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                    </div>
+                <td class="menu-list-quantity" title="Remaining Servings" style="text-align: center;">
+                    <span>${remainingDisplay}</span>
                 </td>
-                <td class="menu-list-daily-servings">${maxServingsPerDay}</td>
-                <td class="menu-list-status"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
+                <td class="menu-list-daily-servings" style="text-align: center;">${maxServingsPerDay}</td>
+                <td class="menu-list-status" style="text-align: center;"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
                 <td class="menu-list-price">PHP ${price}</td>
-                <td class="menu-list-actions">
-                    <button type="button" class="btn btn-sm btn-secondary menu-list-view-btn" 
-                            onclick="showMenuListDetail('${escapeHtml(itemId)}')" 
-                            title="View Details">
-                        <i class="fas fa-eye"></i>
-                        <span class="menu-list-btn-text">View</span>
-                    </button>
-                </td>
             `;
+            
+            // Make row clickable
+            row.style.cursor = 'pointer';
+            row.onclick = function(e) {
+                // Don't trigger if clicking on a button or link
+                if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A' && !e.target.closest('button') && !e.target.closest('a')) {
+                    showMenuListDetail(itemId);
+                }
+            };
             
             tableBody.appendChild(row);
         }
@@ -7059,11 +7038,18 @@ function showMenuListDetail(itemId) {
         detailPanel.style.visibility = 'visible';
         detailPanel.dataset.currentItemId = itemId; // Store current item ID for refresh
         
-        // Resize the left panel to make room for the detail panel
+        // Resize the left panel and tan container to make room for the detail panel
         const leftPanel = document.querySelector('.menu-list-left-panel');
+        const tanContainer = document.querySelector('.menu-list-tan-container');
+        const calculatedWidth = 'calc(100% - 420px)'; // 400px panel + 20px gap
         if (leftPanel) {
             leftPanel.style.flex = '1 1 auto';
-            leftPanel.style.maxWidth = 'calc(100% - 420px)'; // 400px panel + 20px gap
+            leftPanel.style.maxWidth = calculatedWidth;
+            leftPanel.style.width = calculatedWidth;
+        }
+        if (tanContainer) {
+            tanContainer.style.maxWidth = calculatedWidth;
+            tanContainer.style.width = calculatedWidth;
         }
         
         // Update title
@@ -7350,11 +7336,17 @@ function closeMenuListDetail() {
         detailPanel.style.display = 'none';
     }
     
-    // Restore left panel to full width
+    // Restore left panel and tan container to full width
     const leftPanel = document.querySelector('.menu-list-left-panel');
+    const tanContainer = document.querySelector('.menu-list-tan-container');
     if (leftPanel) {
         leftPanel.style.flex = '1 1 100%';
         leftPanel.style.maxWidth = '100%';
+        leftPanel.style.width = '100%';
+    }
+    if (tanContainer) {
+        tanContainer.style.maxWidth = '100%';
+        tanContainer.style.width = '100%';
     }
 }
 
@@ -7978,7 +7970,10 @@ function renderMenuDetailsCarousel() {
             // Set image and caption directly via innerHTML like catalogue does
             imageContainer.innerHTML = `
                 <img id="menuDetailImage" src="${item.imageDataUrl}" alt="${displayName || 'Menu item image'}" style="position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; object-fit: cover; display: block !important; visibility: visible !important; opacity: 1 !important; z-index: 0;">
-                <div class="menu-detail-image-caption" id="menuDetailName" style="z-index: 2;">${displayName || 'Menu item'}</div>
+                <div class="menu-detail-image-overlay">
+                    <div class="menu-detail-image-caption" id="menuDetailName">${displayName || 'Menu item'}</div>
+                    <div class="menu-detail-category-badge" id="menuDetailCategoryBadge">${item.category || 'Uncategorized'}</div>
+                </div>
             `;
             
             // Get the new image element and add handlers
@@ -7988,7 +7983,10 @@ function renderMenuDetailsCarousel() {
                     console.warn('Product Detail - Failed to load image:', item.imageDataUrl);
                     imageContainer.innerHTML = `
                         <div class="menu-detail-image-placeholder">${(displayName || '?').charAt(0).toUpperCase()}</div>
-                        <div class="menu-detail-image-caption" id="menuDetailName">${displayName || 'Menu item'}</div>
+                        <div class="menu-detail-image-overlay">
+                            <div class="menu-detail-image-caption" id="menuDetailName">${displayName || 'Menu item'}</div>
+                            <div class="menu-detail-category-badge" id="menuDetailCategoryBadge">${item.category || 'Uncategorized'}</div>
+                        </div>
                     `;
                 };
                 newImageEl.onload = function() {
@@ -8003,12 +8001,25 @@ function renderMenuDetailsCarousel() {
             console.log('Product Detail - No imageDataUrl for:', item.name);
             imageContainer.innerHTML = `
                 <div class="menu-detail-image-placeholder">${(displayName || '?').charAt(0).toUpperCase()}</div>
-                <div class="menu-detail-image-caption" id="menuDetailName">${displayName || 'Menu item'}</div>
+                <div class="menu-detail-image-overlay">
+                    <div class="menu-detail-image-caption" id="menuDetailName">${displayName || 'Menu item'}</div>
+                    <div class="menu-detail-category-badge" id="menuDetailCategoryBadge">${item.category || 'Uncategorized'}</div>
+                </div>
             `;
         }
     }
 
-    if (captionEl) captionEl.textContent = item.name || 'Menu item';
+    // Update image caption and category badge (if not already set in image container)
+    const categoryBadge = document.getElementById('menuDetailCategoryBadge');
+    
+    if (captionEl) {
+        captionEl.textContent = item.displayName || item.name || 'Menu item';
+    }
+    
+    if (categoryBadge) {
+        categoryBadge.textContent = item.category || 'Uncategorized';
+    }
+    
     if (priceEl) priceEl.textContent = `PHP ${getMenuItemDisplayPrice(item).toFixed(2)}`;
     if (availabilityEl) availabilityEl.textContent = statusInfo.label || '—';
     if (categoryEl) categoryEl.textContent = item.category || 'Uncategorized';
@@ -8050,13 +8061,17 @@ function renderMenuDetailsCarousel() {
     // Render ingredients - show editable version in edit mode, read-only in view mode
     const ingredientsListEl = document.getElementById('menuDetailIngredients');
     const ingredientsEditableEl = document.getElementById('menuDetailIngredientsEditable');
+    const ingredientsTable = document.getElementById('menuDetailIngredientsTable');
     const ingredientsListContainer = document.getElementById('menuDetailIngredientsList');
+    const ingredientsListFallback = document.getElementById('menuDetailIngredientsListFallback');
     
     if (ingredientsListEl && ingredientsEditableEl && ingredientsListContainer) {
         if (menuDetailEditing) {
-            // Edit mode - show editable ingredients
+            // Edit mode - show editable ingredients in table format
             ingredientsListEl.style.display = 'none';
             ingredientsEditableEl.style.display = 'block';
+            if (ingredientsTable) ingredientsTable.style.display = 'table';
+            if (ingredientsListFallback) ingredientsListFallback.style.display = 'none';
             
             // Clear existing rows
             ingredientsListContainer.innerHTML = '';
@@ -8099,6 +8114,8 @@ function renderMenuDetailsCarousel() {
             // View mode - show read-only list
             ingredientsListEl.style.display = 'block';
             ingredientsEditableEl.style.display = 'none';
+            if (ingredientsTable) ingredientsTable.style.display = 'none';
+            if (ingredientsListFallback) ingredientsListFallback.style.display = 'none';
             
             if (!item.ingredients || !item.ingredients.length) {
                 ingredientsListEl.innerHTML = '<li class="empty-state">No ingredients linked yet.</li>';
@@ -8818,8 +8835,17 @@ function setMenuDetailEditMode(isEditing) {
         editBtn.textContent = isEditing ? 'Save' : 'Edit';
     }
     const discardBtn = document.getElementById('menuDetailDiscardBtn');
+    const saveBtn = document.getElementById('menuDetailSaveBtn');
+    const saveBottomBtn = document.getElementById('menuDetailSaveBottomBtn');
+    
     if (discardBtn) {
         discardBtn.style.display = isEditing ? 'inline-block' : 'none';
+    }
+    if (saveBtn) {
+        saveBtn.style.display = isEditing ? 'inline-block' : 'none';
+    }
+    if (saveBottomBtn) {
+        saveBottomBtn.style.display = isEditing ? 'inline-block' : 'none';
     }
     // Update Menu Variation tab edit button
     const menuVariationEditBtn = document.getElementById('menuVariationEditBtn');
@@ -9008,13 +9034,9 @@ function addMenuDetailIngredientRow(prefill = {}) {
     if (!container) return;
     
     const rowId = `menuDetailIngredient_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const row = document.createElement('div');
+    const row = document.createElement('tr');
     row.className = 'menu-detail-ingredient-row';
     row.id = rowId;
-    row.style.display = 'flex';
-    row.style.gap = '10px';
-    row.style.marginBottom = '10px';
-    row.style.alignItems = 'flex-end';
     
     // Parse unit value - normalize from existing data
     let unitValue = prefill.unit || 'kg';
@@ -9031,26 +9053,31 @@ function addMenuDetailIngredientRow(prefill = {}) {
     `;
     
     row.innerHTML = `
-        <div style="flex: 1;">
-            <label style="display: block; margin-bottom: 4px; font-size: 14px; color: #495057;">Ingredient Name</label>
-            <input type="text" class="form-control menu-detail-ingredient-name" placeholder="e.g., Chicken" value="${prefill.name || ''}" list="menuIngredientsOptions">
-        </div>
-        <div style="width: 120px;">
-            <label style="display: block; margin-bottom: 4px; font-size: 14px; color: #495057;">Amount</label>
-            <input type="number" class="form-control menu-detail-ingredient-amount" min="0" step="0.01" placeholder="0.00" value="${prefill.amount || ''}">
-        </div>
-        <div style="width: 150px;">
-            <label style="display: block; margin-bottom: 4px; font-size: 14px; color: #495057;">Unit</label>
-            <select class="form-control menu-detail-ingredient-unit">
+        <td style="padding: 8px;">
+            <input type="text" class="form-control menu-detail-ingredient-name" placeholder="e.g., Chicken" value="${prefill.name || ''}" list="menuIngredientsOptions" style="width: 100%;">
+        </td>
+        <td style="padding: 8px;">
+            <input type="number" class="form-control menu-detail-ingredient-amount" min="0" step="0.01" placeholder="0.00" value="${prefill.amount || ''}" style="width: 100%;">
+        </td>
+        <td style="padding: 8px;">
+            <select class="form-control menu-detail-ingredient-unit" style="width: 100%;">
                 ${unitOptions}
             </select>
-        </div>
-        <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailIngredientRow('${rowId}')" style="flex: 0 0 auto; height: 38px;">
-            <i class="fas fa-trash"></i>
-        </button>
+        </td>
+        <td style="padding: 8px; width: 50px;">
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailIngredientRow('${rowId}')" style="width: 100%;">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
     `;
     
     container.appendChild(row);
+    
+    // Show table if it was hidden
+    const ingredientsTable = document.getElementById('menuDetailIngredientsTable');
+    if (ingredientsTable) {
+        ingredientsTable.style.display = 'table';
+    }
 }
 
 // Remove ingredient row from product details
@@ -10235,7 +10262,8 @@ async function initMenuManagement() {
     // Populate linked meal dropdown
     updateIncludedSaucesCheckboxes();
     
-    // Initialize categories from existing menu items
+    // Initialize categories from existing menu items (for backward compatibility)
+    // This ensures categories from existing menu items are available even if not in Firebase yet
     if (menuState && menuState.length) {
         menuState.forEach(item => {
             if (item.category && !allCategories.includes(item.category)) {

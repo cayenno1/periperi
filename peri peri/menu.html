@@ -481,7 +481,7 @@
             <!-- Ingredient Logs Table - Positioned directly below the red header box -->
             <div class="ingredient-logs-table-wrapper" id="ingredient-logs-table-wrapper" style="display: none;">
                 <div class="table-container ingredient-logs-table-container">
-                    <table class="orders-table inventory-logs-table">
+                    <table class="orders-table modern-orders-table inventory-logs-table">
                         <thead>
                             <tr>
                                 <th class="sortable" data-sort="timestamp" onclick="sortIngredientLogs('timestamp')">
@@ -945,69 +945,67 @@
 
                 <!-- Menu List Table (Active Items Only) -->
                 <div class="menu-list-wrapper" id="menu-list" style="display: none;">
-                    <div class="menu-list-left-panel">
-                        <!-- Filter and Sort Controls -->
-                        <div class="menu-list-controls-bar">
-                            <div class="menu-list-controls-group">
-                                <!-- Search Box -->
-                                <div class="search-box" style="margin-right: 10px;">
+                    <div class="menu-list-tan-container">
+                        <div class="menu-list-left-panel">
+                            <!-- Search and Filter Bar -->
+                            <div class="search-filter-bar">
+                                <div class="search-box">
                                     <i class="fas fa-search"></i>
                                     <input type="text" id="menuListSearch" placeholder="Search menu items..." oninput="applyMenuListSearch()">
                                 </div>
-                            </div>
-                            <div class="menu-list-filters-group">
-                                <div class="filter-container">
-                                    <button class="filter-btn" onclick="toggleDropdown('menuListFilterDropdown')">
-                                        <i class="fas fa-filter"></i>
-                                        Filter
-                                    </button>
-                                    <div class="dropdown-menu" id="menuListFilterDropdown">
-                                        <div class="filter-section">
-                                            <div class="filter-section-title">Status</div>
-                                            <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="all" onclick="applyMenuListFilter('status', 'all'); return false;">All Status</a>
-                                            <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="active" onclick="applyMenuListFilter('status', 'active'); return false;">Active</a>
-                                            <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="inactive" onclick="applyMenuListFilter('status', 'inactive'); return false;">Inactive</a>
-                                        </div>
-                                        <div class="filter-section" id="menuListCategoryFilterSection">
-                                            <div class="filter-section-title">Category</div>
-                                            <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="all" onclick="applyMenuListFilter('category', 'all'); return false;">All Categories</a>
+                                <div class="filter-dropdown">
+                                    <div class="filter-container">
+                                        <button class="filter-btn" onclick="toggleDropdown('menuListFilterDropdown')">
+                                            <i class="fas fa-filter"></i>
+                                            Filter
+                                        </button>
+                                        <div class="dropdown-menu" id="menuListFilterDropdown">
+                                            <div class="filter-section">
+                                                <div class="filter-section-title">Status</div>
+                                                <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="all" onclick="applyMenuListFilter('status', 'all'); return false;">All Status</a>
+                                                <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="active" onclick="applyMenuListFilter('status', 'active'); return false;">Active</a>
+                                                <a href="#" class="dropdown-item" data-filter-type="status" data-filter-value="inactive" onclick="applyMenuListFilter('status', 'inactive'); return false;">Inactive</a>
+                                            </div>
+                                            <div class="filter-section" id="menuListCategoryFilterSection">
+                                                <div class="filter-section-title">Category</div>
+                                                <a href="#" class="dropdown-item" data-filter-type="category" data-filter-value="all" onclick="applyMenuListFilter('category', 'all'); return false;">All Categories</a>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <button class="btn btn-sm btn-link" onclick="showResetTimeInfo()" title="View Reset Time Information" style="margin-left: 8px; padding: 6px 12px; color: #6c757d; text-decoration: none;">
-                                    <i class="fas fa-clock"></i>
-                                    <span>Reset Time</span>
-                                </button>
-                                <div class="sort-container">
-                                    <select id="menuListSort" class="form-control" style="min-width: 200px;" onchange="applyMenuListSort()">
-                                        <option value="name">Sort by Name</option>
-                                        <option value="most-sold">Most Sold</option>
-                                        <option value="least-remaining">Least Daily Servings</option>
-                                        <option value="most-remaining">Most Daily Servings</option>
-                                    </select>
+                                    <button class="btn btn-sm btn-link" onclick="showResetTimeInfo()" title="View Reset Time Information" style="margin-left: 8px; padding: 6px 12px; color: #6c757d; text-decoration: none;">
+                                        <i class="fas fa-clock"></i>
+                                        <span>Reset Time</span>
+                                    </button>
+                                    <div class="sort-container">
+                                        <select id="menuListSort" class="form-control" style="min-width: 200px;" onchange="applyMenuListSort()">
+                                            <option value="name">Sort by Name</option>
+                                            <option value="most-sold">Most Sold</option>
+                                            <option value="least-remaining">Least Daily Servings</option>
+                                            <option value="most-remaining">Most Daily Servings</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="menu-list-table-container">
-                            <table class="orders-table menu-list-table">
-                                <thead>
-                                    <tr>
-                                        <th class="menu-list-image-header">Image</th>
-                                        <th>Menu ID</th>
-                                        <th>Name</th>
-                                        <th>Remaining Servings <small id="resetTimeHeader" style="font-weight: normal; color: #6c757d; font-size: 0.75rem; display: block; margin-top: 2px;"></small></th>
-                                        <th>Daily Servings</th>
-                                        <th>Status</th>
-                                        <th>Price</th>
-                                        <th class="menu-list-actions-header">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="menuListTableBody">
-                                    <tr>
-                                        <td colspan="8" class="empty-table">No active menu items found.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <div class="table-container">
+                                <table class="orders-table modern-orders-table menu-list-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="menu-list-image-header">Image</th>
+                                            <th>Menu ID</th>
+                                            <th>Name</th>
+                                            <th>Remaining Servings <small id="resetTimeHeader" style="font-weight: normal; color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-top: 2px;"></small></th>
+                                            <th>Daily Servings</th>
+                                            <th>Status</th>
+                                            <th>Price</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="menuListTableBody">
+                                        <tr>
+                                            <td colspan="7" class="empty-table">No active menu items found.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                     <!-- Right Side Detail Panel -->
@@ -1068,19 +1066,36 @@
             <!-- Menu Details Carousel Section -->
             <section class="menu-detail-section" id="menu-product-detail">
                 <div class="menu-detail-container">
-                    <div class="menu-detail-image-wrapper">
-                        <div class="menu-detail-slide-indicator" id="menuDetailSlideIndicator">0 / 0</div>
-                        <button class="menu-detail-nav menu-detail-nav-left" type="button" onclick="prevMenuDetail()">
-                            <span>&lt;</span>
-                        </button>
-                        <button class="menu-detail-nav menu-detail-nav-right" type="button" onclick="nextMenuDetail()">
-                            <span>&gt;</span>
-                        </button>
-                        <div class="menu-detail-image" id="menuDetailImageContainer">
-                            <img id="menuDetailImage" src="" alt="Menu item image">
-                            <div class="menu-detail-image-caption" id="menuDetailName">No menu selected</div>
+                    <!-- Top Section: Large Prominent Image with Overlays -->
+                    <div class="menu-detail-header-section">
+                        <div class="menu-detail-image-wrapper">
+                            <div class="menu-detail-slide-indicator" id="menuDetailSlideIndicator">0 / 0</div>
+                            <button class="menu-detail-nav menu-detail-nav-left" type="button" onclick="prevMenuDetail()" aria-label="Previous item">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button class="menu-detail-nav menu-detail-nav-right" type="button" onclick="nextMenuDetail()" aria-label="Next item">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <div class="menu-detail-image" id="menuDetailImageContainer">
+                                <img id="menuDetailImage" src="" alt="Menu item image">
+                                <div class="menu-detail-image-overlay">
+                                    <div class="menu-detail-image-caption-wrapper">
+                                        <div class="menu-detail-image-caption" id="menuDetailName">No menu selected</div>
+                                        <div class="menu-detail-category-badge" id="menuDetailCategoryBadge">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Action Buttons Overlay on Image (Top Right) -->
+                            <div class="menu-detail-header-actions">
+                                <button type="button" class="btn btn-warning btn-action-overlay" id="menuDetailDiscardBtn" onclick="discardMenuDetailEdit()" style="display: none;">
+                                    <i class="fas fa-times"></i> Discard Edit
+                                </button>
+                                <button type="button" class="btn btn-primary btn-action-overlay" id="menuDetailSaveBtn" onclick="saveMenuDetailChanges()" style="display: none;">
+                                    <i class="fas fa-save"></i> Save Changes
+                                </button>
+                            </div>
+                            <input type="file" id="menuDetailImageInput" accept="image/*" style="display: none;" onchange="handleMenuDetailImageSelect(event)">
                         </div>
-                        <input type="file" id="menuDetailImageInput" accept="image/*" style="display: none;" onchange="handleMenuDetailImageSelect(event)">
                     </div>
 
                     <div class="tab-navigation" style="margin-bottom: 0;">
@@ -1141,24 +1156,41 @@
                                     Change Image
                                 </button>
                             </div>
-                            <div class="menu-detail-ingredients-section">
-                                <h5>Ingredients Linked</h5>
-                                <ul class="menu-edit-ingredients" id="menuDetailIngredients">
+                            <div class="menu-detail-ingredients-section" style="margin-top: 24px;">
+                                <h5 style="margin-bottom: 16px;">Ingredients Info</h5>
+                                <ul class="menu-edit-ingredients" id="menuDetailIngredients" style="display: none;">
                                     <li class="empty-state">No ingredients linked yet.</li>
                                 </ul>
-                                <div id="menuDetailIngredientsEditable" style="display: none;">
-                                    <div id="menuDetailIngredientsList" class="menu-detail-ingredients-list">
-                                        <!-- Ingredient rows will be added here -->
+                                <div id="menuDetailIngredientsEditable">
+                                    <div id="menuDetailIngredientsTable" style="display: none;">
+                                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+                                            <thead>
+                                                <tr style="border-bottom: 2px solid #ddd; background: #f8f9fa;">
+                                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Ingredient Name</th>
+                                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Amount</th>
+                                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Unit</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="menuDetailIngredientsList">
+                                                <!-- Ingredient rows will be added here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div id="menuDetailIngredientsListFallback" style="display: none;">
+                                        <!-- Fallback for when not in table mode -->
                                     </div>
                                     <button type="button" class="btn btn-secondary btn-sm" id="addMenuDetailIngredientBtn" onclick="addMenuDetailIngredientRow()" style="margin-top: 10px;">
                                         <i class="fas fa-plus"></i> Add Ingredient
                                     </button>
                                 </div>
                             </div>
-                            <div class="menu-detail-actions">
-                                <button type="button" class="btn btn-secondary" id="menuDetailEditBtn" onclick="toggleMenuDetailEdit()">Edit</button>
-                                <button type="button" class="btn btn-warning" id="menuDetailDiscardBtn" onclick="discardMenuDetailEdit()" style="display: none;">Discard Edit</button>
-                                <button type="button" class="btn btn-danger" onclick="handleMenuItemDeleteFromDetail()">Delete</button>
+                            <div class="menu-detail-actions" style="margin-top: 24px; display: flex; gap: 10px;">
+                                <button type="button" class="btn btn-danger" onclick="handleMenuItemDeleteFromDetail()">
+                                    <i class="fas fa-trash"></i> Delete Product
+                                </button>
+                                <button type="button" class="btn btn-primary" id="menuDetailSaveBottomBtn" onclick="saveMenuDetailChanges()" style="display: none;">
+                                    <i class="fas fa-save"></i> Save Changes
+                                </button>
                             </div>
                             <div class="menu-detail-info-right" style="display: none;">
                                 <h4>Product Details</h4>

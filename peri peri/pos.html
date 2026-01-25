@@ -384,6 +384,30 @@
         </div>
     </div>
 
+    <!-- Linked Items Modal (for products with includedSauces) -->
+    <div id="posLinkedItemsModal" class="modal" style="display: none;">
+        <div class="modal-content pos-sauce-modal">
+            <div class="modal-header">
+                <h2 id="posLinkedItemsModalTitle">Linked Items</h2>
+                <span class="close-modal" onclick="closeLinkedItemsModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p class="pos-sauce-modal-intro">This meal includes the following linked items. Select which ones to add (all are <strong>free</strong>).</p>
+                <div class="pos-sauce-list" id="posLinkedItemsList">
+                    <!-- Linked items will be rendered here -->
+                </div>
+                <div class="pos-sauce-actions">
+                    <button type="button" class="btn btn-secondary" onclick="confirmLinkedItems([])">
+                        Skip
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="confirmLinkedItems(null)">
+                        Add All
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Receipt Modal -->
     <div id="posReceiptModal" class="modal" style="display: none;">
         <div class="modal-content pos-receipt-modal">

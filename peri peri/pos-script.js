@@ -11,6 +11,7 @@ let posServiceType = 'dine-in'; // Current service type: 'dine-in' or 'take-out'
 // Categories that trigger the sauce selection popup (free sauce)
 const PERI_CHICKEN_AND_RIBS_CATEGORIES = ['Peri Chicken', 'Ribs'];
 let posPendingPeriRibs = null; // { product, quantity } when sauce modal is open
+let posPendingLinkedItems = null; // { product, quantity } when linked items modal is open
 
 function generateCartLineId() {
     return 'line_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
@@ -204,7 +205,8 @@ async function loadPOSProducts() {
                             category: data.category || '',
                             isVariation: true,
                             variationIndex: index,
-                            parentId: doc.id
+                            parentId: doc.id,
+                            includedSauces: data.includedSauces || null // Store linked sauces from parent
                         });
                     });
                 } else {
@@ -218,7 +220,8 @@ async function loadPOSProducts() {
                         maxServingsPerDay: maxServingsPerDay,
                         image: data.image || data.imageUrl || data.imageDataUrl || '',
                         category: data.category || '',
-                        isVariation: false
+                        isVariation: false,
+                        includedSauces: data.includedSauces || null // Store linked sauces
                     });
                 }
             }
@@ -410,6 +413,27 @@ function addToCart(productId, quantity = 1) {
     const product = posProducts.find(p => p.id === productId);
     if (!product) return;
     
+    // Check for linked items (includedSauces) - show modal if present
+    if (product.includedSauces && Array.isArray(product.includedSauces) && product.includedSauces.length > 0) {
+        if (!isProductAvailable(product, quantity)) {
+            if (product.maxServingsPerDay === 0) {
+                alert('This product is currently unavailable.');
+            } else {
+                const remaining = getRemainingServings(product);
+                if (remaining !== null && remaining === 0) {
+                    alert('This product has reached its daily limit for today.');
+                } else if (remaining !== null) {
+                    alert(`Only ${remaining} serving(s) remaining for today.`);
+                } else {
+                    alert('This product is out of stock.');
+                }
+            }
+            return;
+        }
+        openLinkedItemsModal(product, quantity);
+        return;
+    }
+    
     // Peri Chicken & Ribs: show sauce selection popup (sauce is free)
     if (PERI_CHICKEN_AND_RIBS_CATEGORIES.includes(product.category || '')) {
         if (!isProductAvailable(product, quantity)) {
@@ -575,6 +599,130 @@ function confirmPeriRibsWithSauce(sauceIdOrNull) {
         }
     }
     
+    updateCart();
+    updatePaymentButton();
+}
+
+// Open linked items modal (for products with includedSauces)
+function openLinkedItemsModal(product, quantity) {
+    posPendingLinkedItems = { product, quantity };
+    const titleEl = document.getElementById('posLinkedItemsModalTitle');
+    if (titleEl) titleEl.textContent = `Linked Items for ${product.name}`;
+    
+    const listEl = document.getElementById('posLinkedItemsList');
+    if (!listEl) return;
+    
+    // Get linked sauce IDs from includedSauces
+    const linkedSauceIds = (product.includedSauces || []).map(s => s.sauceId || s.menuId || s.id).filter(Boolean);
+    
+    if (linkedSauceIds.length === 0) {
+        listEl.innerHTML = '<p class="pos-sauce-none">No linked items found.</p>';
+        document.getElementById('posLinkedItemsModal').style.display = 'block';
+        return;
+    }
+    
+    // Find sauce products that match the linked IDs
+    const linkedSauces = posProducts.filter(p => linkedSauceIds.includes(p.id) || linkedSauceIds.includes(p.menuId));
+    
+    const inCartQty = (sauceId) => 
+        posCart.filter(i => i.freeWithPeriRibs && (i.id === sauceId || i.menuId === sauceId)).reduce((s, c) => s + c.quantity, 0);
+    
+    if (linkedSauces.length === 0) {
+        listEl.innerHTML = '<p class="pos-sauce-none">Linked items not found in products list.</p>';
+    } else {
+        listEl.innerHTML = linkedSauces.map(sauce => {
+            const base = getSauceAvailable(sauce);
+            const inCart = inCartQty(sauce.id);
+            const avail = (base != null ? base : 0) - inCart;
+            const isUnavailable = avail <= 0;
+            const qtyLabel = avail != null ? `Qty: ${avail}` : '—';
+            const sauceName = product.includedSauces.find(s => (s.sauceId || s.menuId || s.id) === sauce.id)?.sauceName || sauce.name;
+            return `
+                <div class="pos-sauce-item ${isUnavailable ? 'unavailable' : ''}" data-sauce-id="${sauce.id}">
+                    <div class="pos-sauce-info">
+                        <span class="pos-sauce-name">${escapeHtml(sauceName)}</span>
+                        <span class="pos-sauce-qty">${qtyLabel}</span>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm pos-sauce-select" 
+                            ${isUnavailable ? 'disabled' : ''} 
+                            onclick="selectLinkedItem('${sauce.id}')">
+                        Select
+                    </button>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    document.getElementById('posLinkedItemsModal').style.display = 'block';
+}
+
+// Track selected linked items
+let selectedLinkedItems = [];
+
+function selectLinkedItem(sauceId) {
+    const item = document.querySelector(`.pos-sauce-item[data-sauce-id="${sauceId}"]`);
+    if (!item) return;
+    
+    if (item.classList.contains('unavailable')) return;
+    
+    // Toggle selection
+    if (selectedLinkedItems.includes(sauceId)) {
+        selectedLinkedItems = selectedLinkedItems.filter(id => id !== sauceId);
+        item.classList.remove('selected');
+        item.querySelector('.pos-sauce-select').textContent = 'Select';
+    } else {
+        selectedLinkedItems.push(sauceId);
+        item.classList.add('selected');
+        item.querySelector('.pos-sauce-select').textContent = 'Selected';
+    }
+}
+
+function closeLinkedItemsModal() {
+    posPendingLinkedItems = null;
+    selectedLinkedItems = [];
+    const m = document.getElementById('posLinkedItemsModal');
+    if (m) m.style.display = 'none';
+}
+
+function confirmLinkedItems(selectedIds) {
+    if (!posPendingLinkedItems) return;
+    const { product, quantity } = posPendingLinkedItems;
+    posPendingLinkedItems = null;
+    closeLinkedItemsModal();
+    
+    // Add main item
+    addToCartInternal(product, quantity);
+    
+    // Add selected linked items (or all if selectedIds is null)
+    const linkedSauceIds = (product.includedSauces || []).map(s => s.sauceId || s.menuId || s.id).filter(Boolean);
+    const itemsToAdd = selectedIds === null ? linkedSauceIds : (Array.isArray(selectedIds) ? selectedIds : selectedLinkedItems);
+    
+    itemsToAdd.forEach(sauceId => {
+        const sauce = posProducts.find(p => p.id === sauceId || p.menuId === sauceId);
+        if (sauce) {
+            const avail = getSauceAvailable(sauce);
+            const inCart = posCart.filter(i => i.freeWithPeriRibs && (i.id === sauce.id || i.menuId === sauce.id)).reduce((s, c) => s + c.quantity, 0);
+            const effective = (avail != null ? avail : 0) - inCart;
+            if (effective >= quantity) {
+                posCart.push({
+                    lineId: generateCartLineId(),
+                    id: sauce.id,
+                    menuId: sauce.menuId,
+                    name: sauce.name,
+                    price: 0,
+                    quantity: quantity,
+                    image: sauce.image,
+                    freeWithPeriRibs: true,
+                    maxServingsPerDay: sauce.maxServingsPerDay,
+                    isVariation: sauce.isVariation,
+                    variationIndex: sauce.variationIndex,
+                    parentId: sauce.parentId
+                });
+            }
+        }
+    });
+    
+    selectedLinkedItems = [];
     updateCart();
     updatePaymentButton();
 }
@@ -1466,6 +1614,11 @@ window.onclick = function(event) {
     
     if (event.target === sauceModal) {
         closeSauceSelectionModal();
+    }
+    
+    const linkedItemsModal = document.getElementById('posLinkedItemsModal');
+    if (event.target === linkedItemsModal) {
+        closeLinkedItemsModal();
     }
 }
 
