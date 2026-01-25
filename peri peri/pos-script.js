@@ -8,6 +8,10 @@ let posSelectedCategory = 'all'; // Currently selected category filter
 let posPaymentMethod = 'cash'; // Current payment method: 'cash' or 'gcash'
 let posServiceType = 'dine-in'; // Current service type: 'dine-in' or 'take-out'
 
+// Categories that trigger the sauce selection popup (free sauce)
+const PERI_CHICKEN_AND_RIBS_CATEGORIES = ['Peri Chicken', 'Ribs'];
+let posPendingPeriRibs = null; // { product, quantity } when sauce modal is open
+
 // Initialize POS when page loads
 document.addEventListener('DOMContentLoaded', async function() {
     await waitForFirebaseReady();
@@ -281,6 +285,27 @@ function getRemainingServings(product) {
     return remaining;
 }
 
+// Get available quantity for a sauce (for modal display and availability)
+// Uses maxServingsPerDay + dailyServings, or quantity. Returns null if unavailable.
+function getSauceAvailable(sauce) {
+    if (sauce.maxServingsPerDay != null && sauce.maxServingsPerDay > 0) {
+        const r = getRemainingServings(sauce);
+        return r;
+    }
+    if (sauce.quantity !== undefined && sauce.quantity !== null) {
+        return Number(sauce.quantity);
+    }
+    return null;
+}
+
+// Get sauces from posProducts (category Sauce or similar) for the modal
+function getSaucesForModal() {
+    const cat = (c) => (c || '').toLowerCase();
+    return posProducts.filter(p => 
+        cat(p.category) === 'sauce' || cat(p.category).includes('sauce')
+    );
+}
+
 // Check if product is available (considering daily servings)
 // Products are ONLY disabled when maxServingsPerDay === 0
 // Even if remaining servings is 0, product is still clickable (will show warning)
@@ -381,6 +406,27 @@ function addToCart(productId, quantity = 1) {
     const product = posProducts.find(p => p.id === productId);
     if (!product) return;
     
+    // Peri Chicken & Ribs: show sauce selection popup (sauce is free)
+    if (PERI_CHICKEN_AND_RIBS_CATEGORIES.includes(product.category || '')) {
+        if (!isProductAvailable(product, quantity)) {
+            if (product.maxServingsPerDay === 0) {
+                alert('This product is currently unavailable.');
+            } else {
+                const remaining = getRemainingServings(product);
+                if (remaining !== null && remaining === 0) {
+                    alert('This product has reached its daily limit for today.');
+                } else if (remaining !== null) {
+                    alert(`Only ${remaining} serving(s) remaining for today.`);
+                } else {
+                    alert('This product is out of stock.');
+                }
+            }
+            return;
+        }
+        openSauceSelectionModal(product, quantity);
+        return;
+    }
+    
     // Check availability - only disable if maxServingsPerDay is 0
     if (!isProductAvailable(product, quantity)) {
         if (product.maxServingsPerDay === 0) {
@@ -440,6 +486,127 @@ function addToCart(productId, quantity = 1) {
     
     updateCart();
     updatePaymentButton();
+}
+
+// --- Sauce selection for Peri Chicken & Ribs ---
+
+function openSauceSelectionModal(product, quantity) {
+    posPendingPeriRibs = { product, quantity };
+    const titleEl = document.getElementById('posSauceModalTitle');
+    if (titleEl) titleEl.textContent = `Choose sauce for ${product.name}`;
+    
+    const sauces = getSaucesForModal();
+    const listEl = document.getElementById('posSauceList');
+    if (!listEl) return;
+    
+    const inCartQty = (sauceId) => 
+        posCart.filter(i => i.freeWithPeriRibs && i.id === sauceId).reduce((s, c) => s + c.quantity, 0);
+    
+    if (sauces.length === 0) {
+        listEl.innerHTML = '<p class="pos-sauce-none">No sauces in the database. You can still add without sauce.</p>';
+    } else {
+        listEl.innerHTML = sauces.map(sauce => {
+            const base = getSauceAvailable(sauce);
+            const inCart = inCartQty(sauce.id);
+            const avail = (base != null ? base : 0) - inCart;
+            const isUnavailable = avail <= 0;
+            const qtyLabel = avail != null ? `Qty: ${avail}` : '—';
+            return `
+                <div class="pos-sauce-item ${isUnavailable ? 'unavailable' : ''}" data-sauce-id="${sauce.id}">
+                    <div class="pos-sauce-info">
+                        <span class="pos-sauce-name">${escapeHtml(sauce.name)}</span>
+                        <span class="pos-sauce-qty">${qtyLabel}</span>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm pos-sauce-select" 
+                            ${isUnavailable ? 'disabled' : ''} 
+                            onclick="confirmPeriRibsWithSauce('${sauce.id}')">
+                        Select
+                    </button>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    document.getElementById('posSauceModal').style.display = 'block';
+}
+
+function closeSauceSelectionModal() {
+    posPendingPeriRibs = null;
+    const m = document.getElementById('posSauceModal');
+    if (m) m.style.display = 'none';
+}
+
+function confirmPeriRibsWithSauce(sauceIdOrNull) {
+    if (!posPendingPeriRibs) return;
+    const { product, quantity } = posPendingPeriRibs;
+    posPendingPeriRibs = null;
+    closeSauceSelectionModal();
+    
+    // Add main item (reuse existing add logic but skip the Peri/Ribs check to avoid recursion)
+    addToCartInternal(product, quantity);
+    
+    if (sauceIdOrNull) {
+        const sauce = posProducts.find(p => p.id === sauceIdOrNull);
+        if (sauce) {
+            const avail = getSauceAvailable(sauce);
+            const inCart = posCart.filter(i => i.freeWithPeriRibs && i.id === sauce.id).reduce((s, c) => s + c.quantity, 0);
+            const effective = (avail != null ? avail : 0) - inCart;
+            if (effective >= quantity) {
+                posCart.push({
+                    id: sauce.id,
+                    menuId: sauce.menuId,
+                    name: sauce.name,
+                    price: 0,
+                    quantity: quantity,
+                    image: sauce.image,
+                    freeWithPeriRibs: true,
+                    maxServingsPerDay: sauce.maxServingsPerDay,
+                    isVariation: sauce.isVariation,
+                    variationIndex: sauce.variationIndex,
+                    parentId: sauce.parentId
+                });
+            }
+        }
+    }
+    
+    updateCart();
+    updatePaymentButton();
+}
+
+// Internal add (no sauce popup) — used by confirmPeriRibsWithSauce
+function addToCartInternal(product, quantity) {
+    const existingItem = posCart.find(item => item.id === product.id && !item.freeWithPeriRibs);
+    const newQty = existingItem ? existingItem.quantity + quantity : quantity;
+    
+    if (product.maxServingsPerDay && product.maxServingsPerDay > 0) {
+        const remaining = getRemainingServings(product);
+        if (remaining !== null && newQty > remaining) {
+            alert(`Only ${remaining} serving(s) remaining for today.`);
+            return;
+        }
+    } else if (product.quantity !== undefined && product.quantity !== null && product.quantity > 0) {
+        if (newQty > product.quantity) {
+            alert('Not enough stock available.');
+            return;
+        }
+    }
+    
+    if (existingItem) {
+        existingItem.quantity += quantity;
+    } else {
+        posCart.push({
+            id: product.id,
+            menuId: product.menuId,
+            name: product.name,
+            price: product.price,
+            quantity: quantity,
+            image: product.image,
+            maxServingsPerDay: product.maxServingsPerDay,
+            isVariation: product.isVariation,
+            variationIndex: product.variationIndex,
+            parentId: product.parentId
+        });
+    }
 }
 
 // Remove item from cart
@@ -562,11 +729,14 @@ function updateCart() {
     } else {
         cartItems.innerHTML = posCart.map(item => {
             const itemTotal = item.price * item.quantity;
+            const isFree = item.freeWithPeriRibs;
+            const nameDisplay = isFree ? `${item.name} (Free with Peri Chicken & Ribs)` : item.name;
+            const priceDisplay = isFree ? 'Free' : `₱${item.price.toFixed(2)} each`;
             return `
                 <div class="pos-cart-item">
                     <div class="pos-cart-item-info">
-                        <div class="pos-cart-item-name">${item.name}</div>
-                        <div class="pos-cart-item-price">₱${item.price.toFixed(2)} each</div>
+                        <div class="pos-cart-item-name">${nameDisplay}</div>
+                        <div class="pos-cart-item-price">${priceDisplay}</div>
                     </div>
                     <div class="pos-cart-item-controls">
                         <div class="pos-cart-item-qty">
@@ -581,7 +751,7 @@ function updateCart() {
                                    onclick="this.select()">
                             <button onclick="updateCartItemQuantity('${item.id}', 1)">+</button>
                         </div>
-                        <div class="pos-cart-item-total">₱${itemTotal.toFixed(2)}</div>
+                        <div class="pos-cart-item-total">${isFree ? 'Free' : '₱' + itemTotal.toFixed(2)}</div>
                         <button class="pos-cart-item-remove" onclick="removeFromCart('${item.id}')" title="Remove">
                             <i class="fas fa-times"></i>
                         </button>
@@ -827,6 +997,10 @@ async function processPayment() {
                 orderItem.variationId = item.id;
             }
             
+            if (item.freeWithPeriRibs) {
+                orderItem.freeWithPeriRibs = true;
+            }
+            
             return orderItem;
         });
         
@@ -964,8 +1138,16 @@ async function deductStockForOrder(orderItems) {
             // Get maxServingsPerDay
             let maxServings = product.maxServingsPerDay;
             if (maxServings === null || maxServings === 0) {
-                // No daily limit set, skip serving increment
-                console.log(`Skipping daily serving increment for ${product.name} (no limit set)`);
+                // Sauce (free with Peri Chicken & Ribs) or Sauce-category: decrement quantity in menu if present
+                const isSauce = orderItem.freeWithPeriRibs || ((product.category || '').toLowerCase().includes('sauce'));
+                if (isSauce && !product.isVariation && product.quantity !== undefined && product.quantity !== null && fns.increment) {
+                    const menuId = product.menuId || product.id;
+                    const menuRef = fns.doc(window.db, 'menu', menuId);
+                    await fns.updateDoc(menuRef, { quantity: fns.increment(-orderQty) });
+                    console.log(`Decremented sauce ${product.name} quantity by ${orderQty}`);
+                } else {
+                    console.log(`Skipping daily serving increment for ${product.name} (no limit set)`);
+                }
                 continue;
             }
             
@@ -1061,7 +1243,7 @@ function showReceipt(orderId, orderData, paymentAmount, change, customerName = '
             <div class="pos-receipt-items">
                 ${orderData.items.map(item => `
                     <div class="pos-receipt-item">
-                        <div class="pos-receipt-item-name">${item.name}</div>
+                        <div class="pos-receipt-item-name">${item.name}${item.freeWithPeriRibs ? ' (Free with Peri Chicken & Ribs)' : ''}</div>
                         <div class="pos-receipt-item-qty">${item.quantity}x</div>
                         <div class="pos-receipt-item-price">₱${(item.price * item.quantity).toFixed(2)}</div>
                     </div>
@@ -1259,6 +1441,7 @@ function isFirestoreReady() {
 window.onclick = function(event) {
     const receiptModal = document.getElementById('posReceiptModal');
     const ordersLogModal = document.getElementById('posOrdersLogModal');
+    const sauceModal = document.getElementById('posSauceModal');
     
     if (event.target === receiptModal) {
         closeReceiptModal();
@@ -1266,6 +1449,10 @@ window.onclick = function(event) {
     
     if (event.target === ordersLogModal) {
         closeWalkInOrdersLog();
+    }
+    
+    if (event.target === sauceModal) {
+        closeSauceSelectionModal();
     }
 }
 

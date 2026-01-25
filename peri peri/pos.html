@@ -363,6 +363,27 @@
         </main>
     </div>
 
+    <!-- Sauce Selection Modal (Peri Chicken & Ribs) -->
+    <div id="posSauceModal" class="modal" style="display: none;">
+        <div class="modal-content pos-sauce-modal">
+            <div class="modal-header">
+                <h2 id="posSauceModalTitle">Choose Sauce</h2>
+                <span class="close-modal" onclick="closeSauceSelectionModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p class="pos-sauce-modal-intro">Select a sauce for your Peri Chicken & Ribs item. Sauces are <strong>free</strong> with this order.</p>
+                <div class="pos-sauce-list" id="posSauceList">
+                    <!-- Sauces will be rendered here -->
+                </div>
+                <div class="pos-sauce-actions">
+                    <button type="button" class="btn btn-secondary" onclick="confirmPeriRibsWithSauce(null)">
+                        No sauce
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Receipt Modal -->
     <div id="posReceiptModal" class="modal" style="display: none;">
         <div class="modal-content pos-receipt-modal">

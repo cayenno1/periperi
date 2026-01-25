@@ -72,6 +72,28 @@
         }
     }
 
+    // Fetch today's served count for a menu item (used for main items and sauces with maxServingsPerDay)
+    async function fetchDailyServedCount(menuId) {
+        await window.utils.waitForFirebaseReady();
+
+        const db = window.firebaseDb;
+        if (!db || !window.doc || !window.getDoc) {
+            return 0;
+        }
+
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const ref = window.doc(db, 'dailyServings', `${today}_${menuId}`);
+            const snap = await window.getDoc(ref);
+            if (!snap.exists()) return 0;
+            const data = snap.data() || {};
+            return typeof data.count === 'number' ? data.count : (Number(data.count) || 0);
+        } catch (error) {
+            console.error('Error fetching daily served count:', error);
+            return 0;
+        }
+    }
+
     // Fetch a single menu item by ID
     async function fetchMenuItemById(itemId) {
         await window.utils.waitForFirebaseReady();
@@ -493,6 +515,7 @@
         REVIEWS_SUBCOLLECTION,
         fetchMenuItems,
         fetchMenuItemById,
+        fetchDailyServedCount,
         fetchReviewSummaryForItem,
         fetchReviewsForItem,
         saveReviewForItem,

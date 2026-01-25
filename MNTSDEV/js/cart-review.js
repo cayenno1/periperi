@@ -124,6 +124,25 @@
         itemOptions.innerHTML = existingContent + variationHtml;
     }
 
+    // Enrich sauces with availability (maxServingsPerDay, remaining, isUnavailable)
+    async function enrichSaucesWithAvailability(sauces) {
+        if (!sauces || sauces.length === 0) return sauces;
+        for (const sauce of sauces) {
+            const max = typeof sauce.maxServingsPerDay === 'number'
+                ? sauce.maxServingsPerDay
+                : (typeof sauce.maxServingsPerDay === 'string' ? parseFloat(sauce.maxServingsPerDay) : null);
+            if (max == null || max === undefined || isNaN(max) || max <= 0) {
+                sauce._isUnavailable = true;
+                sauce._remaining = 0;
+            } else {
+                const served = await window.firestore.fetchDailyServedCount(sauce.id);
+                sauce._remaining = Math.max(0, max - served);
+                sauce._isUnavailable = sauce._remaining <= 0;
+            }
+        }
+        return sauces;
+    }
+
     // Render sauce dropdown
     async function renderSauceDropdown(itemId, currentSauce, cartItemEl, source) {
         const itemOptions = cartItemEl.querySelector('.item-options');
@@ -139,18 +158,22 @@
             return;
         }
         
-        const sauces = await loadSauces();
+        let sauces = await loadSauces();
         if (!sauces || sauces.length === 0) {
             // Don't clear if variations might be present - just don't render sauce
             return;
         }
+
+        sauces = await enrichSaucesWithAvailability(sauces);
         
         const currentSauceId = currentSauce?.id || null;
         
         const sauceOptions = sauces.map(sauce => {
             const sauceName = sauce.displayName || sauce.name || sauce.title;
             const selected = sauce.id === currentSauceId ? 'selected' : '';
-            return `<option value="${sauce.id}" ${selected}>${sauceName}</option>`;
+            const statusText = sauce._isUnavailable ? ' (Unavailable)' : ` (${sauce._remaining} left)`;
+            const disabled = sauce._isUnavailable ? ' disabled' : '';
+            return `<option value="${sauce.id}" ${selected}${disabled}>${sauceName}${statusText}</option>`;
         }).join('');
         
         const selectId = `sauce-select-${itemId}-${Date.now()}`;

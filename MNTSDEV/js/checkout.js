@@ -1454,6 +1454,8 @@
             const unavailableItems = [];
             const orderItems = [];
             const menuUpdates = {}; // menuId -> { menuRef, currentMaxServingsPerDay, quantity }
+            const sauceTotals = {}; // sauceId -> total quantity from all cart lines
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
             for (const cartItem of cartItems) {
                 const qty =
@@ -1559,6 +1561,57 @@
                         price: 0 // Sauce has no fee when attached to a dish
                     } : null
                 });
+
+                // Aggregate sauce quantities for items with sauce (peri chicken, ribs)
+                if (sauce && sauce.id) {
+                    sauceTotals[sauce.id] = (sauceTotals[sauce.id] || 0) + qty;
+                }
+            }
+
+            // Validate sauce availability and prepare sauce dailyServings updates
+            const sauceDailyData = {};
+            for (const [sauceId, totalQty] of Object.entries(sauceTotals)) {
+                const sauceMenuRef = window.doc(db, MENU_COLLECTION, sauceId);
+                const sauceMenuSnap = await transaction.get(sauceMenuRef);
+                if (!sauceMenuSnap.exists()) {
+                    unavailableItems.push({
+                        itemId: sauceId,
+                        name: 'Sauce',
+                        reason: 'Sauce no longer exists on menu'
+                    });
+                    continue;
+                }
+                const sauceData = sauceMenuSnap.data() || {};
+                const maxSauce = typeof sauceData.maxServingsPerDay === 'number'
+                    ? sauceData.maxServingsPerDay
+                    : (typeof sauceData.maxServingsPerDay === 'string' ? parseFloat(sauceData.maxServingsPerDay) : null);
+                if (maxSauce == null || maxSauce === undefined || isNaN(maxSauce) || maxSauce <= 0) {
+                    unavailableItems.push({
+                        itemId: sauceId,
+                        name: sauceData.displayName || sauceData.name || 'Sauce',
+                        reason: 'Sauce is currently unavailable (maxServingsPerDay is null or 0)'
+                    });
+                    continue;
+                }
+                const sauceDailyRef = window.doc(db, 'dailyServings', `${today}_${sauceId}`);
+                const sauceDailySnap = await transaction.get(sauceDailyRef);
+                const currentSauceCount = sauceDailySnap.exists() ? (sauceDailySnap.data().count || 0) : 0;
+                if (maxSauce - currentSauceCount < totalQty) {
+                    unavailableItems.push({
+                        itemId: sauceId,
+                        name: sauceData.displayName || sauceData.name || 'Sauce',
+                        reason: `Only ${maxSauce - currentSauceCount} sauce serving(s) left, but ${totalQty} requested`
+                    });
+                    continue;
+                }
+                sauceDailyData[sauceId] = {
+                    ref: sauceDailyRef,
+                    exists: sauceDailySnap.exists(),
+                    data: sauceDailySnap.exists() ? sauceDailySnap.data() : {},
+                    quantity: totalQty,
+                    maxSauce: maxSauce,
+                    sauceName: sauceData.displayName || sauceData.name || 'Sauce'
+                };
             }
 
             // If any items are unavailable, block the order
@@ -1582,8 +1635,6 @@
 
             // IMPORTANT: Firestore transactions require all reads before all writes
             // Read all dailyServings documents first, then do all writes
-            
-            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
             const dailyServingsData = {}; // Store dailyServings document data
             
             // Read all dailyServings documents first (before any writes)
@@ -1659,6 +1710,27 @@
                         date: today,
                         count: updateInfo.quantity,
                         maxServings: updateInfo.currentMaxServingsPerDay,
+                        createdAt: window.serverTimestamp ? window.serverTimestamp() : new Date(),
+                        updatedAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
+                    });
+                }
+            }
+
+            // Update dailyServings for sauces (decrease available when ordering with peri chicken/ribs)
+            for (const [sauceId, s] of Object.entries(sauceDailyData)) {
+                if (s.exists) {
+                    const currentCount = s.data.count || 0;
+                    transaction.update(s.ref, {
+                        count: currentCount + s.quantity,
+                        updatedAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
+                    });
+                } else {
+                    transaction.set(s.ref, {
+                        menuItemId: sauceId,
+                        menuItemName: s.sauceName,
+                        date: today,
+                        count: s.quantity,
+                        maxServings: s.maxSauce,
                         createdAt: window.serverTimestamp ? window.serverTimestamp() : new Date(),
                         updatedAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
                     });

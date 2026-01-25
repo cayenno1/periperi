@@ -115,6 +115,21 @@
                 return;
             }
 
+            // Enrich each sauce with maxServingsPerDay, remaining, and isUnavailable
+            for (const sauce of sauces) {
+                const max = typeof sauce.maxServingsPerDay === 'number'
+                    ? sauce.maxServingsPerDay
+                    : (typeof sauce.maxServingsPerDay === 'string' ? parseFloat(sauce.maxServingsPerDay) : null);
+                if (max == null || max === undefined || isNaN(max) || max <= 0) {
+                    sauce._isUnavailable = true;
+                    sauce._remaining = 0;
+                } else {
+                    const served = await window.firestore.fetchDailyServedCount(sauce.id);
+                    sauce._remaining = Math.max(0, max - served);
+                    sauce._isUnavailable = sauce._remaining <= 0;
+                }
+            }
+
             currentSauces = sauces;
             sauceScrollPosition = 0;
             
@@ -128,11 +143,15 @@
                     : (typeof sauce.price === 'string' ? parseFloat(sauce.price) : 0);
                 const isSelected = selectedSauce && selectedSauce.id === sauce.id;
                 const sauceImage = sauce.imageDataUrl || sauce.image || sauce.img || '';
+                const isUnavail = sauce._isUnavailable === true;
+                const statusText = isUnavail ? 'Unavailable' : `${sauce._remaining} left`;
+                const cardClass = [isSelected ? 'active' : '', isUnavail ? 'unavailable' : ''].filter(Boolean).join(' ');
                 
                 return `
                     <div 
-                        class="sauce-card ${isSelected ? 'active' : ''}" 
+                        class="sauce-card ${cardClass}" 
                         data-sauce-id="${sauce.id}"
+                        data-unavailable="${isUnavail ? '1' : '0'}"
                         onclick="window.foodItem.selectSauce('${sauce.id}')"
                     >
                         <div class="sauce-card-image">
@@ -140,6 +159,7 @@
                         </div>
                         <div class="sauce-card-info">
                             <div class="sauce-card-name">${sauceName}</div>
+                            <div class="sauce-card-remaining">${statusText}</div>
                         </div>
                     </div>
                 `;
@@ -151,9 +171,10 @@
             // Update navigation buttons visibility
             updateSauceNavigation();
             
-            // Auto-select first sauce if none selected
+            // Auto-select first available sauce if none selected
             if (selectedSauce === null && sauces.length > 0) {
-                selectSauce(sauces[0].id);
+                const firstAvailable = sauces.find(s => !s._isUnavailable);
+                if (firstAvailable) selectSauce(firstAvailable.id);
             }
         } catch (error) {
             console.error('Error loading sauces:', error);
@@ -168,6 +189,7 @@
     function selectSauce(sauceId) {
         const sauce = currentSauces.find(s => s.id === sauceId);
         if (!sauce) return;
+        if (sauce._isUnavailable === true) return;
 
         selectedSauce = sauce;
 
@@ -415,6 +437,15 @@
     async function addToCart() {
         const btn = document.querySelector('.add-to-cart-btn');
         if (!btn || btn.disabled) return;
+
+        if (selectedSauce && selectedSauce._isUnavailable === true) {
+            if (window.utils?.showToast) {
+                window.utils.showToast('Selected sauce is unavailable. Please choose another.', 'error', 2200);
+            } else {
+                alert('Selected sauce is unavailable. Please choose another.');
+            }
+            return;
+        }
 
         const originalContent = btn.innerHTML;
         const originalBg = btn.style.background;

@@ -9163,6 +9163,23 @@ body.food-item-page {
   box-shadow: 0 4px 12px rgba(229, 57, 53, 0.2);
 }
 
+.sauce-card.unavailable {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.sauce-card.unavailable .sauce-card-remaining {
+  color: #c62828;
+  font-weight: 600;
+}
+
+.sauce-card-remaining {
+  font-size: 0.75rem;
+  color: #666;
+  margin-top: 4px;
+}
+
 .sauce-card-image {
   width: 100%;
   height: 120px;
