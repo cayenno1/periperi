@@ -399,6 +399,79 @@ exports.testGmailConnection = functions
 });
 
 /**
+ * Firestore trigger: notifyOnDiscountVerification
+ * -----------------------------------------------
+ * When a customer's PWD/Senior ID discount is accepted or declined (discountInfo
+ * updated by admin), creates a notification in customers/{userId}/notifs.
+ *
+ * Accepted: discountInfo.IDverification changes to true
+ * Declined: discountInfo.idVerificationReason is set (non-empty) and IDverification is not true
+ *
+ * Deploy: firebase deploy --only functions:notifyOnDiscountVerification
+ */
+exports.notifyOnDiscountVerification = functions.firestore
+  .document("customers/{userId}")
+  .onUpdate(async (change, context) => {
+    const userId = context.params.userId;
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const beforeDiscount = before.discountInfo || {};
+    const afterDiscount = after.discountInfo || {};
+
+    const discountType = afterDiscount.type || beforeDiscount.type;
+    const discountLabel = (discountType === "pwd" ? "PWD" : "Senior Citizen");
+
+    // Accepted: IDverification changed to true
+    if (afterDiscount.IDverification === true && beforeDiscount.IDverification !== true) {
+      try {
+        await admin
+          .firestore()
+          .collection("customers")
+          .doc(userId)
+          .collection("notifs")
+          .add({
+            type: "discount_verified",
+            title: "Discount Verified",
+            message: `Your ${discountLabel} discount has been verified and is now active. You will receive 20% off on all orders.`,
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        console.log(`[notifyOnDiscountVerification] Created accepted notif for customer ${userId}`);
+      } catch (e) {
+        console.warn("[notifyOnDiscountVerification] Error creating accepted notif:", e.message);
+      }
+      return null;
+    }
+
+    // Declined: idVerificationReason newly set or changed, and IDverification is not true
+    const beforeReason = String(beforeDiscount.idVerificationReason || before.idVerificationReason || "").trim();
+    const afterReason = String(afterDiscount.idVerificationReason || after.idVerificationReason || "").trim();
+    const reasonChanged = afterReason.length > 0 && beforeReason !== afterReason;
+
+    if (reasonChanged && afterDiscount.IDverification !== true) {
+      try {
+        await admin
+          .firestore()
+          .collection("customers")
+          .doc(userId)
+          .collection("notifs")
+          .add({
+            type: "discount_declined",
+            title: "Discount Not Approved",
+            message: `Your ${discountLabel} discount was not approved. Reason: ${afterReason}. You may re-upload your proof in Account settings.`,
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        console.log(`[notifyOnDiscountVerification] Created declined notif for customer ${userId}`);
+      } catch (e) {
+        console.warn("[notifyOnDiscountVerification] Error creating declined notif:", e.message);
+      }
+    }
+
+    return null;
+  });
+
+/**
  * Scheduled: deleteOldNotifs
  * -------------------------
  * Runs every 24 hours and deletes notifications in customers/{uid}/notifs
@@ -440,4 +513,3 @@ exports.deleteOldNotifs = functions.pubsub
     }
     return null;
   });
-

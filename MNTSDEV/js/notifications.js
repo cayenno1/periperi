@@ -24,7 +24,9 @@
         ORDER_STATUS_CHANGE: 'order_status_change',
         ORDER_DECLINED: 'order_declined',
         SYSTEM_UPDATE: 'system_update',
-        PAYMENT_REQUIRED: 'payment_required'
+        PAYMENT_REQUIRED: 'payment_required',
+        DISCOUNT_VERIFIED: 'discount_verified',
+        DISCOUNT_DECLINED: 'discount_declined'
     };
 
     // Initialize notification system
@@ -328,7 +330,9 @@
             [NOTIFICATION_TYPES.ORDER_STATUS_CHANGE]: '<i class="fas fa-shopping-bag"></i>',
             [NOTIFICATION_TYPES.ORDER_DECLINED]: '<i class="fas fa-times-circle"></i>',
             [NOTIFICATION_TYPES.SYSTEM_UPDATE]: '<i class="fas fa-info-circle"></i>',
-            [NOTIFICATION_TYPES.PAYMENT_REQUIRED]: '<i class="fas fa-credit-card"></i>'
+            [NOTIFICATION_TYPES.PAYMENT_REQUIRED]: '<i class="fas fa-credit-card"></i>',
+            [NOTIFICATION_TYPES.DISCOUNT_VERIFIED]: '<i class="fas fa-id-card"></i>',
+            [NOTIFICATION_TYPES.DISCOUNT_DECLINED]: '<i class="fas fa-id-card"></i>'
         };
         return icons[type] || '<i class="fas fa-bell"></i>';
     }
