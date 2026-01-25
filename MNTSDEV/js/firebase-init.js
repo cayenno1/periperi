@@ -37,6 +37,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   runTransaction,
   serverTimestamp,
   increment
@@ -103,6 +104,7 @@ window.getDocs = getDocs;
 window.query = query;
 window.where = where;
 window.orderBy = orderBy;
+window.limit = limit;
 window.runTransaction = runTransaction;
 window.serverTimestamp = serverTimestamp;
 window.increment = increment;

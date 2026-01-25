@@ -398,3 +398,46 @@ exports.testGmailConnection = functions
   }
 });
 
+/**
+ * Scheduled: deleteOldNotifs
+ * -------------------------
+ * Runs every 24 hours and deletes notifications in customers/{uid}/notifs
+ * older than 7 days. Requires a composite index on the notifs collection group:
+ *   collectionGroup: "notifs", fields: [{ createdAt, Ascending }]
+ * (Firestore will suggest creating it on first run if missing.)
+ *
+ * Deploy: firebase deploy --only functions:deleteOldNotifs
+ */
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const BATCH_SIZE = 500;
+
+exports.deleteOldNotifs = functions.pubsub
+  .schedule("every 24 hours")
+  .onRun(async () => {
+    const db = admin.firestore();
+    const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - SEVEN_DAYS_MS);
+    let totalDeleted = 0;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const q = db
+        .collectionGroup("notifs")
+        .where("createdAt", "<", cutoff)
+        .orderBy("createdAt", "asc")
+        .limit(BATCH_SIZE);
+
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      totalDeleted += snap.docs.length;
+    }
+
+    if (totalDeleted > 0) {
+      console.log(`[deleteOldNotifs] Deleted ${totalDeleted} notification(s) older than 7 days.`);
+    }
+    return null;
+  });
+

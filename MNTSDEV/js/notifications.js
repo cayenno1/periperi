@@ -1,14 +1,21 @@
 // ============================================
 // NOTIFICATION SYSTEM
 // Handles order notifications, system updates, and declined order recomply
+// Persisted in Firestore: customers/{uid}/notifs (subcollection)
+// - Read/mark-all-as-read state is saved; no re-notifying on refresh for read items
+// - Badge only shows for NEW unread notifications
+// - Notifications auto-deleted after 7 days (Cloud Function)
 // ============================================
 
 (function() {
     'use strict';
 
+    const NOTIFS_SUBCOLLECTION = 'notifs';
+
     let notifications = [];
     let unreadCount = 0;
     let orderListeners = new Map(); // orderId -> unsubscribe function
+    let notifUnsubscribe = null;   // unsubscribe for notifs onSnapshot
     let isInitialized = false;
     let previousOrderStates = new Map(); // orderId -> previous order data
 
@@ -23,56 +30,83 @@
     // Initialize notification system
     async function init() {
         if (isInitialized) return;
-        
+
         // Wait for utils to be available
         if (window.utils && typeof window.utils.waitForFirebaseReady === 'function') {
             await window.utils.waitForFirebaseReady();
         }
-        
+
         const user = window.firebaseAuth?.currentUser;
         if (user) {
-            loadNotifications();
+            subscribeToNotifs(user.uid);
             setupOrderListeners(user);
         }
-        
+
         // Listen for auth state changes
         if (window.onAuthStateChanged && window.firebaseAuth) {
             window.onAuthStateChanged(window.firebaseAuth, (user) => {
                 if (user) {
-                    loadNotifications();
+                    subscribeToNotifs(user.uid);
                     setupOrderListeners(user);
                 } else {
                     clearNotifications();
                 }
             });
         }
-        
+
         isInitialized = true;
         renderNotifications();
     }
 
-    // Load notifications from localStorage
-    function loadNotifications() {
-        try {
-            const stored = localStorage.getItem('ppp_notifications');
-            if (stored) {
-                notifications = JSON.parse(stored);
-                updateUnreadCount();
-            }
-        } catch (e) {
-            console.warn('Error loading notifications:', e);
-            notifications = [];
+    // Subscribe to Firestore notifs subcollection: customers/{uid}/notifs
+    // Source of truth: only unread items drive the badge; read items stay read across refresh
+    function subscribeToNotifs(uid) {
+        if (!uid || !window.firebaseDb || !window.collection || !window.doc || !window.query || !window.orderBy || !window.limit || !window.onSnapshot) {
+            console.warn('Firebase not ready for notifs subscription');
+            return;
         }
-    }
 
-    // Save notifications to localStorage
-    function saveNotifications() {
-        try {
-            localStorage.setItem('ppp_notifications', JSON.stringify(notifications));
-            updateUnreadCount();
-        } catch (e) {
-            console.warn('Error saving notifications:', e);
+        // Unsubscribe previous listener
+        if (notifUnsubscribe) {
+            try { notifUnsubscribe(); } catch (e) { console.warn('Notif unsubscribe error:', e); }
+            notifUnsubscribe = null;
         }
+
+        const notifsCol = window.collection(window.doc(window.firebaseDb, 'customers', uid), NOTIFS_SUBCOLLECTION);
+        const q = window.query(
+            notifsCol,
+            window.orderBy('createdAt', 'desc'),
+            window.limit(50)
+        );
+
+        notifUnsubscribe = window.onSnapshot(q, (snapshot) => {
+            notifications = snapshot.docs.map((d) => {
+                const data = d.data() || {};
+                const createdAt = data.createdAt;
+                let ts = Date.now();
+                if (createdAt && typeof createdAt.toMillis === 'function') ts = createdAt.toMillis();
+                else if (typeof createdAt === 'number') ts = createdAt;
+
+                return {
+                    id: d.id,
+                    type: data.type || NOTIFICATION_TYPES.SYSTEM_UPDATE,
+                    title: data.title || '',
+                    message: data.message || '',
+                    orderId: data.orderId || null,
+                    orderNumber: data.orderNumber || null,
+                    declineReason: data.declineReason || null,
+                    oldStatus: data.oldStatus || null,
+                    newStatus: data.newStatus || null,
+                    actionRequired: !!data.actionRequired,
+                    read: !!data.read,
+                    timestamp: ts
+                };
+            });
+            updateUnreadCount();
+            renderNotifications();
+        }, (error) => {
+            console.warn('Notifs snapshot error:', error);
+        });
     }
 
     // Setup real-time listeners for user's orders
@@ -84,18 +118,14 @@
 
         // Clean up existing listeners
         orderListeners.forEach(unsub => {
-            try {
-                unsub();
-            } catch (e) {
-                console.warn('Error unsubscribing listener:', e);
-            }
+            try { unsub(); } catch (e) { console.warn('Error unsubscribing listener:', e); }
         });
         orderListeners.clear();
         previousOrderStates.clear();
 
         try {
             const ordersCol = window.collection(window.firebaseDb, 'orders');
-            
+
             // Listen to authenticated orders
             const authQuery = window.query(
                 ordersCol,
@@ -106,20 +136,14 @@
                 snapshot.docChanges().forEach((change) => {
                     const orderId = change.doc.id;
                     const newData = change.doc.data();
-                    
-                    // Get previous state from memory
                     const oldData = previousOrderStates.get(orderId) || null;
-                    
-                    // Update stored state
                     previousOrderStates.set(orderId, { ...newData });
-                    
-                    if (change.type === 'modified' || change.type === 'added') {
+                    // Only 'modified' to avoid notifying for existing orders on first load
+                    if (change.type === 'modified') {
                         handleOrderChange(orderId, oldData, newData);
                     }
                 });
-            }, (error) => {
-                console.warn('Error in auth order listener:', error);
-            });
+            }, (error) => { console.warn('Error in auth order listener:', error); });
 
             orderListeners.set('auth', unsubscribeAuth);
 
@@ -134,24 +158,17 @@
                     snapshot.docChanges().forEach((change) => {
                         const orderId = change.doc.id;
                         const data = change.doc.data();
-                        const orderEmail = data.customerInfo?.email?.toLowerCase().trim();
-                        const userEmail = user.email.toLowerCase().trim();
-                        
-                        if (orderEmail === userEmail) {
-                            // Get previous state from memory
+                        const orderEmail = (data.customerInfo?.email || '').toLowerCase().trim();
+                        const userEmail = (user.email || '').toLowerCase().trim();
+                        if (orderEmail && orderEmail === userEmail) {
                             const oldData = previousOrderStates.get(orderId) || null;
-                            
-                            // Update stored state
                             previousOrderStates.set(orderId, { ...data });
-                            
-                            if (change.type === 'modified' || change.type === 'added') {
+                            if (change.type === 'modified') {
                                 handleOrderChange(orderId, oldData, data);
                             }
                         }
                     });
-                }, (error) => {
-                    console.warn('Error in guest order listener:', error);
-                });
+                }, (error) => { console.warn('Error in guest order listener:', error); });
 
                 orderListeners.set('guest', unsubscribeGuest);
             }
@@ -164,85 +181,96 @@
     function handleOrderChange(orderId, oldData, newData) {
         if (!newData) return;
 
-        const oldStatus = oldData?.status?.toLowerCase() || 'pending';
-        const newStatus = newData.status?.toLowerCase() || 'pending';
+        const oldStatus = (oldData?.status || 'pending').toLowerCase();
+        const newStatus = (newData.status || 'pending').toLowerCase();
         const orderNumber = newData.orderNumber || newData.trackingId || orderId;
         const displayId = orderNumber.startsWith('#') ? orderNumber : `#${orderNumber}`;
 
-        // Check if order was declined
         if (newStatus === 'declined' && oldStatus !== 'declined') {
             const declineReason = newData.declineReason || 'Payment verification failed';
             addNotification({
-                id: `order_declined_${orderId}_${Date.now()}`,
                 type: NOTIFICATION_TYPES.ORDER_DECLINED,
                 title: 'Order Declined',
                 message: `Order ${displayId} has been declined: ${declineReason}`,
                 orderId: orderId,
                 orderNumber: displayId,
                 declineReason: declineReason,
-                timestamp: Date.now(),
-                read: false,
                 actionRequired: true
             });
-            return; // Don't process other status changes for declined orders
+            return;
         }
-        // Check for other status changes (but not if it was already declined)
-        else if (oldStatus !== newStatus && oldStatus !== 'declined' && newStatus !== 'declined') {
+
+        if (oldStatus !== newStatus && oldStatus !== 'declined' && newStatus !== 'declined') {
             const statusLabels = {
                 'pending': 'Pending',
-                'preparing': 'Preparing',
+                'preparing': 'In Kitchen',
                 'ready': 'Ready',
                 'out for delivery': 'Out for Delivery',
-                'delivered': 'Delivered',
+                'delivered': 'Done',
                 'completed': 'Completed'
             };
-
             addNotification({
-                id: `order_status_${orderId}_${Date.now()}`,
                 type: NOTIFICATION_TYPES.ORDER_STATUS_CHANGE,
                 title: 'Order Status Updated',
                 message: `Order ${displayId} is now ${statusLabels[newStatus] || newStatus}`,
                 orderId: orderId,
                 orderNumber: displayId,
                 oldStatus: oldStatus,
-                newStatus: newStatus,
-                timestamp: Date.now(),
-                read: false
+                newStatus: newStatus
             });
         }
     }
 
-    // Add a new notification
-    function addNotification(notification) {
-        // Check if similar notification already exists (prevent duplicates)
-        const exists = notifications.some(n => 
-            n.orderId === notification.orderId && 
-            n.type === notification.type &&
-            Date.now() - n.timestamp < 5000 // Within 5 seconds
-        );
+    // Add a new notification to Firestore (customers/{uid}/notifs)
+    // Badge only increases when this creates a new unread doc; on refresh we load from Firestore and only count unread
+    async function addNotification(payload) {
+        const user = window.firebaseAuth?.currentUser;
+        if (!user || !window.firebaseDb || !window.collection || !window.doc || !window.addDoc || !window.serverTimestamp) {
+            return;
+        }
 
+        // Dedupe: same orderId + type within 5 seconds
+        const exists = notifications.some(n =>
+            n.orderId === payload.orderId &&
+            n.type === payload.type &&
+            (Date.now() - n.timestamp) < 5000
+        );
         if (exists) return;
 
-        notifications.unshift(notification); // Add to beginning
-        notifications = notifications.slice(0, 50); // Keep only last 50
-        saveNotifications();
-        renderNotifications();
-        showNotificationBadge();
+        const notifsCol = window.collection(window.doc(window.firebaseDb, 'customers', user.uid), NOTIFS_SUBCOLLECTION);
+        const data = {
+            type: payload.type,
+            title: payload.title,
+            message: payload.message,
+            read: false,
+            createdAt: window.serverTimestamp()
+        };
+        if (payload.orderId != null) data.orderId = payload.orderId;
+        if (payload.orderNumber != null) data.orderNumber = payload.orderNumber;
+        if (payload.declineReason != null) data.declineReason = payload.declineReason;
+        if (payload.oldStatus != null) data.oldStatus = payload.oldStatus;
+        if (payload.newStatus != null) data.newStatus = payload.newStatus;
+        if (payload.actionRequired != null) data.actionRequired = !!payload.actionRequired;
+
+        try {
+            await window.addDoc(notifsCol, data);
+            // onSnapshot will update notifications and badge
+            showNotificationBadge();
+        } catch (e) {
+            console.warn('Error adding notification to Firestore:', e);
+        }
     }
 
     // Add system notification
     function addSystemNotification(title, message) {
         addNotification({
-            id: `system_${Date.now()}`,
             type: NOTIFICATION_TYPES.SYSTEM_UPDATE,
             title: title,
-            message: message,
-            timestamp: Date.now(),
-            read: false
+            message: message
         });
     }
 
-    // Update unread count
+    // Update unread count and badge (only unread drive the badge; no re-notify for read on refresh)
     function updateUnreadCount() {
         unreadCount = notifications.filter(n => !n.read).length;
         const badge = document.getElementById('notificationBadge');
@@ -277,14 +305,14 @@
             const readClass = notif.read ? 'read' : 'unread';
 
             return `
-                <div class="notification-item ${readClass}" data-notification-id="${notif.id}" onclick="window.notifications?.handleNotificationClick('${notif.id}')">
+                <div class="notification-item ${readClass}" data-notification-id="${escapeHtml(notif.id)}" onclick="window.notifications?.handleNotificationClick('${escapeHtml(notif.id)}')">
                     <div class="notification-icon-small">${icon}</div>
                     <div class="notification-content">
                         <div class="notification-title">${escapeHtml(notif.title)}</div>
                         <div class="notification-message">${escapeHtml(notif.message)}</div>
                         <div class="notification-time">${timeAgo}</div>
                         ${notif.type === NOTIFICATION_TYPES.ORDER_DECLINED && notif.actionRequired ? `
-                            <button class="notification-action-btn" onclick="event.stopPropagation(); window.notifications?.recomplyOrder('${notif.orderId}')">
+                            <button class="notification-action-btn" onclick="event.stopPropagation(); window.notifications?.recomplyOrder('${escapeHtml(notif.orderId || '')}')">
                                 <i class="fas fa-redo"></i> Recomply
                             </button>
                         ` : ''}
@@ -295,7 +323,6 @@
         }).join('');
     }
 
-    // Get notification icon based on type
     function getNotificationIcon(type) {
         const icons = {
             [NOTIFICATION_TYPES.ORDER_STATUS_CHANGE]: '<i class="fas fa-shopping-bag"></i>',
@@ -306,7 +333,6 @@
         return icons[type] || '<i class="fas fa-bell"></i>';
     }
 
-    // Get time ago string
     function getTimeAgo(date) {
         const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
         if (seconds < 60) return 'Just now';
@@ -318,14 +344,13 @@
         return `${days}d ago`;
     }
 
-    // Escape HTML
     function escapeHtml(text) {
+        if (text == null) return '';
         const div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = String(text);
         return div.innerHTML;
     }
 
-    // Toggle notification dropdown
     function toggleDropdown() {
         const dropdown = document.getElementById('notificationDropdown');
         if (!dropdown) return;
@@ -338,27 +363,43 @@
         }
     }
 
-    // Handle notification click
-    function handleNotificationClick(notificationId) {
+    // Mark one as read in Firestore; onSnapshot will update local state and badge
+    async function handleNotificationClick(notificationId) {
         const notif = notifications.find(n => n.id === notificationId);
         if (!notif) return;
 
-        // Mark as read
-        notif.read = true;
-        saveNotifications();
-        renderNotifications();
+        const user = window.firebaseAuth?.currentUser;
+        if (!user || !window.firebaseDb || !window.doc || !window.updateDoc) return;
 
-        // Navigate based on type
+        try {
+            const ref = window.doc(window.firebaseDb, 'customers', user.uid, NOTIFS_SUBCOLLECTION, notificationId);
+            await window.updateDoc(ref, { read: true });
+        } catch (e) {
+            console.warn('Error marking notification as read:', e);
+        }
+
         if (notif.orderId) {
             window.location.href = `order_details.html?orderId=${encodeURIComponent(notif.orderId)}`;
         }
     }
 
-    // Mark all as read
-    function markAllAsRead() {
-        notifications.forEach(n => n.read = true);
-        saveNotifications();
-        renderNotifications();
+    // Mark all as read in Firestore
+    async function markAllAsRead() {
+        const user = window.firebaseAuth?.currentUser;
+        if (!user || !window.firebaseDb || !window.doc || !window.updateDoc) return;
+
+        const unread = notifications.filter(n => !n.read);
+        if (unread.length === 0) return;
+
+        try {
+            for (const n of unread) {
+                const ref = window.doc(window.firebaseDb, 'customers', user.uid, NOTIFS_SUBCOLLECTION, n.id);
+                await window.updateDoc(ref, { read: true });
+            }
+            // onSnapshot will update local and badge
+        } catch (e) {
+            console.warn('Error marking all as read:', e);
+        }
     }
 
     // Recomply to declined order
@@ -369,7 +410,7 @@
             if (window.utils && typeof window.utils.waitForFirebaseReady === 'function') {
                 await window.utils.waitForFirebaseReady();
             }
-            
+
             const db = window.firebaseDb;
             if (!db || !window.doc || !window.getDoc) {
                 alert('Unable to load order. Please try again.');
@@ -378,32 +419,28 @@
 
             const orderRef = window.doc(db, 'orders', orderId);
             const orderSnap = await window.getDoc(orderRef);
-            
+
             if (!orderSnap.exists()) {
                 alert('Order not found.');
                 return;
             }
 
             const orderData = orderSnap.data();
-            
-            // Check if order is actually declined
+
             if (orderData.status?.toLowerCase() !== 'declined') {
                 alert('This order is not declined.');
                 return;
             }
 
-            // Check if it's a GCash order that needs payment proof
             const paymentMethod = (orderData.paymentMode || orderData.payment?.method || '').toLowerCase();
             if (paymentMethod !== 'gcash') {
                 alert('Recomply is only available for GCash orders.');
                 return;
             }
 
-            // Store order info and redirect to checkout with recomply mode
             localStorage.setItem('ppp_recomply_order_id', orderId);
             localStorage.setItem('ppp_recomply_order_data', JSON.stringify(orderData));
-            
-            // Redirect to checkout page
+
             window.location.href = 'checkout.html?recomply=true';
         } catch (error) {
             console.error('Error recomply order:', error);
@@ -411,34 +448,33 @@
         }
     }
 
-    // Clear notifications
     function clearNotifications() {
         notifications = [];
+        unreadCount = 0;
+
+        if (notifUnsubscribe) {
+            try { notifUnsubscribe(); } catch (e) { console.warn('Notif unsubscribe error:', e); }
+            notifUnsubscribe = null;
+        }
+
         orderListeners.forEach(unsub => {
-            try {
-                unsub();
-            } catch (e) {
-                console.warn('Error unsubscribing:', e);
-            }
+            try { unsub(); } catch (e) { console.warn('Error unsubscribing:', e); }
         });
         orderListeners.clear();
         previousOrderStates.clear();
-        saveNotifications();
+
         renderNotifications();
+        updateUnreadCount();
     }
 
-    // Show notification badge animation
     function showNotificationBadge() {
         const badge = document.getElementById('notificationBadge');
         if (badge && unreadCount > 0) {
             badge.style.animation = 'pulse 0.5s ease-in-out';
-            setTimeout(() => {
-                badge.style.animation = '';
-            }, 500);
+            setTimeout(() => { badge.style.animation = ''; }, 500);
         }
     }
 
-    // Expose to window
     window.notifications = {
         init,
         toggleDropdown,
@@ -448,23 +484,20 @@
         addSystemNotification
     };
 
-    // Initialize on DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
 
-    // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
         const dropdown = document.getElementById('notificationDropdown');
         const button = document.getElementById('notificationButton');
-        
-        if (dropdown && button && 
-            !dropdown.contains(e.target) && 
+
+        if (dropdown && button &&
+            !dropdown.contains(e.target) &&
             !button.contains(e.target)) {
             dropdown.style.display = 'none';
         }
     });
 })();
-
