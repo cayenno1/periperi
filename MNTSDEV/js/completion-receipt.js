@@ -531,6 +531,15 @@
     window.printReceipt = printReceipt;
     window.saveReceipt = saveReceipt;
 
+    // Clear the "pending receipt" key when we successfully land on the receipt page.
+    // This key is set by checkout.js before redirecting here; if we don't clear it,
+    // the next time the user goes cart_review → checkout, checkout would see the
+    // stale key and immediately redirect back to the receipt (bug).
+    const PENDING_RECEIPT_KEY = 'ppp_pending_receipt_url';
+    try {
+        window.localStorage?.removeItem(PENDING_RECEIPT_KEY);
+    } catch (e) {}
+
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', () => {
         initializeReceipt();
