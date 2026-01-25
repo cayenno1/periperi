@@ -36,8 +36,24 @@
           <div class="nav-icon menu-icon" title="Menu" onclick="goToMenu()">
             <i class="fas fa-utensils"></i>
           </div>
-          <div class="nav-icon account-icon" title="Account" onclick="goToAccount()">
-            <i class="fas fa-user"></i>
+          <div class="nav-icon profile-icon" title="Profile" id="profileButton">
+            <i class="fas fa-user-circle profile-icon-only" id="profileIcon"></i>
+            <span class="profile-text" id="profileText">Sign In</span>
+            <div class="profile-dropdown" id="profileDropdown">
+              <div class="profile-dropdown-header">
+                <div class="profile-meta">
+                  <span class="profile-name" id="profileName">Your Account</span>
+                  <span class="profile-email" id="profileEmail">user@example.com</span>
+                </div>
+              </div>
+              <a href="account.html" class="profile-item profile-manage-account" data-nav-target="account" data-hide-on-body="account-page"><span>Manage account</span></a>
+              <a href="orders.html" class="profile-item" data-nav-target="orders" data-hide-on-body="orders-page"><span>Orders</span></a>
+              <a href="help.html" class="profile-item" data-nav-target="help" data-hide-on-body="help-page"><span>Help & support</span></a>
+              <div class="profile-divider"></div>
+              <button class="profile-item logout" id="logoutBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
+                <i class="fas fa-arrow-right-from-bracket"></i><span>Log out</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -237,6 +253,8 @@
   </main>
 
   <script type="module" src="js/firebase-init.js"></script>
+  <script src="js/profile-login.js"></script>
+  <script src="js/profile-authentication.js"></script>
   <script src="js/utils.js" defer></script>
   <script src="js/completion-receipt.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

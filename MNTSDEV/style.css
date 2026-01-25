@@ -55,75 +55,6 @@ body {
   background: rgba(255, 255, 255, 0.95);
 }
 
-/* PRIMARY MAIN NAVBAR (Home / Menu) */
-.primary-nav {
-  position: sticky;
-  top: 72px; /* keeps it just below the sticky header */
-  z-index: 900;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-}
-
-.primary-nav-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 10px 20px;
-  display: flex;
-  justify-content: center;
-  gap: 24px;
-}
-
-.primary-nav-link {
-  position: relative;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #444;
-  text-decoration: none;
-  padding: 6px 4px;
-  letter-spacing: 0.02em;
-  transition: color 0.2s ease;
-}
-
-.primary-nav-link::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: -4px;
-  width: 0;
-  height: 2px;
-  background: #e53935;
-  border-radius: 999px;
-  transition: width 0.2s ease;
-}
-
-.primary-nav-link:hover,
-.primary-nav-link:focus-visible {
-  color: #e53935;
-}
-
-.primary-nav-link:hover::after,
-.primary-nav-link:focus-visible::after {
-  width: 100%;
-}
-
-/* Simple active-state styling (optional: can be toggled per-page) */
-.primary-nav-link-home[href="index.html"] {
-  /* On the home page this naturally points to current page */
-}
-
-@media (max-width: 600px) {
-  .primary-nav-inner {
-    justify-content: center;
-    gap: 18px;
-    padding-inline: 16px;
-  }
-
-  .primary-nav-link {
-    font-size: 0.9rem;
-  }
-}
-
 .logo-container {
   display: flex;
   align-items: center;
@@ -2114,21 +2045,6 @@ body {
 }
 
 /* ==========================
-   SETTINGS PAGE STYLES
-   Scope with .settings-page to avoid collisions
-========================== */
-.settings-page .settings-section .anonymous-toggle {
-  padding: 8px 12px;
-  background: #fff;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
-}
-
-.settings-page .settings-section .spice-buttons .spice-btn {
-  min-width: 80px;
-}
-
-/* ==========================
    HELP PAGE STYLES
    Scope with .help-page to avoid collisions
 ========================== */
@@ -2385,157 +2301,6 @@ body {
   50% { transform: scale(1.1); }
 }
 
-/* NAVIGATION STYLES */
-.menu-nav {
-  background: #ffe3a3;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  position: relative;
-}
-
-.search-container {
-  margin-bottom: 16px;
-}
-
-.search-box {
-  position: relative;
-  max-width: 100%;
-  margin: 0 auto;
-}
-
-.search-icon {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #666;
-  font-size: 1.1em;
-  z-index: 2;
-}
-
-.search-input {
-  width: 100%;
-  padding: 16px 16px 16px 48px;
-  border: 2px solid #e0e0e0;
-  border-radius: 16px;
-  font-size: 1em;
-  background: #fff;
-  transition: all 0.3s ease;
-  -webkit-appearance: none;
-  appearance: none;
-  font-family: inherit;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #e53935;
-  box-shadow: 0 0 0 4px rgba(229, 57, 53, 0.1), 0 4px 16px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.search-clear {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #999;
-  font-size: 1em;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.search-clear:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #666;
-}
-
-.category-tabs {
-  display: flex;
-  justify-content: flex-start;
-  gap: 0;
-  overflow-x: auto;
-  padding: 0 20px 8px 20px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-@media (min-width: 1024px) {
-  .category-tabs {
-    display: flex;
-    justify-content: center !important;
-    align-items: center;
-    padding: 0 0 16px 0 !important;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-  .menu-nav {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-}
-
-.category-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 20px;
-  background: transparent;
-  color: #666;
-  font-size: 0.95em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-  flex-shrink: 0;
-  border: none;
-  border-bottom: 3px solid transparent;
-  position: relative;
-  font-family: inherit;
-}
-
-.tab-icon {
-  font-size: 1.1em;
-  transition: transform 0.3s ease;
-}
-
-.tab-btn:hover {
-  color: #e53935;
-  background: rgba(229, 57, 53, 0.05);
-  transform: translateY(-1px);
-}
-
-.tab-btn:hover .tab-icon {
-  transform: scale(1.1);
-}
-
-.tab-btn.active {
-  background: transparent;
-  color: #e53935;
-  border-bottom-color: #e53935;
-  font-weight: 600;
-}
-
-.tab-btn.active .tab-icon {
-  transform: scale(1.1);
-}
-
-.tab-btn:active {
-  transform: scale(0.98);
-}
-
 /* MAIN CONTAINER & LAYOUT */
 .main-container {
   max-width: 1200px;
@@ -2605,100 +2370,6 @@ body {
   font-size: 1.1em;
   color: #666;
   font-weight: 400;
-}
-
-.featured-card {
-  position: relative;
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-  cursor: pointer;
-  transition: all 0.4s ease;
-  background: transparent;
-}
-
-.featured-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-}
-
-.featured-image-container {
-  position: relative;
-  overflow: hidden;
-}
-
-.featured-image {
-  width: 100%;
-  height: 280px;
-  object-fit: cover;
-  transition: transform 0.4s ease;
-}
-
-.featured-card:hover .featured-image {
-  transform: scale(1.05);
-}
-
-.featured-badge {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: linear-gradient(135deg, #e53935, #c62828);
-  color: #fff;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 0.9em;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 4px 16px rgba(229, 57, 53, 0.3);
-  backdrop-filter: blur(10px);
-}
-
-.featured-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-  color: #fff;
-  padding: 32px 24px 24px 24px;
-}
-
-.featured-title {
-  font-size: 1.8em;
-  font-weight: 700;
-  margin-bottom: 8px;
-  letter-spacing: -0.5px;
-}
-
-.featured-desc {
-  font-size: 1em;
-  opacity: 0.9;
-  margin-bottom: 20px;
-  line-height: 1.5;
-}
-
-.featured-btn {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 12px 20px;
-  font-size: 0.9em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  backdrop-filter: blur(10px);
-}
-
-.featured-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: translateY(-2px);
 }
 
 /* MENU SECTION */
@@ -2839,9 +2510,6 @@ body {
   gap: 4px;
   box-shadow: 0 4px 12px rgba(229, 57, 53, 0.3);
 }
-
-/* Hide fire/popular badge */
-.popular-badge { display: none; }
 
 .card-content {
   padding: 8px 10px 8px;
@@ -3500,243 +3168,6 @@ body {
   box-shadow: 0 6px 20px rgba(229, 57, 53, 0.3);
 }
 
-/* DRINK PAGE STYLES */
-.drink-main-container {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 20px 16px;
-}
-
-.drink-page-title {
-  font-size: 2em;
-  font-weight: bold;
-  color: #222;
-  text-align: center;
-  margin-bottom: 24px;
-  line-height: 1.2;
-}
-
-.drinks-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 0 4px;
-}
-
-.drink-item {
-  background: #fff;
-  border-radius: 16px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.drink-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.drink-image {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 12px;
-  flex-shrink: 0;
-}
-
-.drink-details {
-  flex: 1;
-  min-width: 0;
-}
-
-.drink-name {
-  font-size: 1.3em;
-  font-weight: bold;
-  color: #222;
-  margin-bottom: 8px;
-  line-height: 1.2;
-}
-
-.drink-price {
-  font-size: 1.2em;
-  font-weight: bold;
-  color: #e53935;
-  margin-bottom: 8px;
-}
-
-.size-selector {
-  margin-bottom: 8px;
-}
-
-.size-select {
-  padding: 8px 12px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 0.9em;
-  background: #fff;
-  color: #222;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.size-select:focus {
-  outline: none;
-  border-color: #e53935;
-  box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.1);
-}
-
-.drink-quantity-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.drink-qty-btn {
-  background: #f5f5f5;
-  color: #222;
-  border: none;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  font-size: 1.2em;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.drink-qty-btn:hover {
-  background: #e0e0e0;
-  transform: scale(1.1);
-}
-
-.drink-qty-btn:active {
-  transform: scale(0.95);
-}
-
-.drink-qty-value {
-  font-size: 1.2em;
-  font-weight: bold;
-  color: #222;
-  min-width: 30px;
-  text-align: center;
-}
-
-.drink-no-thanks {
-  background: #f5f5f5;
-  color: #666;
-  text-align: center;
-  padding: 16px;
-  border-radius: 12px;
-  font-size: 1.1em;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid transparent;
-}
-
-.drink-no-thanks:hover {
-  background: #e0e0e0;
-  color: #222;
-  border-color: #ddd;
-}
-
-.drink-add-button {
-  background: #e53935;
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  padding: 16px;
-  font-size: 1.2em;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 8px;
-}
-
-.drink-add-button:hover {
-  background: #c62828;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(229, 57, 53, 0.3);
-}
-
-.drink-add-button:active {
-  transform: translateY(0);
-}
-
-/* Beverages grid and card styles */
-.beverages-grid {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  margin: 0 auto;
-  max-width: 100%;
-  padding: 0 8px;
-}
-
-.beverage-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 24px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  min-height: 72px;
-}
-
-.beverage-card .beverage-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.beverage-card .beverage-name {
-  font-size: 1.1em;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.beverage-card .beverage-price {
-  font-size: 1em;
-  font-weight: 500;
-  color: #e53935;
-}
-
-@media (min-width: 600px) {
-  .beverages-grid {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 24px;
-    max-width: 700px;
-    padding: 0;
-  }
-}
-
-@media (min-width: 1024px) {
-  .beverages-grid {
-    max-width: 900px;
-    gap: 32px;
-    padding: 0;
-  }
-  .beverage-card {
-    padding: 32px 24px;
-    min-height: 90px;
-  }
-  .beverage-card .beverage-name {
-    font-size: 1.2em;
-  }
-  .beverage-card .beverage-price {
-    font-size: 1.1em;
-  }
-}
-
 /* TABLET STYLES */
 @media (min-width: 768px) {
   .header {
@@ -3827,38 +3258,7 @@ body {
     font-size: 0.9rem;
   }
 }
-  
-  .menu-nav {
-    padding: 32px;
-  }
-  
-  .search-container {
-    margin-bottom: 32px;
-  }
-  
-  .search-box {
-    max-width: 600px;
-  }
-  
-  .search-icon {
-    left: 20px;
-    font-size: 1.2em;
-  }
-  
-  .search-input {
-    padding: 18px 18px 18px 56px;
-  }
-  
-  .category-tabs {
-    gap: 0;
-    padding: 0 32px 16px 32px;
-  }
-  
-  .tab-btn {
-    padding: 18px 28px;
-    font-size: 1em;
-  }
-  
+
   .main-container {
     padding: 40px 32px;
   }
@@ -3871,10 +3271,6 @@ body {
   .section-title {
     font-size: 2.8em;
     margin-bottom: 12px;
-  }
-  
-  .featured-image {
-    height: 320px;
   }
   
   .menu-grid {
@@ -3907,29 +3303,6 @@ body {
   .food-price {
     font-size: 2.5em;
   }
-  
-  .drink-main-container {
-    padding: 32px 24px;
-  }
-  
-  .drink-page-title {
-    font-size: 2.5em;
-    margin-bottom: 32px;
-  }
-  
-  .drinks-container {
-    gap: 20px;
-  }
-  
-  .drink-item {
-    padding: 24px;
-    gap: 20px;
-  }
-  
-  .drink-image {
-    width: 100px;
-    height: 100px;
-  }
 }
 
 /* DESKTOP STYLES */
@@ -3941,10 +3314,6 @@ body {
   .menu-grid {
     grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
     gap: 48px;
-  }
-  
-  .featured-image {
-    height: 360px;
   }
   
   .floating-cart {
@@ -4213,35 +3582,9 @@ body.mobile-menu-open {
     padding: 16px 20px;
   }
   
-  .menu-nav {
-    padding: 16px 20px;
-  }
-  
-  .search-container {
-    margin-bottom: 16px;
-  }
-  
-  .search-input {
-    padding: 12px 12px 12px 44px;
-  }
-  
-  .category-tabs {
-    gap: 0;
-    padding: 0 16px 8px 16px;
-  }
-  
-  .tab-btn {
-    padding: 12px 20px;
-    font-size: 0.9em;
-  }
-  
   .section-title {
     font-size: 1.8em;
     margin-bottom: 6px;
-  }
-  
-  .featured-image {
-    height: 180px;
   }
   
   .menu-grid {
@@ -4269,8 +3612,7 @@ body.mobile-menu-open {
     image-rendering: crisp-edges;
   }
   
-  .card-image,
-  .featured-image {
+  .card-image {
     image-rendering: -webkit-optimize-contrast;
     image-rendering: crisp-edges;
   }
@@ -5903,9 +5245,9 @@ select.restaurant-form-input {
   opacity: 1;
 }
 
-.popular-badge, .new-badge, .refreshing-badge, .featured-badge {
-  background: rgba(255, 255, 255, 0.95);
-  color: #e53935;
+.new-badge {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  color: white;
   padding: 6px 12px;
   border-radius: 20px;
   font-size: 0.8em;
@@ -5915,21 +5257,6 @@ select.restaurant-form-input {
   gap: 4px;
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.new-badge {
-  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-  color: white;
-}
-
-.refreshing-badge {
-  background: linear-gradient(135deg, #74b9ff, #0984e3);
-  color: white;
-}
-
-.featured-badge {
-  background: linear-gradient(135deg, #fdcb6e, #e17055);
-  color: white;
 }
 
 .food-image {
@@ -7043,67 +6370,6 @@ select.restaurant-form-input {
   font-size: 0.8rem;
 }
 
-.size-selector, .spice-level {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.size-label, .spice-label {
-  font-size: 0.9em;
-  font-weight: 600;
-  color: #333;
-  min-width: 80px;
-}
-
-.size-select {
-  padding: 8px 12px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 0.9em;
-  background: #fff;
-  color: #222;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: inherit;
-}
-
-.size-select:focus {
-  outline: none;
-  border-color: #e53935;
-  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.1);
-}
-
-.spice-buttons {
-  display: flex;
-  gap: 6px;
-}
-
-.spice-btn {
-  padding: 6px 12px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  background: #fff;
-  color: #666;
-  font-size: 0.8em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: inherit;
-}
-
-.spice-btn:hover {
-  border-color: #e53935;
-  color: #e53935;
-}
-
-.spice-btn.active {
-  background: #e53935;
-  color: #fff;
-  border-color: #e53935;
-}
-
 .item-price-section {
   display: flex;
   flex-direction: column;
@@ -7655,17 +6921,6 @@ select.restaurant-form-input {
   
   .cart-item-title {
     font-size: 1.1em;
-  }
-  
-  .size-selector, .spice-level {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .spice-buttons {
-    width: 100%;
-    justify-content: space-between;
   }
   
   .proceed-btn,
@@ -9175,11 +8430,6 @@ body.index-page .price-section {
   font-size: 1rem;
   font-weight: 500;
   color: var(--color-text-secondary);
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 /* ============================================
