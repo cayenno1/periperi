@@ -200,9 +200,22 @@
           <section class="delivery-section">
             <h3 class="section-title">Payment Method</h3>
             <div class="delivery-options">
+              <!-- Cash Payment (only for Delivery) -->
+              <label class="delivery-option hidden" id="cash-payment-option">
+                <input type="radio" name="payment" value="cash">
+                <div class="option-content">
+                  <div class="option-icon">
+                    <i class="fas fa-money-bill-wave"></i>
+                  </div>
+                  <div class="option-details">
+                    <span class="option-title">Cash</span>
+                    <span class="option-subtitle">Pay on delivery</span>
+                  </div>
+                </div>
+              </label>
               <!-- GCash -->
               <label class="delivery-option" id="gcash-option-label">
-                <input type="radio" name="payment" value="gcash" id="gcash-payment-radio" onclick="toggleGCashDetails()">
+                <input type="radio" name="payment" value="gcash" id="gcash-payment-radio">
                 <div class="option-content">
                   <div class="option-icon">
                     <i class="fas fa-mobile-alt"></i>
@@ -223,19 +236,6 @@
                 <i class="fas fa-info-circle"></i>
                 <span>GCash payment is currently unavailable. Please select another payment method.</span>
               </div>
-              <!-- Cash Payment (only for Delivery) -->
-              <label class="delivery-option hidden" id="cash-payment-option">
-                <input type="radio" name="payment" value="cash">
-                <div class="option-content">
-                  <div class="option-icon">
-                    <i class="fas fa-money-bill-wave"></i>
-                  </div>
-                  <div class="option-details">
-                    <span class="option-title">Cash</span>
-                    <span class="option-subtitle">Pay on delivery</span>
-                  </div>
-                </div>
-              </label>
               <div class="gcash-details" id="gcash-details">
                 <div class="gcash-info-card">
                   <div class="gcash-header">
@@ -247,14 +247,14 @@
                       <i class="fas fa-phone"></i>
                       <div>
                         <span class="label">GCash Number:</span>
-                        <span class="value">0917 123 4567</span>
+                        <span class="value" id="gcash-number-value">—</span>
                       </div>
                     </div>
                     <div class="gcash-name">
                       <i class="fas fa-store"></i>
                       <div>
                         <span class="label">Account Name:</span>
-                        <span class="value">PABLO'S PERI PERI</span>
+                        <span class="value" id="gcash-store-name-value">—</span>
                       </div>
                     </div>
                     <div class="gcash-qr-code" id="gcash-qr-code-container" style="display: none;">

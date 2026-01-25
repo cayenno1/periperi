@@ -80,8 +80,9 @@ service firebase.storage {
       // allow writes with file size and content type restrictions
       allow write: if request.resource.size < 5 * 1024 * 1024  // Max 5MB
                    && (
-                     // Allow if content type is an image (if set)
+                     // Allow if content type is missing, empty, or image (some clients omit or send '')
                      !('contentType' in request.resource) ||
+                     request.resource.contentType == '' ||
                      request.resource.contentType.matches('image/.*')
                    );
     }

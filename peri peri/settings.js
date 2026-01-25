@@ -203,10 +203,16 @@
             const previewContainer = document.getElementById('qrCodePreviewContainer');
             const previewImg = document.getElementById('qrCodePreview');
             const uploadBtnText = document.getElementById('qrCodeUploadBtnText');
+            const storeNameEl = document.getElementById('gcashStoreName');
+            const storeNumEl = document.getElementById('gcashStoreNum');
 
             if (settingsSnap.exists()) {
                 const data = settingsSnap.data();
-                const qrCodeUrl = data.gcash && data.gcash.qrCodeUrl;
+                const gcash = data.gcash || {};
+                const qrCodeUrl = gcash.qrCodeUrl;
+
+                if (storeNameEl) storeNameEl.value = gcash.storeName || '';
+                if (storeNumEl) storeNumEl.value = gcash.storeNum || '';
 
                 if (qrCodeUrl) {
                     if (previewContainer) {
@@ -233,6 +239,8 @@
                 if (uploadBtnText) {
                     uploadBtnText.textContent = 'Upload QR Code';
                 }
+                if (storeNameEl) storeNameEl.value = '';
+                if (storeNumEl) storeNumEl.value = '';
             }
         } catch (error) {
             console.error('Error loading QR code:', error);
@@ -349,12 +357,15 @@
         return Boolean(window.storage && window.storageFunctions);
     }
 
-    // Save QR code URL to Firestore
+    // Save QR code URL to Firestore (also saves current storeName and storeNum from form)
     async function saveQRCodeUrl(qrCodeUrl) {
         const fns = window.firestoreFunctions;
         if (!fns || !window.db) {
             throw new Error('Firebase not ready');
         }
+
+        const storeName = (document.getElementById('gcashStoreName')?.value || '').trim() || null;
+        const storeNum = (document.getElementById('gcashStoreNum')?.value || '').trim() || null;
 
         // Get current staff session for updatedBy
         let updatedBy = 'System';
@@ -371,15 +382,7 @@
         const settingsRef = fns.doc(window.db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
         const settingsSnap = await fns.getDoc(settingsRef);
 
-        const updateData = {
-            'gcash.qrCodeUrl': qrCodeUrl,
-            'gcash.qrCodeUpdatedAt': fns.serverTimestamp ? fns.serverTimestamp() : new Date(),
-            'gcash.qrCodeUpdatedBy': updatedBy,
-            updatedAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date()
-        };
-
         if (settingsSnap.exists()) {
-            // Update existing document - need to merge with existing gcash object
             const existingData = settingsSnap.data();
             const existingGCash = existingData.gcash || {};
             await fns.updateDoc(settingsRef, {
@@ -387,22 +390,91 @@
                     ...existingGCash,
                     qrCodeUrl: qrCodeUrl,
                     qrCodeUpdatedAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date(),
-                    qrCodeUpdatedBy: updatedBy
+                    qrCodeUpdatedBy: updatedBy,
+                    storeName: storeName !== null ? storeName : (existingGCash.storeName || null),
+                    storeNum: storeNum !== null ? storeNum : (existingGCash.storeNum || null)
                 },
                 updatedAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date()
             });
         } else {
-            // Create new document
             await fns.setDoc(settingsRef, {
                 gcash: {
                     enabled: true,
                     qrCodeUrl: qrCodeUrl,
                     qrCodeUpdatedAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date(),
-                    qrCodeUpdatedBy: updatedBy
+                    qrCodeUpdatedBy: updatedBy,
+                    storeName: storeName,
+                    storeNum: storeNum
                 },
                 createdAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date(),
                 updatedAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date()
             });
+        }
+    }
+
+    // Save store name and store number to Firestore (gcash.storeName, gcash.storeNum)
+    async function saveGCashStoreDetails() {
+        const fns = window.firestoreFunctions;
+        if (!fns || !window.db) {
+            showNotification('Firebase not ready', 'error');
+            return;
+        }
+
+        const storeName = (document.getElementById('gcashStoreName')?.value || '').trim() || null;
+        const storeNum = (document.getElementById('gcashStoreNum')?.value || '').trim() || null;
+        const statusEl = document.getElementById('gcashDetailsSaveStatus');
+        const btn = document.getElementById('gcashDetailsSaveBtn');
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+        if (statusEl) {
+            statusEl.style.display = 'none';
+        }
+
+        try {
+            const settingsRef = fns.doc(window.db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
+            const settingsSnap = await fns.getDoc(settingsRef);
+            const existingGCash = (settingsSnap.exists() && settingsSnap.data().gcash) ? settingsSnap.data().gcash : {};
+
+            if (settingsSnap.exists()) {
+                await fns.updateDoc(settingsRef, {
+                    gcash: {
+                        ...existingGCash,
+                        storeName: storeName,
+                        storeNum: storeNum
+                    },
+                    updatedAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date()
+                });
+            } else {
+                await fns.setDoc(settingsRef, {
+                    gcash: { ...existingGCash, storeName: storeName, storeNum: storeNum, enabled: true },
+                    createdAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date(),
+                    updatedAt: fns.serverTimestamp ? fns.serverTimestamp() : new Date()
+                });
+            }
+
+            showNotification('Account name and number saved', 'success');
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.style.color = '#28a745';
+                statusEl.textContent = 'Saved.';
+                setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+            }
+        } catch (e) {
+            console.error('Error saving GCash store details:', e);
+            showNotification('Failed to save: ' + (e.message || 'Unknown error'), 'error');
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.style.color = '#dc3545';
+                statusEl.textContent = e.message || 'Save failed.';
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save';
+            }
         }
     }
 
@@ -473,6 +545,46 @@
         }
     }
 
+    // Get store/account name (for use in customer-facing checkout, etc.)
+    async function getGCashStoreName() {
+        try {
+            if (!isFirestoreReady()) {
+                await waitForFirebaseReady();
+            }
+            const fns = window.firestoreFunctions;
+            if (!fns || !window.db) return null;
+            const settingsRef = fns.doc(window.db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
+            const snap = await fns.getDoc(settingsRef);
+            if (snap.exists() && snap.data().gcash && snap.data().gcash.storeName) {
+                return snap.data().gcash.storeName;
+            }
+            return null;
+        } catch (e) {
+            console.error('Error getting GCash store name:', e);
+            return null;
+        }
+    }
+
+    // Get store/account number (for use in customer-facing checkout, etc.)
+    async function getGCashStoreNum() {
+        try {
+            if (!isFirestoreReady()) {
+                await waitForFirebaseReady();
+            }
+            const fns = window.firestoreFunctions;
+            if (!fns || !window.db) return null;
+            const settingsRef = fns.doc(window.db, SETTINGS_COLLECTION, PAYMENT_METHODS_DOC_ID);
+            const snap = await fns.getDoc(settingsRef);
+            if (snap.exists() && snap.data().gcash && snap.data().gcash.storeNum) {
+                return snap.data().gcash.storeNum;
+            }
+            return null;
+        } catch (e) {
+            console.error('Error getting GCash store number:', e);
+            return null;
+        }
+    }
+
     // Update subscription to also handle QR code updates
     function subscribeToPaymentSettings() {
         if (!isFirestoreReady()) {
@@ -536,6 +648,11 @@
                         const previewContainer = document.getElementById('qrCodePreviewContainer');
                         const previewImg = document.getElementById('qrCodePreview');
                         const uploadBtnText = document.getElementById('qrCodeUploadBtnText');
+                        const storeNameEl = document.getElementById('gcashStoreName');
+                        const storeNumEl = document.getElementById('gcashStoreNum');
+
+                        if (storeNameEl) storeNameEl.value = (data.gcash && data.gcash.storeName) || '';
+                        if (storeNumEl) storeNumEl.value = (data.gcash && data.gcash.storeNum) || '';
 
                         if (qrCodeUrl) {
                             if (previewContainer) {
@@ -574,12 +691,17 @@
     // Expose functions globally
     window.getGCashEnabled = getGCashEnabled;
     window.getGCashQRCodeUrl = getGCashQRCodeUrl;
+    window.getGCashStoreName = getGCashStoreName;
+    window.getGCashStoreNum = getGCashStoreNum;
     window.handleQRCodeUpload = handleQRCodeUpload;
     window.removeQRCode = removeQRCode;
+    window.saveGCashStoreDetails = saveGCashStoreDetails;
     window.settingsModule = {
         getGCashEnabled: getGCashEnabled,
         updateGCashSetting: updateGCashSetting,
-        getGCashQRCodeUrl: getGCashQRCodeUrl
+        getGCashQRCodeUrl: getGCashQRCodeUrl,
+        getGCashStoreName: getGCashStoreName,
+        getGCashStoreNum: getGCashStoreNum
     };
 })();
 

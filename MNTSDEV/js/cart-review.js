@@ -9,7 +9,6 @@
     const GUEST_CART_KEY = 'ppp_guest_cart';
     let availableSauces = []; // Cache for sauces
     const MAX_QTY = 99;
-    const NOTE_MAX_LEN = 140;
 
     function setCartReviewLoading(isLoading) {
         const container = document.querySelector('.cart-review-container');
@@ -347,20 +346,6 @@
         }
     }
 
-    function sanitizeNote(raw) {
-        const s = String(raw ?? '').replace(/\s+/g, ' ').trim();
-        return s.length > NOTE_MAX_LEN ? s.slice(0, NOTE_MAX_LEN) : s;
-    }
-
-    function updateGuestCartItemNote(guestId, note) {
-        if (!guestId) return;
-        const cart = getGuestCart();
-        const idx = cart.findIndex((item) => item.id === guestId);
-        if (idx === -1) return;
-        cart[idx].note = note || '';
-        setGuestCart(cart);
-    }
-
     function updateGuestCartItemQuantity(guestId, newQty, unitPrice) {
         if (!guestId) return;
         const cart = getGuestCart();
@@ -441,57 +426,6 @@
         }
     }
 
-    async function commitNoteForCartItem(cartItem, noteText) {
-        if (!cartItem) return;
-        const safeNote = sanitizeNote(noteText);
-
-        const textarea = cartItem.querySelector('.ppp-item-notes textarea');
-        if (textarea) textarea.value = safeNote;
-
-        const docId = cartItem.dataset.cartDocId;
-        const guestId = cartItem.dataset.guestId;
-        const source = cartItem.dataset.source || (guestId ? 'guest' : 'user');
-
-        if (source === 'guest') {
-            updateGuestCartItemNote(guestId, safeNote);
-            return;
-        }
-
-        if (!docId) return;
-
-        try {
-            await window.utils.waitForFirebaseReady();
-            const db = window.firebaseDb;
-            const auth = window.firebaseAuth;
-            if (!db || !auth || !window.doc || !window.updateDoc) return;
-            const user = auth.currentUser;
-            if (!user) return;
-
-            const customerRef = window.doc(db, 'customers', user.uid);
-            const cartItemRef = window.doc(customerRef, 'cartItems', docId);
-            await window.updateDoc(cartItemRef, {
-                note: safeNote || '',
-                updatedAt: new Date()
-            });
-        } catch (error) {
-            console.error('Error updating cart item note:', error);
-        }
-    }
-
-    function onNoteInput(textarea) {
-        if (!textarea) return;
-        // Allow typing, but clamp length and normalize spacing lightly.
-        const next = String(textarea.value ?? '').slice(0, NOTE_MAX_LEN);
-        if (textarea.value !== next) textarea.value = next;
-    }
-
-    async function onNoteBlur(textarea) {
-        if (!textarea) return;
-        const cartItem = textarea.closest('.cart-item');
-        if (!cartItem) return;
-        await commitNoteForCartItem(cartItem, textarea.value);
-    }
-
     function removeGuestCartItem(guestId) {
         if (!guestId) return;
         const cart = getGuestCart().filter((item) => item.id !== guestId);
@@ -547,7 +481,6 @@
                 const sauce = data.sauce || null;
                 const variation = data.variation || null;
                 const itemId = data.itemId || null;
-                const note = typeof data.note === 'string' ? data.note : '';
 
                 const itemEl = document.createElement('div');
                 itemEl.className = 'cart-item';
@@ -556,7 +489,6 @@
                 itemEl.dataset.source = 'user';
                 itemEl.dataset.itemId = itemId || '';
 
-                const noteId = `note-${docId}-${Date.now()}`;
                 itemEl.innerHTML = `
                     <div class="item-image-container">
                         <img src="${imageUrl}" alt="${name}" class="item-image">
@@ -566,16 +498,6 @@
                             <h3 class="cart-item-title">${name}</h3>
                         </div>
                         <div class="item-options"></div>
-                        <div class="ppp-item-notes">
-                            <label for="${noteId}">Item notes (optional)</label>
-                            <textarea
-                                id="${noteId}"
-                                maxlength="${NOTE_MAX_LEN}"
-                                placeholder="e.g., no onions, extra spicy"
-                                oninput="cartReview.onNoteInput(this)"
-                                onblur="cartReview.onNoteBlur(this)"
-                            >${note || ''}</textarea>
-                        </div>
                         <div class="item-price-section">
                             <div class="cart-item-price">₱${unitPrice.toFixed(2)}</div>
                             <div class="price-per-unit">₱${unitPrice.toFixed(2)} each</div>
@@ -650,7 +572,6 @@
             const sauce = data.sauce || null;
             const variation = data.variation || null;
             const itemId = data.itemId || null;
-            const note = typeof data.note === 'string' ? data.note : '';
 
             const itemEl = document.createElement('div');
             itemEl.className = 'cart-item';
@@ -659,7 +580,6 @@
             itemEl.dataset.source = 'guest';
             itemEl.dataset.itemId = itemId || '';
 
-            const noteId = `note-${guestId}-${Date.now()}`;
             itemEl.innerHTML = `
                 <div class="item-image-container">
                     <img src="${imageUrl}" alt="${name}" class="item-image">
@@ -669,16 +589,6 @@
                         <h3 class="cart-item-title">${name}</h3>
                     </div>
                     <div class="item-options"></div>
-                    <div class="ppp-item-notes">
-                        <label for="${noteId}">Item notes (optional)</label>
-                        <textarea
-                            id="${noteId}"
-                            maxlength="${NOTE_MAX_LEN}"
-                            placeholder="e.g., no onions, extra spicy"
-                            oninput="cartReview.onNoteInput(this)"
-                            onblur="cartReview.onNoteBlur(this)"
-                        >${note || ''}</textarea>
-                    </div>
                     <div class="item-price-section">
                         <div class="cart-item-price">₱${unitPrice.toFixed(2)}</div>
                         <div class="price-per-unit">₱${unitPrice.toFixed(2)} each</div>
@@ -1106,9 +1016,7 @@
         changeSauce,
         changeVariation,
         onQtyInput,
-        onQtyBlur,
-        onNoteInput,
-        onNoteBlur
+        onQtyBlur
     };
 
     // Global functions for onclick handlers

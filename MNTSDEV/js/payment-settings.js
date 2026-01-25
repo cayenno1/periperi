@@ -105,7 +105,19 @@
         }
     }
 
-    // Load QR code from Firestore
+    // Update GCash Number and Account Name from storeNum and storeName
+    function updateGCashDisplayDetails(storeNum, storeName) {
+        const numEl = document.getElementById('gcash-number-value');
+        const nameEl = document.getElementById('gcash-store-name-value');
+        if (numEl) {
+            numEl.textContent = (storeNum != null && String(storeNum).trim() !== '') ? String(storeNum).trim() : '—';
+        }
+        if (nameEl) {
+            nameEl.textContent = (storeName != null && String(storeName).trim() !== '') ? String(storeName).trim() : '—';
+        }
+    }
+
+    // Load QR code and GCash display details (storeNum, storeName) from Firestore
     async function loadQRCode() {
         try {
             const db = window.firebaseDb;
@@ -123,7 +135,10 @@
 
             if (settingsSnap.exists()) {
                 const data = settingsSnap.data();
-                const qrCodeUrl = data.gcash && data.gcash.qrCodeUrl;
+                const gcash = data.gcash || {};
+                const qrCodeUrl = gcash.qrCodeUrl;
+                const storeNum = gcash.storeNum;
+                const storeName = gcash.storeName;
 
                 if (qrCodeUrl && qrCodeContainer && qrCodeImage) {
                     qrCodeImage.src = qrCodeUrl;
@@ -131,11 +146,17 @@
                 } else if (qrCodeContainer) {
                     qrCodeContainer.style.display = 'none';
                 }
-            } else if (qrCodeContainer) {
-                qrCodeContainer.style.display = 'none';
+
+                updateGCashDisplayDetails(storeNum, storeName);
+            } else {
+                if (qrCodeContainer) {
+                    qrCodeContainer.style.display = 'none';
+                }
+                updateGCashDisplayDetails(null, null);
             }
         } catch (error) {
             console.error('Error loading QR code:', error);
+            updateGCashDisplayDetails(null, null);
         }
     }
 
@@ -161,13 +182,19 @@
             (snapshot) => {
                 let gcashEnabled = true;
                 let qrCodeUrl = null;
+                let storeNum = null;
+                let storeName = null;
 
                 if (snapshot.exists()) {
                     const data = snapshot.data();
-                    gcashEnabled = data.gcash && data.gcash.enabled !== false;
-                    qrCodeUrl = data.gcash && data.gcash.qrCodeUrl;
+                    const gcash = data.gcash || {};
+                    gcashEnabled = gcash.enabled !== false;
+                    qrCodeUrl = gcash.qrCodeUrl;
+                    storeNum = gcash.storeNum;
+                    storeName = gcash.storeName;
                 }
                 updateGCashUI(gcashEnabled);
+                updateGCashDisplayDetails(storeNum, storeName);
 
                 const qrCodeContainer = document.getElementById('gcash-qr-code-container');
                 const qrCodeImage = document.getElementById('gcash-qr-code-image');

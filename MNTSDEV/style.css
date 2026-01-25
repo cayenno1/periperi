@@ -11880,7 +11880,8 @@ body.account-page {
 }
 
 .gcash-details.show {
-  max-height: 800px;
+  max-height: 1600px;
+  overflow-y: auto;
 }
 
 .gcash-info-card {
@@ -13290,26 +13291,6 @@ body.food-item-page .food-image {
 .checkout-error {
   border-color: #e53935 !important;
   box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.18) !important;
-}
-
-/* ----- Notes UI in cart (item-level) ----- */
-.ppp-item-notes {
-  margin-top: 10px;
-  display: grid;
-  gap: 6px;
-}
-.ppp-item-notes label {
-  font-size: 0.85rem;
-  color: #444;
-  font-weight: 600;
-}
-.ppp-item-notes textarea {
-  width: 100%;
-  min-height: 44px;
-  border-radius: 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(0,0,0,0.12);
-  resize: vertical;
 }
 
 /* ----- Cart add-ons section ----- */

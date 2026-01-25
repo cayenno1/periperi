@@ -1049,31 +1049,32 @@
         window.location.href = 'cart_review.html';
     }
 
-    function toggleGCashDetails() {
+    function updateGCashDetailsVisibility() {
         const gcashRadio = document.getElementById('gcash-payment-radio');
-        // Don't toggle if GCash is disabled
-        if (gcashRadio && gcashRadio.disabled) {
-            return;
-        }
-
         const gcashDetails = document.getElementById('gcash-details');
         const arrow = document.querySelector('input[name="payment"][value="gcash"]')?.closest('.delivery-option')?.querySelector('.option-arrow i');
-        
         if (!gcashDetails) return;
 
-        if (gcashDetails.classList.contains('show')) {
-            gcashDetails.classList.remove('show');
-            if (arrow) {
-            arrow.classList.remove('fa-chevron-up');
-            arrow.classList.add('fa-chevron-down');
-            }
-        } else {
+        const checked = document.querySelector('input[name="payment"]:checked');
+        const isGcash = checked && checked.value === 'gcash' && (!gcashRadio || !gcashRadio.disabled);
+
+        if (isGcash) {
             gcashDetails.classList.add('show');
             if (arrow) {
-            arrow.classList.remove('fa-chevron-down');
-            arrow.classList.add('fa-chevron-up');
+                arrow.classList.remove('fa-chevron-down');
+                arrow.classList.add('fa-chevron-up');
+            }
+        } else {
+            gcashDetails.classList.remove('show');
+            if (arrow) {
+                arrow.classList.remove('fa-chevron-up');
+                arrow.classList.add('fa-chevron-down');
             }
         }
+    }
+
+    function toggleGCashDetails() {
+        updateGCashDetailsVisibility();
     }
 
     function handleFileUpload(input) {
@@ -1965,6 +1966,12 @@
                 if (type) setServiceType(type);
             });
         });
+
+        // Hide GCash details when a different payment method is selected
+        document.querySelectorAll('input[name="payment"]').forEach(function (r) {
+            r.addEventListener('change', updateGCashDetailsVisibility);
+        });
+        updateGCashDetailsVisibility();
 
         // No guest ordering: require login to access checkout.
         if (window.firebaseAuth && window.onAuthStateChanged) {

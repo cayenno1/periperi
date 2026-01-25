@@ -267,6 +267,20 @@
                                 <p class="setting-description">
                                     Upload a QR code image for GCash payments. This QR code will be displayed to customers during checkout to facilitate easy payment scanning.
                                 </p>
+                                <div class="gcash-details-fields" style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;">
+                                    <div style="flex: 1; min-width: 180px;">
+                                        <label for="gcashStoreName" style="display: block; font-size: 0.85rem; font-weight: 500; color: #555; margin-bottom: 6px;">Account / Store Name</label>
+                                        <input type="text" id="gcashStoreName" placeholder="e.g. Pablo's Peri Peri" style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem;">
+                                    </div>
+                                    <div style="flex: 1; min-width: 180px;">
+                                        <label for="gcashStoreNum" style="display: block; font-size: 0.85rem; font-weight: 500; color: #555; margin-bottom: 6px;">Account / Mobile Number</label>
+                                        <input type="text" id="gcashStoreNum" placeholder="e.g. 09XX XXX XXXX" style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem;">
+                                    </div>
+                                    <button type="button" class="btn btn-primary" id="gcashDetailsSaveBtn" onclick="saveGCashStoreDetails()">
+                                        <i class="fas fa-save"></i> Save
+                                    </button>
+                                </div>
+                                <div id="gcashDetailsSaveStatus" style="margin-top: 8px; font-size: 0.85rem; display: none;"></div>
                                 <div class="qr-code-preview-container" id="qrCodePreviewContainer" style="display: none;">
                                     <div class="qr-code-preview">
                                         <img id="qrCodePreview" src="" alt="GCash QR Code" style="max-width: 200px; max-height: 200px; border: 2px solid #e0e0e0; border-radius: 8px; padding: 10px; background: #fff;">
