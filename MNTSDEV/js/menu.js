@@ -417,13 +417,22 @@
                 const popular = !!item.popular;
                 const badge = item.badge || '';
 
-                // Check maxServingsPerDay to determine availability
-                const maxServingsPerDay = typeof item.maxServingsPerDay === 'number' 
-                    ? item.maxServingsPerDay 
-                    : (typeof item.maxServingsPerDay === 'string' 
-                        ? parseFloat(item.maxServingsPerDay) 
-                        : null);
-                const isUnavailable = maxServingsPerDay === null || maxServingsPerDay === undefined || isNaN(maxServingsPerDay) || maxServingsPerDay <= 0;
+                // Quantity-based availability: do NOT use maxServingsPerDay
+                const variations = Array.isArray(item.variations) ? item.variations : [];
+                let isUnavailable;
+                let displayVariation = null; // first variation with qty > 0; used for price and + button
+                if (variations.length > 0) {
+                    // Products WITH variations: cycle to first with quantity > 0. If all 0 → whole product unavailable.
+                    const firstAvailable = variations.find((v) => ((v != null && (v.quantity ?? 0)) || 0) > 0);
+                    isUnavailable = !firstAvailable;
+                    if (firstAvailable) {
+                        displayVariation = firstAvailable;
+                    }
+                } else {
+                    // Products WITHOUT variations: use data.quantity. Unavailable if 0 or null.
+                    const q = item.quantity;
+                    isUnavailable = (q == null || (typeof q === 'number' ? q : (parseFloat(q) || 0)) <= 0);
+                }
 
                 // Get display name from displayName field first, then fallback to other fields
                 const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
@@ -437,25 +446,18 @@
                 const attrSafeName = String(displayName).replace(/"/g, '&quot;');
                 const attrSafeImg = String(imgSrc).replace(/"/g, '&quot;');
 
-                // Get price from variations if available, otherwise use item price
-                let basePrice = 150; // default fallback
-                const variations = Array.isArray(item.variations) ? item.variations : [];
-                
+                // Price: for variation products use displayVariation (first in-stock); else first variation or item price
+                let basePrice = 150;
                 if (variations.length > 0) {
-                    // Use price from first variation
-                    const firstVariation = variations[0];
-                    if (firstVariation && typeof firstVariation.price === 'number') {
-                        basePrice = firstVariation.price;
-                    } else if (firstVariation && typeof firstVariation.price === 'string') {
-                        basePrice = parseFloat(firstVariation.price) || basePrice;
+                    if (displayVariation) {
+                        basePrice = typeof displayVariation.price === 'number' ? displayVariation.price : (parseFloat(displayVariation.price) || basePrice);
+                    } else {
+                        const first = variations[0];
+                        basePrice = (first && typeof first.price === 'number') ? first.price : (first && typeof first.price === 'string' ? parseFloat(first.price) || basePrice : basePrice);
                     }
                 } else {
-                    // No variations, use item price or ingredient price
-                    if (typeof item.price === 'number') {
-                        basePrice = item.price;
-                    } else if (typeof primaryIngredient.baseAmountPerDish === 'number') {
-                        basePrice = primaryIngredient.baseAmountPerDish;
-                    }
+                    if (typeof item.price === 'number') basePrice = item.price;
+                    else if (typeof primaryIngredient.baseAmountPerDish === 'number') basePrice = primaryIngredient.baseAmountPerDish;
                 }
                 
                 const price = `₱${basePrice.toFixed(2)}`;
@@ -497,16 +499,19 @@
                             <div class="card-kcal">${kcalDisplay}</div>
                             <div class="price-row">
                                 <div class="card-price">${price}</div>
+                                ${!isUnavailable ? `
                                 <button
                                     class="add-plus-btn"
                                     data-item-id="${item.id}"
                                     data-item-name="${attrSafeName}"
                                     data-item-price="${basePrice}"
                                     data-item-img="${attrSafeImg}"
-                                    ${isUnavailable ? 'disabled' : 'onclick="window.cart.addToCart(event)"'}
+                                    ${displayVariation ? `data-variation-id="${String(displayVariation.variationId || displayVariation.id || '').replace(/"/g, '&quot;')}" data-variation-name="${String(displayVariation.name || displayVariation.title || '').replace(/"/g, '&quot;')}" data-variation-price="${typeof displayVariation.price === 'number' ? displayVariation.price : (parseFloat(displayVariation.price) || 0)}"` : ''}
+                                    onclick="window.cart.addToCart(event)"
                                 >
                                     <i class="fas fa-plus"></i>
                                 </button>
+                                ` : ''}
                             </div>
                         </div>
                     </div>

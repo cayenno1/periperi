@@ -220,6 +220,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ----- Clock-In / Clock-Out Codes (for driver shift codes) -----
+    // ADDED: Required for Generate Clock-In Code and Generate Clock-Out Code in drivers.html
+    match /clockInCodes/{codeId} {
+      // Allow reading codes (admin loads active codes; driver app validates code)
+      allow read: if true;
+      // Allow creating new clock-in/clock-out codes (admin generates from drivers.html)
+      allow create: if request.resource.data.code is string &&
+                     request.resource.data.code.size() > 0 &&
+                     request.resource.data.type in ['clock_in', 'clock_out'] &&
+                     request.resource.data.validUntil is timestamp &&
+                     request.resource.data.isActive == true;
+      // Allow updates (admin deactivates/clears; driver app may update usedBy/currentUses)
+      allow update: if true;
+      // Prevent deletion (audit trail)
+      allow delete: if false;
+    }
+
     // ----- Orders -----
     match /orders/{orderId} {
       // Helper function to validate order status update
@@ -357,6 +374,7 @@ service cloud.firestore {
       allow read: if true;
 
       // Allow updating shift logs to add endTime (only if endTime is being added/updated)
+      // Also allow clockOutMethod and qrCodeId for driver app (QR code vs remote clock-out)
       allow update: if (
         // Prevent changing driverId
         request.resource.data.driverId == resource.data.driverId &&
@@ -364,16 +382,24 @@ service cloud.firestore {
         request.resource.data.driverName == resource.data.driverName &&
         // Prevent changing startTime
         request.resource.data.startTime == resource.data.startTime &&
-        // Only allow updating endTime, createdAt, or updatedAt
+        // Only allow: endTime+updatedAt; or +createdAt; or +clockOutMethod (remote); or +clockOutMethod+qrCodeId (qr_code)
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'updatedAt']) ||
-         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'createdAt', 'updatedAt']))) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'createdAt', 'updatedAt']) ||
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'clockOutMethod', 'updatedAt']) ||
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'clockOutMethod', 'qrCodeId', 'updatedAt'])) &&
         // Validate endTime is timestamp or null
         (!('endTime' in request.resource.data) || 
          request.resource.data.endTime is timestamp || 
          request.resource.data.endTime == null) &&
         // Validate updatedAt is timestamp
         (!('updatedAt' in request.resource.data) || 
-         request.resource.data.updatedAt is timestamp)
+         request.resource.data.updatedAt is timestamp) &&
+        // Validate clockOutMethod if present ('qr_code' or 'remote')
+        (!('clockOutMethod' in request.resource.data) || 
+         request.resource.data.clockOutMethod in ['qr_code', 'remote']) &&
+        // Validate qrCodeId if present (string, for QR code clock-out)
+        (!('qrCodeId' in request.resource.data) || 
+         request.resource.data.qrCodeId is string)
       );
 
       // Prevent deletion of shift logs (for audit trail)

@@ -223,18 +223,14 @@
                         <option value="">Status</option>
                         <option value="pending">NEW ORDER</option>
                         <option value="preparing">In Kitchen</option>
-                        <option value="ready">Ready</option>
                         <option value="ready for delivery">Awaiting Driver</option>
-                        <option value="ready for pick-up">Ready for Pick-up</option>
                         <option value="out-for-delivery">On the Way</option>
-                        <option value="delivered">Delivered</option>
+                        <option value="delivered">Done</option>
                         <option value="declined">Declined</option>
                     </select>
                     <select id="orderServiceTypeFilter" class="filter-select" onchange="applyOrderFilters()">
                         <option value="">Service Type</option>
                         <option value="delivery">Delivery</option>
-                        <option value="dine-in">Dine In</option>
-                        <option value="pick-up">Pick Up</option>
                     </select>
                 </div>
             </div>
@@ -315,6 +311,49 @@
         </div>
     </div>
 
+
+    <!-- Receipt Preview Modal -->
+    <div id="receiptPreviewModal" class="modal" style="display: none;" role="dialog" aria-labelledby="receiptPreviewTitle" aria-modal="true">
+        <div class="modal-content receipt-preview-modal-content">
+            <div class="modal-header receipt-preview-header">
+                <h2 id="receiptPreviewTitle">Receipt Preview</h2>
+                <div class="receipt-preview-controls">
+                    <button class="btn-icon" onclick="zoomReceiptPreview('out')" title="Zoom Out (Ctrl + -)" aria-label="Zoom Out">
+                        <i class="fas fa-search-minus"></i>
+                    </button>
+                    <span class="zoom-indicator" id="zoomIndicator" title="Current Zoom Level">100%</span>
+                    <button class="btn-icon" onclick="zoomReceiptPreview('reset')" title="Reset Zoom (Ctrl + 0)" aria-label="Reset Zoom">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <button class="btn-icon" onclick="zoomReceiptPreview('in')" title="Zoom In (Ctrl + +)" aria-label="Zoom In">
+                        <i class="fas fa-search-plus"></i>
+                    </button>
+                    <span class="close-modal" onclick="closeReceiptPreviewModal()" title="Close (ESC)" aria-label="Close modal">&times;</span>
+                </div>
+            </div>
+            <div class="modal-body receipt-preview-body" id="receiptPreviewContent">
+                <!-- Receipt content will be populated here -->
+            </div>
+            <div class="modal-footer receipt-preview-footer">
+                <div class="receipt-actions-left">
+                    <button class="btn btn-icon-text" onclick="copyReceiptText()" aria-label="Copy Receipt Text" title="Copy receipt text to clipboard">
+                        <i class="fas fa-copy"></i> Copy Text
+                    </button>
+                    <button class="btn btn-icon-text" onclick="downloadReceipt()" aria-label="Download Receipt" title="Download receipt as file">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                </div>
+                <div class="receipt-actions-right">
+                    <button class="btn btn-primary" onclick="printReceiptFromPreview()" aria-label="Print Receipt">
+                        <i class="fas fa-print"></i> Print Receipt
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeReceiptPreviewModal()" aria-label="Close">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Driver Selection Modal -->
     <div id="driverSelectionModal" class="modal" style="display: none;">

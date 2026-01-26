@@ -6,6 +6,7 @@
     <title>Sales Report - Pablo's Peri Peri</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script>
         // Hide restricted navigation immediately on page load (runs before page renders)
         (function() {
@@ -205,14 +206,48 @@
 
             <!-- Sales Section -->
             <div id="sales" class="analytics-section">
-                <!-- Sales Period Tabs -->
+                <!-- Sales Period Tabs + Date Range + Refresh -->
                 <div class="sales-activity-tabs">
                     <div class="tab-navigation">
                         <button class="tab-btn active" onclick="switchReport('weekly')">Weekly</button>
                         <button class="tab-btn" onclick="switchReport('monthly')">Monthly</button>
                         <button class="tab-btn" onclick="switchReport('yearly')">Yearly</button>
                     </div>
+                    <div class="sales-tabs-right">
+                        <span id="salesDateRangeLabel" class="sales-date-range"></span>
+                        <button type="button" class="sales-refresh-btn" onclick="refreshSalesReport()" title="Refresh data">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
                 </div>
+
+                <div class="sales-page-section-title">Overview</div>
+
+                <!-- KPI Strip -->
+                <div id="salesKpiStrip" class="sales-kpi-strip">
+                    <div class="sales-kpi-card">
+                        <span class="sales-kpi-label">Revenue</span>
+                        <span id="salesKpiRevenue" class="sales-kpi-value">—</span>
+                    </div>
+                    <div class="sales-kpi-card">
+                        <span class="sales-kpi-label">Orders</span>
+                        <span id="salesKpiOrders" class="sales-kpi-value">—</span>
+                    </div>
+                    <div class="sales-kpi-card">
+                        <span class="sales-kpi-label">Avg. Order</span>
+                        <span id="salesKpiAvg" class="sales-kpi-value">—</span>
+                    </div>
+                    <div class="sales-kpi-card">
+                        <span class="sales-kpi-label">vs prior period</span>
+                        <span id="salesKpiVsPrior" class="sales-kpi-value sales-kpi-trend">—</span>
+                    </div>
+                    <div class="sales-kpi-card sales-kpi-today">
+                        <span class="sales-kpi-label">Today</span>
+                        <span id="salesKpiToday" class="sales-kpi-value">—</span>
+                    </div>
+                </div>
+
+                <div class="sales-page-section-title">Performance</div>
 
                 <!-- Main Dashboard Grid -->
                 <div class="sales-dashboard-grid">
@@ -301,14 +336,71 @@
                     </div>
                 </div>
 
+                <div class="sales-page-section-title">Insights</div>
+
+                <!-- Additional Analytics Section -->
+                <div class="sales-analytics-grid">
+                    <!-- Peak Hours Analysis -->
+                    <div class="sales-section peak-hours-section">
+                        <div class="section-header">
+                            <h3>Peak Hours</h3>
+                            <p class="section-subtitle">Busiest hours of the day</p>
+                        </div>
+                        <div id="peakHoursContent" class="peak-hours-content">
+                            <!-- Peak hours will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Best Days Analysis -->
+                    <div class="sales-section best-days-section">
+                        <div class="section-header">
+                            <h3>Best Days</h3>
+                            <p class="section-subtitle">Top performing days of the week</p>
+                        </div>
+                        <div id="bestDaysContent" class="best-days-content">
+                            <!-- Best days will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Category Performance -->
+                    <div class="sales-section category-performance-section">
+                        <div class="section-header">
+                            <h3>Category Performance</h3>
+                            <p class="section-subtitle">Revenue by menu category</p>
+                        </div>
+                        <div id="categoryPerformanceContent" class="category-performance-content">
+                            <!-- Category performance will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Low Performers -->
+                    <div class="sales-section low-performers-section">
+                        <div class="section-header">
+                            <h3>Low Performers</h3>
+                            <p class="section-subtitle">Items that may need attention</p>
+                        </div>
+                        <div id="lowPerformersContent" class="low-performers-content">
+                            <!-- Low performers will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sales-page-section-title">Details</div>
+
                 <!-- In-depth View Section -->
                 <div id="in-depth-section" class="in-depth-section">
                     <div class="in-depth-header">
                         <h3>In-depth view</h3>
-                        <button class="export-btn" onclick="exportReport()">
-                            <i class="fas fa-download"></i>
-                            Export Sales Report
-                        </button>
+                        <div class="export-buttons">
+                            <button class="export-btn" onclick="exportReport()" title="Export as CSV">
+                                <i class="fas fa-file-csv"></i>
+                                Export CSV
+                            </button>
+                            <button class="export-btn export-pdf-btn" onclick="exportReportAsPDF()" title="Export as PDF">
+                                <i class="fas fa-file-pdf"></i>
+                                Export PDF
+                            </button>
+                        </div>
                     </div>
                     <div class="table-container">
                         <table class="orders-table">
@@ -342,6 +434,11 @@
                             <label for="dailyReportDate" style="margin-right: 10px; font-weight: 500;">Select Date:</label>
                             <input type="date" id="dailyReportDate" class="date-input" onchange="updateDailySalesReport()" />
                         </div>
+                    </div>
+
+                    <!-- Day Summary -->
+                    <div id="dailyReportSummary" class="daily-report-summary">
+                        <span id="dailyReportSummaryText" class="daily-report-summary-text">Select a date to view</span>
                     </div>
 
                     <!-- Table 1: Dishes Sold by Category -->
@@ -388,6 +485,30 @@
                                 <tbody id="dailyPaymentTableBody">
                                     <tr>
                                         <td colspan="5" class="empty-table">Select a date to view daily sales report</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Table 3: Service Type Breakdown -->
+                    <div class="daily-report-table-section">
+                        <div class="table-section-header">
+                            <h4>Service Type Breakdown</h4>
+                        </div>
+                        <div class="table-container">
+                            <table class="orders-table daily-report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Service Type</th>
+                                        <th>Orders</th>
+                                        <th>Revenue</th>
+                                        <th>% of Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dailyServiceTypeTableBody">
+                                    <tr>
+                                        <td colspan="4" class="empty-table">Select a date to view</td>
                                     </tr>
                                 </tbody>
                             </table>

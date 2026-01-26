@@ -154,8 +154,10 @@ service cloud.firestore {
 
     // ----- Menu (Dishes) -----
     function isValidMenuItem(data) {
-      return data.keys().hasAll(['name', 'category', 'price']) &&
-             data.name is string && data.name.size() > 0 &&
+      return data.keys().hasAll(['category', 'price']) &&
+             ((data.name is string && data.name.size() > 0) ||
+              (data.foodName is string && data.foodName.size() > 0) ||
+              (data.displayName is string && data.displayName.size() > 0)) &&
              data.category is string && data.category.size() > 0 &&
              isNonNegativeNumber(data.price) &&
              (!('description' in data) || data.description is string) &&
@@ -225,6 +227,23 @@ service cloud.firestore {
       // Allow drivers to update their own status/availability when logging in/out
       allow update: if true;
       // Prevent deletion of driver records
+      allow delete: if false;
+    }
+
+    // ----- Clock-In / Clock-Out Codes (for driver shift codes) -----
+    // ADDED: Required for Generate Clock-In Code and Generate Clock-Out Code in drivers.html
+    match /clockInCodes/{codeId} {
+      // Allow reading codes (admin loads active codes; driver app validates code)
+      allow read: if true;
+      // Allow creating new clock-in/clock-out codes (admin generates from drivers.html)
+      allow create: if request.resource.data.code is string &&
+                     request.resource.data.code.size() > 0 &&
+                     request.resource.data.type in ['clock_in', 'clock_out'] &&
+                     request.resource.data.validUntil is timestamp &&
+                     request.resource.data.isActive == true;
+      // Allow updates (admin deactivates/clears; driver app may update usedBy/currentUses)
+      allow update: if true;
+      // Prevent deletion (audit trail)
       allow delete: if false;
     }
 
@@ -312,23 +331,15 @@ service cloud.firestore {
                request.resource.data.isGuest == true;
       }
 
-      // POS/Walk-in orders: allow creation without auth if it's a walk-in order
+      // POS/Walk-in orders: allow creation with or without Firebase Auth
+      // (POS uses custom session; request.auth is null, but rule works if Auth is added later)
       function isWalkInOrder() {
-        return request.auth == null &&
-               request.resource.data.walkin == true &&
+        return request.resource.data.walkin == true &&
                request.resource.data.isGuest == true &&
                request.resource.data.status == 'completed';
       }
 
-      // POS/Walk-in orders: allow creation when staff is signed in with Firebase Auth
-      function isStaffWalkInOrder() {
-        return request.auth != null &&
-               request.resource.data.walkin == true &&
-               request.resource.data.isGuest == true &&
-               request.resource.data.status == 'completed';
-      }
-
-      allow create: if isAuthedOrder() || isGuestOrder() || isWalkInOrder() || isStaffWalkInOrder();
+      allow create: if isAuthedOrder() || isGuestOrder() || isWalkInOrder();
 
       // Read access is open so the admin dashboard can list orders
       allow read: if true;
@@ -553,6 +564,3 @@ service cloud.firestore {
     }
   }
 }
-
-
-

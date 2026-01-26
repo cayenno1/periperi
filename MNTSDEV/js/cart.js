@@ -162,10 +162,23 @@
         if (!btn) return;
 
         const itemId = btn.dataset.itemId || '';
-        const itemName = btn.dataset.itemName || '';
+        let itemName = btn.dataset.itemName || '';
         const imageUrl = btn.dataset.itemImg || '';
         const priceValue = Number(btn.dataset.itemPrice || '0') || 0;
         const quantity = 1;
+
+        // From menu + button: variation can be passed for products-with-variations (first in-stock)
+        const variationId = btn.dataset.variationId || null;
+        const variationName = btn.dataset.variationName || null;
+        const variationPrice = btn.dataset.variationPrice != null ? Number(btn.dataset.variationPrice) : null;
+        const variation = (variationId || variationName) ? {
+            id: variationId || null,
+            name: variationName || null,
+            price: (typeof variationPrice === 'number' && !isNaN(variationPrice)) ? variationPrice : 0
+        } : null;
+        if (variation && variationName) {
+            itemName = `${itemName} - ${variationName}`;
+        }
 
         window.incrementCartCount(1);
 
@@ -181,22 +194,22 @@
         
         const user = window.firebaseAuth?.currentUser;
         if (user) {
-            // Logged-in: save to Firestore cart.
             saveCartItemToFirestore({
                 itemId,
                 name: itemName,
                 imageUrl,
                 price: priceValue,
-                quantity
+                quantity,
+                variation: variation || undefined
             });
         } else {
-            // Guest: save to temporary local cart.
             addGuestCartItem({
                 itemId,
                 name: itemName,
                 imageUrl,
                 price: priceValue,
-                quantity
+                quantity,
+                variation: variation || undefined
             });
         }
     }

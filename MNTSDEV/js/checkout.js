@@ -1453,7 +1453,9 @@
         return await window.runTransaction(db, async (transaction) => {
             const unavailableItems = [];
             const orderItems = [];
-            const menuUpdates = {}; // menuId -> { menuRef, currentMaxServingsPerDay, quantity }
+            // menuId -> { menuRef, menuData, baseQty, byVariation: { [variationId]: qty } }
+            // Only menu.quantity and menu.variations[i].quantity are deducted. No dailyServings/maxServingsPerDay.
+            const menuUpdates = {};
             const sauceTotals = {}; // sauceId -> total quantity from all cart lines
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -1470,78 +1472,62 @@
 
                 const unitPrice = qty > 0 ? linePrice / qty : linePrice;
 
-                // Include sauce information if present (no additional fee)
                 const sauce = cartItem.sauce || null;
-                // Include variation information if present
                 const variation = cartItem.variation || null;
-                // Item-level note (optional)
+                const variationId = variation?.id || variation?.variationId || null;
                 const note = typeof cartItem.note === 'string' ? cartItem.note : '';
 
                 const menuId = cartItem.itemId;
                 if (!menuId) {
-                    unavailableItems.push({
-                        itemId: null,
-                        name: cartItem.name || 'Item',
-                        reason: 'Missing menu item ID'
-                    });
+                    unavailableItems.push({ itemId: null, name: cartItem.name || 'Item', reason: 'Missing menu item ID' });
                     continue;
                 }
 
-                // Check menu item availability using maxServingsPerDay
                 const menuRef = window.doc(db, MENU_COLLECTION, menuId);
                 const menuSnap = await transaction.get(menuRef);
-                
                 if (!menuSnap.exists()) {
-                    unavailableItems.push({
-                        itemId: menuId,
-                        name: cartItem.name || 'Item',
-                        reason: 'Item no longer exists on menu'
-                    });
+                    unavailableItems.push({ itemId: menuId, name: cartItem.name || 'Item', reason: 'Item no longer exists on menu' });
                     continue;
                 }
 
                 const menuData = menuSnap.data() || {};
-                
-                // Check maxServingsPerDay to determine availability
-                const maxServingsPerDay = typeof menuData.maxServingsPerDay === 'number' 
-                    ? menuData.maxServingsPerDay 
-                    : (typeof menuData.maxServingsPerDay === 'string' 
-                        ? parseFloat(menuData.maxServingsPerDay) 
-                        : null);
+                const variations = Array.isArray(menuData.variations) ? menuData.variations : [];
+                const hasVariations = variations.length > 0;
 
-                // Log for debugging
-                console.log(`[Checkout Guest] Menu item ${menuId} (${menuData.name || cartItem.name}): maxServingsPerDay = ${maxServingsPerDay}, menuData keys:`, Object.keys(menuData));
-
-                // If maxServingsPerDay is null, undefined, or negative, item is unavailable
-                if (maxServingsPerDay === null || maxServingsPerDay === undefined || isNaN(maxServingsPerDay) || maxServingsPerDay < 0) {
-                    unavailableItems.push({
-                        itemId: menuId,
-                        name: cartItem.name || menuData.name || 'Item',
-                        reason: `Item is currently unavailable (maxServingsPerDay: ${maxServingsPerDay})`
-                    });
-                    continue;
-                }
-
-                // Check if there are enough servings available
-                if (maxServingsPerDay < qty) {
-                    unavailableItems.push({
-                        itemId: menuId,
-                        name: cartItem.name || menuData.name || 'Item',
-                        reason: `Only ${maxServingsPerDay} serving(s) available, but ${qty} requested`
-                    });
-                    continue;
-                }
-
-                // Track menu items that need to be updated (aggregate quantities if same item appears multiple times)
                 if (!menuUpdates[menuId]) {
-                    menuUpdates[menuId] = {
-                        menuRef: menuRef,
-                        menuItemName: menuData.name || cartItem.name || 'Unknown Item',
-                        currentMaxServingsPerDay: maxServingsPerDay,
-                        quantity: 0
-                    };
+                    menuUpdates[menuId] = { menuRef, menuData, baseQty: 0, byVariation: {} };
                 }
-                menuUpdates[menuId].quantity += qty;
+                const rec = menuUpdates[menuId];
+
+                // Quantity-based availability: do NOT use maxServingsPerDay
+                if (hasVariations) {
+                    // Products WITH variations: use ONLY variation.quantity. Need variationId.
+                    if (!variationId) {
+                        unavailableItems.push({ itemId: menuId, name: cartItem.name || menuData.name || 'Item', reason: 'Variation required for this item' });
+                        continue;
+                    }
+                    const v = variations.find((x) => (x.variationId || x.id) === variationId);
+                    if (!v) {
+                        unavailableItems.push({ itemId: menuId, name: cartItem.name || menuData.name || 'Item', reason: 'Variation not found' });
+                        continue;
+                    }
+                    const cur = (rec.byVariation[variationId] || 0) + qty;
+                    const avail = (v.quantity ?? 0) || 0;
+                    if (avail < cur) {
+                        unavailableItems.push({ itemId: menuId, name: cartItem.name || menuData.name || 'Item', reason: `Only ${avail} available for this variation, ${cur} requested` });
+                        continue;
+                    }
+                    rec.byVariation[variationId] = cur;
+                } else {
+                    // Products WITHOUT variations: use data.quantity
+                    const cur = rec.baseQty + qty;
+                    const avail = (menuData.quantity ?? 0) || 0;
+                    if (avail < cur) {
+                        unavailableItems.push({ itemId: menuId, name: cartItem.name || menuData.name || 'Item', reason: `Only ${avail} available, ${cur} requested` });
+                        continue;
+                    }
+                    rec.baseQty = cur;
+                }
 
                 orderItems.push({
                     itemId: cartItem.itemId || cartItem.id,
@@ -1550,19 +1536,15 @@
                     unitPrice: unitPrice,
                     lineTotal: linePrice || unitPrice * qty,
                     note: note || null,
+                    variationId: variationId || null,
                     variation: variation ? {
                         name: variation.name || null,
-                        price: typeof variation.price === 'number' ? variation.price : 
-                            (typeof variation.price === 'string' ? parseFloat(variation.price) : 0)
+                        price: typeof variation.price === 'number' ? variation.price : (typeof variation.price === 'string' ? parseFloat(variation.price) : 0),
+                        id: variationId
                     } : null,
-                    sauce: sauce ? {
-                        id: sauce.id || null,
-                        name: sauce.name || null,
-                        price: 0 // Sauce has no fee when attached to a dish
-                    } : null
+                    sauce: sauce ? { id: sauce.id || null, name: sauce.name || null, price: 0 } : null
                 });
 
-                // Aggregate sauce quantities for items with sauce (peri chicken, ribs)
                 if (sauce && sauce.id) {
                     sauceTotals[sauce.id] = (sauceTotals[sauce.id] || 0) + qty;
                 }
@@ -1614,44 +1596,14 @@
                 };
             }
 
-            // If any items are unavailable, block the order
             if (unavailableItems.length > 0) {
-                const details = unavailableItems
-                    .map((i) => `${i.name} (${i.reason})`)
-                    .join(', ');
+                const details = unavailableItems.map((i) => `${i.name} (${i.reason})`).join(', ');
                 const error = new Error(`Unavailable items: ${details}`);
                 error.code = 'inventory/insufficient';
                 throw error;
             }
 
-            // Verify again that we have enough servings after aggregating quantities
-            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
-                if (updateInfo.currentMaxServingsPerDay < updateInfo.quantity) {
-                    const error = new Error(`Insufficient servings available for one or more items`);
-                    error.code = 'inventory/insufficient';
-                    throw error;
-                }
-            }
-
-            // IMPORTANT: Firestore transactions require all reads before all writes
-            // Read all dailyServings documents first, then do all writes
-            const dailyServingsData = {}; // Store dailyServings document data
-            
-            // Read all dailyServings documents first (before any writes)
-            for (const [menuId, updateInfo] of Object.entries(menuUpdates)) {
-                const dailyServingsDocId = `${today}_${menuId}`;
-                const dailyServingsRef = window.doc(db, 'dailyServings', dailyServingsDocId);
-                const dailyServingsSnap = await transaction.get(dailyServingsRef);
-                
-                dailyServingsData[menuId] = {
-                    ref: dailyServingsRef,
-                    exists: dailyServingsSnap.exists(),
-                    data: dailyServingsSnap.exists() ? dailyServingsSnap.data() : null,
-                    updateInfo: updateInfo
-                };
-            }
-
-            // Now do all writes (order document + dailyServings updates)
+            // All reads are done. Now do writes: order + menu deductions (quantity / variations[].quantity only; no dailyServings for menu)
             // Create order document with sequential ID
             const ordersCol = window.collection(db, 'orders');
             const orderRef = window.doc(ordersCol, orderNumber);
@@ -1690,33 +1642,30 @@
 
             transaction.set(orderRef, orderDoc);
 
-            // Update dailyServings collection instead of modifying maxServingsPerDay
-            // maxServingsPerDay should remain constant - it's the maximum limit set by admin
-            for (const [menuId, dailyData] of Object.entries(dailyServingsData)) {
-                const updateInfo = dailyData.updateInfo;
-                
-                if (dailyData.exists) {
-                    // Document exists - update count
-                    const currentCount = dailyData.data.count || 0;
-                    transaction.update(dailyData.ref, {
-                        count: currentCount + updateInfo.quantity,
-                        updatedAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
+            // Deduct menu.quantity and menu.variations[i].quantity. Do NOT update dailyServings or maxServingsPerDay.
+            for (const [menuId, rec] of Object.entries(menuUpdates)) {
+                const { menuRef, menuData, baseQty, byVariation } = rec;
+                const updateDoc = {};
+                if (baseQty > 0) {
+                    updateDoc.quantity = Math.max(0, ((menuData.quantity ?? 0) || 0) - baseQty);
+                }
+                if (Array.isArray(menuData.variations) && menuData.variations.length > 0) {
+                    const newVariations = menuData.variations.map((x) => {
+                        const vid = x.variationId || x.id;
+                        const d = vid != null ? (byVariation[vid] || 0) : 0;
+                        if (d > 0) {
+                            return { ...x, quantity: Math.max(0, ((x.quantity ?? 0) || 0) - d) };
+                        }
+                        return x;
                     });
-                } else {
-                    // Document doesn't exist - create new one
-                    transaction.set(dailyData.ref, {
-                        menuItemId: menuId,
-                        menuItemName: updateInfo.menuItemName,
-                        date: today,
-                        count: updateInfo.quantity,
-                        maxServings: updateInfo.currentMaxServingsPerDay,
-                        createdAt: window.serverTimestamp ? window.serverTimestamp() : new Date(),
-                        updatedAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
-                    });
+                    updateDoc.variations = newVariations;
+                }
+                if (Object.keys(updateDoc).length > 0) {
+                    transaction.update(menuRef, updateDoc);
                 }
             }
 
-            // Update dailyServings for sauces (decrease available when ordering with peri chicken/ribs)
+            // Update dailyServings for sauces (peri chicken/ribs). Menu items use quantity only, not dailyServings.
             for (const [sauceId, s] of Object.entries(sauceDailyData)) {
                 if (s.exists) {
                     const currentCount = s.data.count || 0;

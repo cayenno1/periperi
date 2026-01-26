@@ -9038,6 +9038,11 @@ body.food-item-page {
   box-shadow: 0 2px 8px rgba(229, 57, 53, 0.15);
 }
 
+.variation-btn.unavailable {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .variation-name {
   font-size: 0.9375rem;
   font-weight: 600;

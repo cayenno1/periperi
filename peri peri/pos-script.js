@@ -21,7 +21,6 @@ function generateCartLineId() {
 document.addEventListener('DOMContentLoaded', async function() {
     await waitForFirebaseReady();
     await loadPOSProducts();
-    await loadDailyServings();
     renderPOSProducts();
     
     // Initialize service type (default to dine-in)
@@ -182,11 +181,18 @@ async function loadPOSProducts() {
                 
                 // Check if item has variations
                 if (data.variations && Array.isArray(data.variations) && data.variations.length > 0) {
+                    const baseName = data.foodName || data.name || data.displayName || 'Product';
                     // Add each variation as a separate product
                     data.variations.forEach((variation, index) => {
-                        const variationName = variation.name || `${data.foodName || data.name || 'Product'} ${variation.size || ''}`.trim();
+                        // Naming: "default name - variation" (e.g. chicken - whole)
+                        const variationPart = variation.name || variation.size || '';
+                        const variationDisplayName = variationPart ? `${baseName} - ${variationPart}` : baseName;
                         const variationPrice = variation.price || data.price || 0;
-                        const variationQty = variation.quantity || 0;
+                        // Quantity: use only this variation's individual quantity (e.g. Large: 10, Small: 20).
+                        // Do not use or display the overall/parent product quantity.
+                        const variationQty = (variation.quantity !== undefined && variation.quantity !== null)
+                            ? Number(variation.quantity)
+                            : 0;
                         const variationId = variation.variationId || variation.id || `${doc.id}_var_${index}`;
                         
                         // Get variation's maxServingsPerDay (if set), otherwise use parent's
@@ -197,9 +203,9 @@ async function loadPOSProducts() {
                         posProducts.push({
                             id: variationId,
                             menuId: doc.id,
-                            name: variationName,
+                            name: variationDisplayName,
                             price: Number(variationPrice),
-                            quantity: Number(variationQty),
+                            quantity: variationQty,
                             maxServingsPerDay: varMaxServings,
                             image: data.image || data.imageUrl || data.imageDataUrl || '',
                             category: data.category || '',
@@ -211,12 +217,13 @@ async function loadPOSProducts() {
                     });
                 } else {
                     // Add main product
+                    // Non-variation: quantity from default (top-level)
                     posProducts.push({
                         id: doc.id,
                         menuId: doc.id,
                         name: data.foodName || data.name || data.displayName || 'Product',
                         price: Number(data.price || 0),
-                        quantity: Number(data.quantity || 0),
+                        quantity: Number(data.quantity ?? 0),
                         maxServingsPerDay: maxServingsPerDay,
                         image: data.image || data.imageUrl || data.imageDataUrl || '',
                         category: data.category || '',
@@ -226,6 +233,9 @@ async function loadPOSProducts() {
                 }
             }
         });
+        
+        // Update category filters based on loaded products
+        updatePOSCategoryFilters();
         
         // Apply filters after loading
         applyPOSFilters();
@@ -238,6 +248,46 @@ async function loadPOSProducts() {
             </div>
         `;
     }
+}
+
+// Update category filter buttons based on available products
+function updatePOSCategoryFilters() {
+    // Get all unique categories from loaded products
+    const categories = new Set();
+    posProducts.forEach(product => {
+        if (product.category && product.category.trim()) {
+            categories.add(product.category.trim());
+        }
+    });
+    
+    // Sort categories alphabetically
+    const sortedCategories = Array.from(categories).sort();
+    
+    // Get the category filters container
+    const filtersContainer = document.querySelector('.pos-category-filters');
+    if (!filtersContainer) return;
+    
+    // Build HTML for category buttons
+    let categoryButtonsHTML = `
+        <button class="pos-category-btn active" onclick="filterByCategory('all')" data-category="all">
+            <i class="fas fa-th"></i> All
+        </button>
+    `;
+    
+    // Add a button for each category
+    sortedCategories.forEach(category => {
+        categoryButtonsHTML += `
+            <button class="pos-category-btn" onclick="filterByCategory('${escapeHtml(category)}')" data-category="${escapeHtml(category)}">
+                ${escapeHtml(category)}
+            </button>
+        `;
+    });
+    
+    // Update the container
+    filtersContainer.innerHTML = categoryButtonsHTML;
+    
+    // Re-apply current filter to update active state
+    filterByCategory(posSelectedCategory);
 }
 
 // Filter products by category
@@ -292,16 +342,10 @@ function getRemainingServings(product) {
     return remaining;
 }
 
-// Get available quantity for a sauce (for modal display and availability)
-// Uses maxServingsPerDay + dailyServings, or quantity. Returns null if unavailable.
+// Get available quantity for a sauce (for modal display and availability).
+// Always uses quantity, not maxServingsPerDay.
 function getSauceAvailable(sauce) {
-    if (sauce.maxServingsPerDay != null && sauce.maxServingsPerDay > 0) {
-        const r = getRemainingServings(sauce);
-        return r;
-    }
-    if (sauce.quantity !== undefined && sauce.quantity !== null) {
-        return Number(sauce.quantity);
-    }
+    if (sauce.quantity != null) return Number(sauce.quantity);
     return null;
 }
 
@@ -313,30 +357,9 @@ function getSaucesForModal() {
     );
 }
 
-// Check if product is available (considering daily servings)
-// Products are ONLY disabled when maxServingsPerDay === 0
-// Even if remaining servings is 0, product is still clickable (will show warning)
+// Check if product is available. Always uses quantity, not maxServingsPerDay.
 function isProductAvailable(product, requestedQty = 1) {
-    // ONLY disable if maxServingsPerDay is explicitly set to 0
-    // This is the ONLY condition that makes a product unclickable
-    if (product.maxServingsPerDay === 0) {
-        return false;
-    }
-    
-    // If maxServingsPerDay is null or undefined, it's unlimited - always available
-    if (product.maxServingsPerDay === null || product.maxServingsPerDay === undefined) {
-        // Check legacy quantity field only if no maxServingsPerDay is set
-        if (product.quantity !== undefined && product.quantity !== null && product.quantity === 0) {
-            return false; // Legacy mode: disable if quantity is 0
-        }
-        return true;
-    }
-    
-    // If maxServingsPerDay > 0, product is ALWAYS clickable
-    // We don't check remaining servings here - that's done in addToCart()
-    // This allows cashiers to see products even when remaining is 0
-    // They'll get a warning message when trying to add, but the button works
-    
+    if (product.quantity == null || product.quantity === 0) return false;
     return true;
 }
 
@@ -355,42 +378,20 @@ function renderPOSProducts() {
     }
     
     grid.innerHTML = posFilteredProducts.map(product => {
-        const remainingServings = getRemainingServings(product);
         const isAvailable = isProductAvailable(product);
-        
         let stockClass = '';
         let stockText = '';
-        
-        // Only show "Out of Stock" and disable if maxServingsPerDay is 0
-        if (product.maxServingsPerDay === 0) {
+        // Always use quantity, not maxServingsPerDay
+        const q = product.quantity;
+        if (q == null || q === 0) {
             stockClass = 'out';
             stockText = 'Out of Stock';
-        } else if (product.maxServingsPerDay && product.maxServingsPerDay > 0) {
-            // Using daily servings system - show remaining
-            if (remainingServings === 0) {
-                stockClass = 'low';
-                stockText = `Remaining: 0 (Limit: ${product.maxServingsPerDay})`;
-            } else if (remainingServings < 5) {
-                stockClass = 'low';
-                stockText = `Remaining: ${remainingServings}`;
-            } else {
-                stockText = `Remaining: ${remainingServings}`;
-            }
+        } else if (q < 5) {
+            stockClass = 'low';
+            stockText = `Stock: ${q}`;
         } else {
-            // Unlimited or using quantity field (legacy)
-            if (product.quantity === 0) {
-                stockClass = 'out';
-                stockText = 'Out of Stock';
-            } else if (product.quantity !== undefined && product.quantity !== null && product.quantity < 5) {
-                stockClass = 'low';
-                stockText = `Stock: ${product.quantity}`;
-            } else if (product.quantity !== undefined && product.quantity !== null) {
-                stockText = `Stock: ${product.quantity}`;
-            } else {
-                stockText = 'Available';
-            }
+            stockText = `Stock: ${q}`;
         }
-        
         return `
             <div class="pos-product-card ${!isAvailable ? 'disabled' : ''}" 
                  onclick="${isAvailable ? `addToCart('${product.id}')` : ''}">
@@ -416,18 +417,7 @@ function addToCart(productId, quantity = 1) {
     // Check for linked items (includedSauces) - show modal if present
     if (product.includedSauces && Array.isArray(product.includedSauces) && product.includedSauces.length > 0) {
         if (!isProductAvailable(product, quantity)) {
-            if (product.maxServingsPerDay === 0) {
-                alert('This product is currently unavailable.');
-            } else {
-                const remaining = getRemainingServings(product);
-                if (remaining !== null && remaining === 0) {
-                    alert('This product has reached its daily limit for today.');
-                } else if (remaining !== null) {
-                    alert(`Only ${remaining} serving(s) remaining for today.`);
-                } else {
-                    alert('This product is out of stock.');
-                }
-            }
+            alert((product.quantity != null && product.quantity > 0) ? `Only ${product.quantity} in stock.` : 'This product is out of stock.');
             return;
         }
         openLinkedItemsModal(product, quantity);
@@ -437,38 +427,15 @@ function addToCart(productId, quantity = 1) {
     // Peri Chicken & Ribs: show sauce selection popup (sauce is free)
     if (PERI_CHICKEN_AND_RIBS_CATEGORIES.includes(product.category || '')) {
         if (!isProductAvailable(product, quantity)) {
-            if (product.maxServingsPerDay === 0) {
-                alert('This product is currently unavailable.');
-            } else {
-                const remaining = getRemainingServings(product);
-                if (remaining !== null && remaining === 0) {
-                    alert('This product has reached its daily limit for today.');
-                } else if (remaining !== null) {
-                    alert(`Only ${remaining} serving(s) remaining for today.`);
-                } else {
-                    alert('This product is out of stock.');
-                }
-            }
+            alert((product.quantity != null && product.quantity > 0) ? `Only ${product.quantity} in stock.` : 'This product is out of stock.');
             return;
         }
         openSauceSelectionModal(product, quantity);
         return;
     }
     
-    // Check availability - only disable if maxServingsPerDay is 0
     if (!isProductAvailable(product, quantity)) {
-        if (product.maxServingsPerDay === 0) {
-            alert('This product is currently unavailable.');
-        } else {
-            const remaining = getRemainingServings(product);
-            if (remaining !== null && remaining === 0) {
-                alert('This product has reached its daily limit for today.');
-            } else if (remaining !== null) {
-                alert(`Only ${remaining} serving(s) remaining for today.`);
-            } else {
-                alert('This product is out of stock.');
-            }
-        }
+        alert((product.quantity != null && product.quantity > 0) ? `Only ${product.quantity} in stock.` : 'This product is out of stock.');
         return;
     }
     
@@ -476,23 +443,11 @@ function addToCart(productId, quantity = 1) {
     const existingItem = posCart.find(item => item.id === productId && !item.freeWithPeriRibs);
     const newQty = existingItem ? existingItem.quantity + quantity : quantity;
     
-    // Check if adding more would exceed daily serving limit (only if maxServingsPerDay > 0)
-    if (product.maxServingsPerDay && product.maxServingsPerDay > 0) {
-        const remaining = getRemainingServings(product);
-        if (remaining !== null && newQty > remaining) {
-            alert(`Only ${remaining} serving(s) remaining for today.`);
-            return;
-        }
-    } else if (product.maxServingsPerDay === 0) {
-        // Product is disabled (maxServingsPerDay = 0)
-        alert('This product is currently unavailable.');
+    // Always use quantity, not maxServingsPerDay
+    const cap = (product.quantity != null) ? Number(product.quantity) : 0;
+    if (newQty > cap) {
+        alert(cap === 0 ? 'This product is out of stock.' : `Only ${cap} in stock.`);
         return;
-    } else if (product.quantity !== undefined && product.quantity !== null && product.quantity > 0) {
-        // Legacy quantity check
-        if (newQty > product.quantity) {
-            alert('Not enough stock available.');
-            return;
-        }
     }
     
     if (existingItem) {
@@ -732,17 +687,11 @@ function addToCartInternal(product, quantity) {
     const existingItem = posCart.find(item => item.id === product.id && !item.freeWithPeriRibs);
     const newQty = existingItem ? existingItem.quantity + quantity : quantity;
     
-    if (product.maxServingsPerDay && product.maxServingsPerDay > 0) {
-        const remaining = getRemainingServings(product);
-        if (remaining !== null && newQty > remaining) {
-            alert(`Only ${remaining} serving(s) remaining for today.`);
-            return;
-        }
-    } else if (product.quantity !== undefined && product.quantity !== null && product.quantity > 0) {
-        if (newQty > product.quantity) {
-            alert('Not enough stock available.');
-            return;
-        }
+    // Always use quantity, not maxServingsPerDay
+    const cap = (product.quantity != null) ? Number(product.quantity) : 0;
+    if (newQty > cap) {
+        alert(cap === 0 ? 'This product is out of stock.' : `Only ${cap} in stock.`);
+        return;
     }
     
     if (existingItem) {
@@ -789,25 +738,13 @@ function updateCartItemQuantity(lineId, change) {
         return;
     }
     
-    // Check availability (daily servings or quantity)
+    // Always use quantity, not maxServingsPerDay
     const product = posProducts.find(p => p.id === item.id);
     if (product) {
-        // Only disable if maxServingsPerDay is 0
-        if (product.maxServingsPerDay === 0) {
-            alert('This product is currently unavailable.');
+        const cap = (product.quantity != null) ? Number(product.quantity) : 0;
+        if (newQty > cap) {
+            alert(cap === 0 ? 'This product is out of stock.' : `Only ${cap} in stock.`);
             return;
-        } else if (product.maxServingsPerDay && product.maxServingsPerDay > 0) {
-            const remaining = getRemainingServings(product);
-            if (remaining !== null && newQty > remaining) {
-                alert(`Only ${remaining} serving(s) remaining for today.`);
-                return;
-            }
-        } else if (product.quantity !== undefined && product.quantity !== null && product.quantity > 0) {
-            // Legacy quantity check
-            if (newQty > product.quantity) {
-                alert('Not enough stock available.');
-                return;
-            }
         }
     }
     
@@ -842,26 +779,13 @@ function updateCartItemQuantityDirect(lineId, newQtyStr) {
         return;
     }
     
-    // Check availability (daily servings or quantity)
+    // Always use quantity, not maxServingsPerDay
     const product = posProducts.find(p => p.id === item.id);
     if (product) {
-        // Only disable if maxServingsPerDay is 0
-        if (product.maxServingsPerDay === 0) {
-            alert('This product is currently unavailable.');
-            updateCart(); // Reset to current quantity
-            return;
-        } else if (product.maxServingsPerDay && product.maxServingsPerDay > 0) {
-            const remaining = getRemainingServings(product);
-            if (remaining !== null && newQty > remaining) {
-                newQty = remaining;
-                alert(`Only ${remaining} serving(s) remaining for today.`);
-            }
-        } else if (product.quantity !== undefined && product.quantity !== null && product.quantity > 0) {
-            // Legacy quantity check
-            if (newQty > product.quantity) {
-                newQty = product.quantity;
-                alert('Not enough stock available.');
-            }
+        const cap = (product.quantity != null) ? Number(product.quantity) : 0;
+        if (newQty > cap) {
+            newQty = cap;
+            alert(cap === 0 ? 'This product is out of stock.' : `Only ${cap} in stock.`);
         }
     }
     
@@ -1263,8 +1187,6 @@ async function processPayment() {
         updateCart();
         calculateChange();
         
-        // Reload daily servings to update product availability
-        await loadDailyServings();
         renderPOSProducts();
         
         // Refresh walk-in orders log to show the new order
@@ -1276,105 +1198,76 @@ async function processPayment() {
     }
 }
 
-// Deduct daily servings for order items
+// Deduct menu quantity for order items. Always uses quantity (variation.quantity or menu.quantity), not maxServingsPerDay.
+// When quantity becomes 0, product is unavailable on next load.
 async function deductStockForOrder(orderItems) {
     try {
         const fns = window.firestoreFunctions;
         if (!fns || !window.db) {
-            console.error('Firestore not ready for deducting servings');
+            console.error('Firestore not ready for deducting');
             return;
         }
-        
-        const today = getTodayDateString();
-        
+        // Build map of menuId -> { mainQty, variations: { varId: qty } } for quantity deduction
+        const menuUpdates = {};
         for (const orderItem of orderItems) {
             const orderQty = Number(orderItem.quantity) || 1;
             const product = posProducts.find(p => p.id === orderItem.id);
-            
             if (!product) {
                 console.warn('Product not found for order item:', orderItem.id);
                 continue;
             }
-            
-            // Get maxServingsPerDay
-            let maxServings = product.maxServingsPerDay;
-            if (maxServings === null || maxServings === 0) {
-                // Sauce (free with Peri Chicken & Ribs) or Sauce-category: decrement quantity in menu if present
-                const isSauce = orderItem.freeWithPeriRibs || ((product.category || '').toLowerCase().includes('sauce'));
-                if (isSauce && !product.isVariation && product.quantity !== undefined && product.quantity !== null && fns.increment) {
-                    const menuId = product.menuId || product.id;
-                    const menuRef = fns.doc(window.db, 'menu', menuId);
-                    await fns.updateDoc(menuRef, { quantity: fns.increment(-orderQty) });
-                    console.log(`Decremented sauce ${product.name} quantity by ${orderQty}`);
-                } else {
-                    console.log(`Skipping daily serving increment for ${product.name} (no limit set)`);
-                }
-                continue;
+            const menuId = product.menuId || product.id;
+            if (!menuUpdates[menuId]) menuUpdates[menuId] = { mainQty: 0, variations: {} };
+            if (product.isVariation) {
+                const varId = product.id;
+                menuUpdates[menuId].variations[varId] = (menuUpdates[menuId].variations[varId] || 0) + orderQty;
+            } else {
+                menuUpdates[menuId].mainQty += orderQty;
             }
-            
-            // Use the product's ID for daily servings tracking (variation ID or main product ID)
-            const menuItemId = orderItem.id; // This is the variation ID or main product ID
-            const menuItemName = orderItem.name;
-            
-            // Increment daily serving count in Firebase
-            const docId = `${today}_${menuItemId}`;
-            const docRef = fns.doc(window.db, 'dailyServings', docId);
+        }
+        // Deduct menu quantity for each affected menu document (variation.quantity or menu.quantity)
+        for (const menuId of Object.keys(menuUpdates)) {
+            const { mainQty, variations: varMap } = menuUpdates[menuId];
+            const hasMain = mainQty > 0;
+            const hasVars = Object.keys(varMap).length > 0;
+            if (!hasMain && !hasVars) continue;
             
             try {
                 await fns.runTransaction(window.db, async (transaction) => {
-                    const docSnapshot = await transaction.get(docRef);
-                    
-                    if (docSnapshot.exists) {
-                        const current = docSnapshot.data();
-                        if (!current) {
-                            // Document exists but data is null/undefined - treat as new document
-                            transaction.set(docRef, {
-                                menuItemId: menuItemId,
-                                menuItemName: menuItemName,
-                                date: today,
-                                count: orderQty,
-                                maxServings: maxServings || null,
-                                createdAt: fns.serverTimestamp(),
-                                updatedAt: fns.serverTimestamp()
-                            });
-                            console.log(`Created daily serving document for ${menuItemName} (was empty): ${orderQty}`);
-                        } else {
-                            const currentCount = current.count || 0;
-                            const newCount = currentCount + orderQty;
-                            transaction.update(docRef, {
-                                count: newCount,
-                                updatedAt: fns.serverTimestamp()
-                            });
-                            console.log(`Updated daily serving for ${menuItemName}: ${currentCount} -> ${newCount}`);
-                        }
-                    } else {
-                        // First serving of the day - initialize document in Firebase
-                        transaction.set(docRef, {
-                            menuItemId: menuItemId,
-                            menuItemName: menuItemName,
-                            date: today,
-                            count: orderQty,
-                            maxServings: maxServings || null,
-                            createdAt: fns.serverTimestamp(),
-                            updatedAt: fns.serverTimestamp()
+                    const menuRef = fns.doc(window.db, 'menu', menuId);
+                    const snap = await transaction.get(menuRef);
+                    if (!snap.exists()) return;
+                    const data = snap.data();
+                    const upd = {};
+                    if (hasMain) {
+                        upd.quantity = Math.max(0, (data.quantity || 0) - mainQty);
+                    }
+                    if (hasVars && Array.isArray(data.variations)) {
+                        upd.variations = data.variations.map((v) => {
+                            const varId = v.variationId || v.id;
+                            const dec = varMap[varId];
+                            if (dec == null) return v;
+                            const newVarQty = Math.max(0, (v.quantity || 0) - dec);
+                            return { ...v, quantity: newVarQty };
                         });
-                        console.log(`Created daily serving document for ${menuItemName}: ${orderQty}`);
+                    }
+                    if (Object.keys(upd).length > 0) {
+                        upd.updatedAt = fns.serverTimestamp();
+                        transaction.update(menuRef, upd);
+                        console.log(`Deducted menu quantity for ${menuId}: main -${mainQty}, variations updated`);
                     }
                 });
             } catch (error) {
-                console.error(`Error incrementing serving for ${menuItemId}:`, error);
-                throw error; // Re-throw to handle in outer catch
+                console.error(`Error deducting menu quantity for ${menuId}:`, error);
+                throw error;
             }
         }
         
-        console.log('Daily servings updated in Firebase for all items');
-        
-        // Reload daily servings and products to update display
-        await loadDailyServings();
+        console.log('Menu quantity updated in Firebase');
         await loadPOSProducts();
     } catch (error) {
-        console.error('Error deducting daily servings:', error);
-        throw error; // Re-throw so processPayment can handle it
+        console.error('Error deducting menu quantity:', error);
+        throw error;
     }
 }
 
@@ -1390,10 +1283,12 @@ function showReceipt(orderId, orderData, paymentAmount, change, customerName = '
     
     const cashierName = orderData.processedByName || 'Staff';
     
-    const receiptHTML = `
-        <div class="pos-receipt-content">
+    // Generate customer copy receipt
+    const customerReceiptHTML = `
+        <div class="pos-receipt-content pos-receipt-customer">
             <div class="pos-receipt-header">
                 <h3>PABLO'S PERI PERI</h3>
+                <p><strong>CUSTOMER COPY</strong></p>
                 <p><strong>${orderData.serviceType === 'take-out' ? 'TAKE OUT' : 'DINE IN'}</strong></p>
                 <p>Order ID: ${orderId}</p>
                 <p>Customer: ${displayCustomerName}</p>
@@ -1452,7 +1347,47 @@ function showReceipt(orderId, orderData, paymentAmount, change, customerName = '
         </div>
     `;
     
-    receiptContent.innerHTML = receiptHTML;
+    // Generate kitchen copy receipt
+    const kitchenReceiptHTML = `
+        <div class="pos-receipt-content pos-receipt-kitchen">
+            <div class="pos-receipt-header">
+                <h3>PABLO'S PERI PERI</h3>
+                <p><strong>KITCHEN COPY</strong></p>
+                <p><strong>${orderData.serviceType === 'take-out' ? 'TAKE OUT' : 'DINE IN'}</strong></p>
+                <p>Order ID: ${orderId}</p>
+                <p>Customer: ${displayCustomerName}</p>
+                ${orderData.serviceType === 'dine-in' && displayTableNumber ? `<p>Table: ${displayTableNumber}</p>` : ''}
+                <p>Cashier: ${cashierName}</p>
+                <p>Date: ${new Date().toLocaleString()}</p>
+            </div>
+            <div class="pos-receipt-items">
+                ${orderData.items.map(item => `
+                    <div class="pos-receipt-item">
+                        <div class="pos-receipt-item-name">${item.name}${item.freeWithPeriRibs ? ' (Free)' : ''}</div>
+                        <div class="pos-receipt-item-qty">${item.quantity}x</div>
+                        <div class="pos-receipt-item-price">—</div>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="pos-receipt-total">
+                <div class="pos-receipt-total-row">
+                    <span>Total Items:</span>
+                    <span>${orderData.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                </div>
+            </div>
+            <div class="pos-receipt-footer">
+                <p>Please prepare order</p>
+            </div>
+        </div>
+    `;
+    
+    // Combine both receipts
+    receiptContent.innerHTML = `
+        <div class="pos-receipts-container">
+            ${customerReceiptHTML}
+            ${kitchenReceiptHTML}
+        </div>
+    `;
     document.getElementById('posReceiptModal').style.display = 'block';
 }
 
@@ -1488,6 +1423,12 @@ function printReceipt() {
                             -webkit-print-color-adjust: exact;
                             print-color-adjust: exact;
                         }
+                        .pos-receipts-container {
+                            page-break-after: always;
+                        }
+                        .pos-receipt-kitchen {
+                            page-break-before: always;
+                        }
                     }
                     body { 
                         font-family: 'Courier New', monospace; 
@@ -1498,6 +1439,11 @@ function printReceipt() {
                         max-width: 80mm;
                         font-size: 10px;
                         line-height: 1.2;
+                    }
+                    .pos-receipts-container {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 20px;
                     }
                     .pos-receipt-content { 
                         background: white; 
@@ -1625,10 +1571,169 @@ window.onclick = function(event) {
 // Mobile menu toggle
 function toggleMobileSidebar() {
     const sidebar = document.getElementById('sidebar');
-    if (sidebar) {
+    const overlay = document.querySelector('.sidebar-overlay');
+    if (sidebar && overlay) {
         sidebar.classList.toggle('mobile-open');
+        overlay.classList.toggle('active');
     }
 }
+
+// Prevent dropdowns from closing when clicking submenu items
+// This must be a global handler (not in DOMContentLoaded) to work consistently
+// Use IIFE to ensure it runs immediately and works across page navigations
+(function() {
+    // Global handler to prevent dropdown closing when clicking submenu items
+    // Use capture phase to run BEFORE other click handlers (including script.js handlers)
+    // This handler MUST run first to prevent any other handlers from closing dropdowns
+    function preventDropdownClose(event) {
+        // Check if clicking inside an open submenu (most common case)
+        const submenu = event.target.closest('.menu-nav-submenu');
+        if (submenu && submenu.classList.contains('show')) {
+            // CRITICAL: Stop all propagation to prevent ANY other handler from closing dropdown
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            return; // Exit early - we've handled it
+        }
+        
+        // Also check if clicking on any element that's inside an open submenu
+        // This catches cases where the click target might be nested (e.g., icon inside link)
+        const clickedElement = event.target;
+        let currentElement = clickedElement;
+        
+        // Walk up the DOM tree to check if we're inside an open submenu
+        while (currentElement && currentElement !== document.body) {
+            if (currentElement.classList && currentElement.classList.contains('menu-nav-submenu')) {
+                if (currentElement.classList.contains('show')) {
+                    // We're inside an open submenu - prevent closing
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    return;
+                }
+                break; // Found submenu but it's closed, stop checking
+            }
+            currentElement = currentElement.parentElement;
+        }
+        
+        // Check if clicking on a link that's inside an open submenu
+        const clickedLink = clickedElement.closest('a');
+        if (clickedLink) {
+            const parentSubmenu = clickedLink.closest('.menu-nav-submenu');
+            if (parentSubmenu && parentSubmenu.classList.contains('show')) {
+                // Prevent dropdown from closing when clicking submenu links
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                return;
+            }
+        }
+    }
+    
+    // Add the handler in capture phase with highest priority (runs first)
+    // Use {capture: true, passive: false} to ensure we can stop propagation
+    document.addEventListener('click', preventDropdownClose, {capture: true, passive: false});
+})();
+
+// Additional protection on DOMContentLoaded to ensure it works after navigation
+document.addEventListener('DOMContentLoaded', function() {
+    // Re-apply protection to any submenus that exist
+    const submenus = document.querySelectorAll('.menu-nav-submenu');
+    submenus.forEach(submenu => {
+        submenu.addEventListener('click', function(event) {
+            if (submenu.classList.contains('show')) {
+                // Keep dropdown open when clicking inside it
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            }
+        }, true); // Capture phase
+    });
+    
+    // Also handle submenu links specifically
+    const submenuLinks = document.querySelectorAll('.menu-nav-submenu a');
+    submenuLinks.forEach(link => {
+        link.addEventListener('click', function(event) {
+            const parentSubmenu = link.closest('.menu-nav-submenu');
+            if (parentSubmenu && parentSubmenu.classList.contains('show')) {
+                // Prevent dropdown from closing
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            }
+        }, true); // Capture phase
+    });
+});
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    const toggleBtn = document.querySelector('.mobile-menu-toggle');
+    
+    // Don't close if clicking anywhere inside the sidebar (including dropdowns)
+    const isInsideSidebar = sidebar && sidebar.contains(event.target);
+    const isToggleButton = toggleBtn && toggleBtn.contains(event.target);
+    
+    // Don't close if clicking on dropdown toggle buttons or submenu items
+    const isDropdownToggle = event.target.closest('.menu-toggle');
+    const isSubmenuItem = event.target.closest('.menu-nav-submenu a');
+    
+    if (sidebar && overlay && toggleBtn) {
+        // Only close if clicking outside the sidebar and not on the toggle button
+        // Also exclude dropdown toggles and submenu items from closing the sidebar
+        if (!isInsideSidebar && !isToggleButton && !isDropdownToggle && !isSubmenuItem && sidebar.classList.contains('mobile-open')) {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+        }
+    }
+});
+
+// Close mobile menu when window is resized to desktop size
+window.addEventListener('resize', function() {
+    if (window.innerWidth > 768) {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (sidebar && overlay) {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+        }
+    }
+});
+
+// Close mobile menu when navigation links are clicked (mobile UX improvement)
+document.addEventListener('DOMContentLoaded', function() {
+    // Only attach to actual navigation links, not dropdown toggle buttons
+    const navLinks = document.querySelectorAll('.sidebar .nav-link:not(.menu-toggle), .sidebar .menu-nav-submenu a');
+    navLinks.forEach(link => {
+        link.addEventListener('click', function(event) {
+            // Don't close if this is a dropdown toggle button
+            if (link.classList.contains('menu-toggle') || link.closest('.menu-toggle')) {
+                return;
+            }
+            
+            // Check if this is a submenu link
+            const isSubmenuLink = link.closest('.menu-nav-submenu');
+            
+            // For submenu links, don't interfere at all - let them handle navigation naturally
+            // The dropdown close prevention handlers above will keep dropdown open
+            // DO NOT close sidebar or do anything that might affect dropdown state
+            if (isSubmenuLink) {
+                // Completely skip this handler for submenu links
+                // Let the global prevention handler and navigation handle everything
+                return;
+            }
+            
+            // Only close sidebar for top-level nav links on mobile
+            // This should NOT affect dropdown state at all
+            if (window.innerWidth <= 768) {
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.querySelector('.sidebar-overlay');
+                
+                if (sidebar && overlay) {
+                    // Only close sidebar, don't touch dropdowns
+                    sidebar.classList.remove('mobile-open');
+                    overlay.classList.remove('active');
+                }
+            }
+        });
+    });
+});
 
 // Load and display walk-in orders log
 async function loadWalkInOrdersLog() {

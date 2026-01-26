@@ -1132,6 +1132,25 @@
       }
     }
 
+    // Set driver availability in Firebase (drivers or staff). Used on shift start/end.
+    async function setDriverAvailabilityInFirebase(value) {
+      if (!currentDriver || !currentDriver.id) return;
+      try {
+        const db = window.firebaseDb;
+        const updateDocFn = window.updateDoc;
+        const docFn = window.doc;
+        const serverTimestampFn = window.serverTimestamp;
+        if (!db || !updateDocFn || !docFn || !serverTimestampFn) return;
+        try {
+          const driverRef = docFn(db, 'drivers', currentDriver.id);
+          await updateDocFn(driverRef, { availability: value, updatedAt: serverTimestampFn() });
+        } catch (e) {
+          const staffRef = docFn(db, 'staff', currentDriver.id);
+          await updateDocFn(staffRef, { availability: value, updatedAt: serverTimestampFn() });
+        }
+      } catch (e) { console.warn('Error updating driver availability:', e); }
+    }
+
     async function startShift() {
       if (!currentDriver || !currentDriver.id) {
         notify('Driver information not available', 'error');
@@ -1169,6 +1188,7 @@
         shiftState.startTime = currentTime;
         shiftState.endTime = null;
         
+        await setDriverAvailabilityInFirebase('on');
         updateShiftUI();
         notify('Shift started successfully', 'success');
         
@@ -1210,21 +1230,26 @@
         const getDocFn = window.getDoc;
         if (getDocFn) {
           const shiftDoc = await getDocFn(shiftRef);
-          const shiftData = shiftDoc.data();
-          shiftState.endTime = shiftData.endTime;
+          if (shiftDoc.exists()) {
+            const shiftData = shiftDoc.data();
+            if (shiftData) shiftState.endTime = shiftData.endTime;
+          }
         }
         
         shiftState.isActive = false;
         shiftState.currentShiftId = null;
         
+        await setDriverAvailabilityInFirebase('off');
         updateShiftUI();
         notify('Shift ended successfully', 'success');
         
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
-        console.error('Error ending shift:', error);
-        notify('Error ending shift. Please try again.', 'error');
+        console.error('Error ending shift:', error?.code, error?.message, error);
+        const msg = (error?.code === 'not-found') ? 'Shift record not found. It may have been removed.' : (error?.message || error?.code || 'Please try again.');
+        notify('Error ending shift: ' + msg, 'error');
+        if (error?.code === 'not-found') loadShiftStatus();
       }
     }
 
@@ -1433,6 +1458,7 @@
           }
         }
         
+        await setDriverAvailabilityInFirebase('on');
         updateShiftUI();
         notify('Shift started successfully', 'success');
         
@@ -1497,21 +1523,26 @@
         const getDocFn = window.getDoc;
         if (getDocFn) {
           const shiftDoc = await getDocFn(shiftRef);
-          const shiftData = shiftDoc.data();
-          shiftState.endTime = shiftData.endTime;
+          if (shiftDoc.exists()) {
+            const shiftData = shiftDoc.data();
+            if (shiftData) shiftState.endTime = shiftData.endTime;
+          }
         }
         
         shiftState.isActive = false;
         shiftState.currentShiftId = null;
         
+        await setDriverAvailabilityInFirebase('off');
         updateShiftUI();
         notify('Shift ended successfully', 'success');
         
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
-        console.error('Error ending shift:', error);
-        notify('Error ending shift. Please try again.', 'error');
+        console.error('Error ending shift:', error?.code, error?.message, error);
+        const msg = (error?.code === 'not-found') ? 'Shift record not found. It may have been removed.' : (error?.message || error?.code || 'Please try again.');
+        notify('Error ending shift: ' + msg, 'error');
+        if (error?.code === 'not-found') loadShiftStatus();
       }
     }
 
@@ -1555,21 +1586,26 @@
         const getDocFn = window.getDoc;
         if (getDocFn) {
           const shiftDoc = await getDocFn(shiftRef);
-          const shiftData = shiftDoc.data();
-          shiftState.endTime = shiftData.endTime;
+          if (shiftDoc.exists()) {
+            const shiftData = shiftDoc.data();
+            if (shiftData) shiftState.endTime = shiftData.endTime;
+          }
         }
         
         shiftState.isActive = false;
         shiftState.currentShiftId = null;
         
+        await setDriverAvailabilityInFirebase('off');
         updateShiftUI();
         notify('Shift ended successfully', 'success');
         
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
-        console.error('Error ending shift:', error);
-        notify('Error ending shift. Please try again.', 'error');
+        console.error('Error ending shift:', error?.code, error?.message, error);
+        const msg = (error?.code === 'not-found') ? 'Shift record not found. It may have been removed.' : (error?.message || error?.code || 'Please try again.');
+        notify('Error ending shift: ' + msg, 'error');
+        if (error?.code === 'not-found') loadShiftStatus();
       }
     }
 
@@ -1947,6 +1983,7 @@
         return;
       }
       
+      closeOrderModal();
       const completedOrder = ongoingOrders.splice(idx,1)[0];
       completedOrder.completedAt = new Date().toLocaleString();
       completedOrder.completedAtTs = Date.now();
@@ -2129,6 +2166,8 @@
         }
       }
       modal.classList.add('show');
+      modal.style.removeProperty('display');
+      modal.setAttribute('aria-hidden', 'false');
     }
 
     function updateCashChange(orderId, orderTotal) {
@@ -2243,6 +2282,7 @@
         return;
       }
       
+      closeOrderModal();
       // Update local order object
       const completedOrder = ongoingOrders.splice(idx,1)[0];
       completedOrder.completedAt = new Date().toLocaleString();
@@ -2253,8 +2293,6 @@
       completedOrders.unshift(completedOrder);
       
       notify('Delivery completed for ' + (order.trackingId || order.id), 'success');
-      closeOrderModal();
-      
       if (ongoingOrders.length === 0) { 
         driverAvailability = 'available'; 
         updateStatusDisplay();
@@ -2287,9 +2325,15 @@
       renderAll();
     }
 
-    function closeOrderModal(){ 
-      document.getElementById('orderModal').classList.remove('show'); 
+    function closeOrderModal(){
+      const el = document.getElementById('orderModal');
+      if (el) {
+        el.classList.remove('show');
+        el.style.display = 'none';
+        el.setAttribute('aria-hidden', 'true');
+      }
     }
+    window.closeOrderModal = closeOrderModal;
 
     function notify(message, type){
       const container = document.getElementById('toastContainer');

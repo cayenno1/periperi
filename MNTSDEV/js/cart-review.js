@@ -99,8 +99,12 @@
             const variationName = variation.name || variation.title || `Variation ${index + 1}`;
             const variationPrice = typeof variation.price === 'number' ? variation.price : 
                 (typeof variation.price === 'string' ? parseFloat(variation.price) : 0);
+            const vq = (variation.quantity ?? 0) || 0;
+            const isUnavailable = vq <= 0;
             const selected = (currentVariationIndex === index) ? 'selected' : '';
-            return `<option value="${index}" ${selected}>${variationName} (₱${variationPrice.toFixed(2)})</option>`;
+            const disabled = isUnavailable ? ' disabled' : '';
+            const unavLabel = isUnavailable ? ' (Unavailable)' : '';
+            return `<option value="${index}" ${selected}${disabled}>${variationName} (₱${variationPrice.toFixed(2)})${unavLabel}</option>`;
         }).join('');
         
         const selectId = `variation-select-${itemId}-${Date.now()}`;
@@ -218,7 +222,8 @@
                 variationData = {
                     index: variationIndex,
                     name: selectedVariation.name || selectedVariation.title || null,
-                    price: variationPrice
+                    price: variationPrice,
+                    id: selectedVariation.variationId || selectedVariation.id || null
                 };
                 
                 // Update cart item price based on variation
@@ -673,6 +678,16 @@
 
     async function quickAddItem(menuItem) {
         if (!menuItem) return;
+        // Products with variations: must open item to choose; quick-add has no variationId
+        if (Array.isArray(menuItem.variations) && menuItem.variations.length > 0) {
+            if (window.utils?.showToast) window.utils.showToast('Open the item to choose a variation.', 'info');
+            return;
+        }
+        // Quantity-based: do not add when quantity is 0 or null
+        if (((menuItem.quantity ?? 0) || 0) <= 0) {
+            if (window.utils?.showToast) window.utils.showToast('This item is currently unavailable.', 'error');
+            return;
+        }
         const itemId = menuItem.id || null;
         const name = menuItem.displayName || menuItem.name || menuItem.title || 'Item';
         const unitPrice = getBasePriceFromMenuItem(menuItem, 50);
@@ -738,14 +753,17 @@
                     const name = it.displayName || it.name || it.title || 'Item';
                     const price = getBasePriceFromMenuItem(it, 50);
                     const img = pickImageFromMenuItem(it);
+                    const hasV = Array.isArray(it.variations) && it.variations.length > 0;
+                    const q = (it.quantity ?? 0) || 0;
+                    const isUnav = hasV || q <= 0;
                     return `
                         <div class="ppp-addon-card">
                             <img src="${String(img).replace(/"/g, '&quot;')}" alt="${String(name).replace(/"/g, '&quot;')}">
                             <div class="ppp-addon-name">${name}</div>
                             <div class="ppp-addon-meta">
                                 <div class="ppp-addon-price">₱${price.toFixed(2)}</div>
-                                <button type="button" class="btn btn-outline-danger ppp-addon-addbtn" data-addon-id="${it.id}">
-                                    Add
+                                <button type="button" class="btn btn-outline-danger ppp-addon-addbtn" data-addon-id="${it.id}" ${isUnav ? ' disabled' : ''}>
+                                    ${isUnav ? 'Unavailable' : 'Add'}
                                 </button>
                             </div>
                         </div>

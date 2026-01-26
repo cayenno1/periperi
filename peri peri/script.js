@@ -61,12 +61,20 @@ let orderFilters = {
 let ordersCurrentPage = 1;
 const ordersPerPage = 10;
 let driversState = [];
-let driverFilter = 'available';
+let driverFilter = 'all';
 let driverSearchTerm = '';
 let currentViewingDriverId = null;
 let customersState = [];
 let selectedCustomerId = null;
 let customerSearchTerm = '';
+// Global alert state for cross-page notifications
+let reviewAlertsInitialized = false;
+let lastReviewedOrderIds = new Set();
+let orderReviewAlertUnsubscribe = null;
+let idVerificationAlertInitialized = false;
+let lastPendingIdCustomerIds = new Set();
+let idVerificationAlertUnsubscribe = null;
+let pendingIdCustomerDetails = [];
 
 // InventoryStore removed - system is now recipe-based
 
@@ -456,6 +464,9 @@ const MenuStore = (() => {
                     quantity: (variation.quantity !== undefined && variation.quantity !== null)
                         ? Number(variation.quantity)
                         : 0,
+                    maxServingsPerDay: (variation.maxServingsPerDay !== undefined && variation.maxServingsPerDay !== null)
+                        ? Number(variation.maxServingsPerDay)
+                        : null,
                     allergens: variation.allergens || '',
                     description: variation.description || '',
                     ingredientId: variation.ingredientId || null,
@@ -1072,9 +1083,19 @@ async function subscribeToOrdersCollection() {
                             console.log(`New order detected: ${order.id} with status ${orderStatus} - deducting servings`);
                             try {
                                 await deductDailyServingsForOrder(order);
-                                // Refresh menu list after deduction
+                                // Refresh serving cache (include variation ids) and menu list
                                 if (menuState && menuState.length > 0) {
-                                    const menuItemIds = menuState.map(item => item.id);
+                                    const menuItemIds = [];
+                                    menuState.forEach(function (it) {
+                                        if (Array.isArray(it.variations) && it.variations.length > 0) {
+                                            it.variations.forEach(function (v) {
+                                                const id = v.variationId || v.id;
+                                                if (id) menuItemIds.push(id);
+                                            });
+                                        } else {
+                                            if (it.id) menuItemIds.push(it.id);
+                                        }
+                                    });
                                     await refreshServingsCache(menuItemIds);
                                     const menuListTable = document.getElementById('menuListTableBody');
                                     if (menuListTable) {
@@ -1269,6 +1290,19 @@ function filterOrdersByCriteria(orders) {
     
     let filtered = [...orders];
     
+    // For Orders tab (orders.html), only show online orders (delivery), exclude dine-in and pick-up
+    const isOrdersPage = window.location.pathname.includes('orders.html') || 
+                         document.getElementById('orderServiceTypeFilter') !== null;
+    if (isOrdersPage) {
+        filtered = filtered.filter(order => {
+            const serviceType = (order.serviceType || '').toLowerCase().trim();
+            // Only show delivery orders (exclude dine-in and pick-up)
+            return serviceType === 'delivery' || 
+                   (!serviceType || (serviceType !== 'dine-in' && serviceType !== 'dinein' && 
+                                     serviceType !== 'pick-up' && serviceType !== 'pickup' && serviceType !== 'pick_up'));
+        });
+    }
+    
     // Filter by search term
     if (orderFilters.searchTerm) {
         const searchLower = orderFilters.searchTerm.toLowerCase();
@@ -1311,8 +1345,6 @@ function filterOrdersByCriteria(orders) {
                 const serviceType = (order.serviceType || '').toLowerCase().trim();
                 if (typeFilter === 'delivery') {
                     return serviceType === 'delivery' || (!serviceType || (serviceType !== 'dine-in' && serviceType !== 'dinein' && serviceType !== 'pick-up' && serviceType !== 'pickup' && serviceType !== 'pick_up'));
-                } else if (typeFilter === 'dine-in') {
-                    return serviceType === 'dine-in' || serviceType === 'dinein';
                 } else if (typeFilter === 'pick-up') {
                     return serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up';
                 }
@@ -1442,6 +1474,7 @@ function renderOrdersTable(orders) {
         const isDelivered = orderStatusLower === 'delivered' || orderStatusLower === 'completed';
         const isCancelled = orderStatusLower === 'cancelled' || orderStatusLower === 'canceled' || orderStatusLower === 'failed';
         const isDeclined = orderStatusLower === 'declined';
+        const hasDriver = !!(order.driverId && (typeof order.driverId === 'string' ? order.driverId.trim() : order.driverId));
         
         // Check if GCash payment needs verification
         const paymentModeLower = (order.paymentMode || '').toLowerCase();
@@ -1467,7 +1500,7 @@ function renderOrdersTable(orders) {
             // - Out for Delivery (for delivery orders)
             // - Ready for Pick-up (for pick-up orders)
             // - Ready (for dine-in orders)
-            if (isDeliveryOrder && hasDeliveryAddress) {
+            if (isDeliveryOrder && hasDeliveryAddress && hasDriver) {
                 availableStatuses.push({ value: 'out for delivery', label: 'On the Way' });
             } else if (isPickUp) {
                 availableStatuses.push({ value: 'ready for pick-up', label: 'Ready for Pick-up' });
@@ -1478,22 +1511,22 @@ function renderOrdersTable(orders) {
         } else if (isReadyForPickup) {
             // From ready for pick-up, can mark as delivered
             if (isPickUp) {
-                availableStatuses.push({ value: 'delivered', label: 'Delivered' });
+                availableStatuses.push({ value: 'delivered', label: 'Done' });
             }
         } else if (orderStatusLower === 'ready') {
             // From ready (dine-in), can mark as delivered
             if (isDineIn) {
-                availableStatuses.push({ value: 'delivered', label: 'Delivered' });
+                availableStatuses.push({ value: 'delivered', label: 'Done' });
             }
         } else if (isReadyForDelivery) {
-            // From ready for delivery, can go to out for delivery
-            if (isDeliveryOrder) {
+            // From ready for delivery, can go to out for delivery (only if driver already assigned)
+            if (isDeliveryOrder && hasDriver) {
                 availableStatuses.push({ value: 'out for delivery', label: 'On the Way' });
             }
         } else if (isOutForDelivery) {
             // From out for delivery, can mark as delivered
             if (isDeliveryOrder) {
-                availableStatuses.push({ value: 'delivered', label: 'Delivered' });
+                availableStatuses.push({ value: 'delivered', label: 'Done' });
             }
         }
         
@@ -1539,9 +1572,13 @@ function renderOrdersTable(orders) {
                 }
             }
             
-            // Show Assign Driver button for delivery orders that are "out for delivery" (on the way) and have no driver assigned
-            const hasDriver = !!(order.driverId && (typeof order.driverId === 'string' ? order.driverId.trim() : order.driverId));
-            if (isOutForDelivery && isDeliveryOrder && !hasDriver) {
+            // Show Assign Driver when: delivery order with no driver, and (ready for delivery, or preparing with address, or already on the way)
+            const showAssignDriver = isDeliveryOrder && !hasDriver && (
+                isReadyForDelivery ||
+                (isPreparing && hasDeliveryAddress) ||
+                isOutForDelivery
+            );
+            if (showAssignDriver) {
                 buttons.push(`<button class="order-action-btn btn-assign-driver" onclick="event.stopPropagation(); openDriverSelectionForOrder('${escapedOrderId}')" title="Assign Driver">
                     <i class="fas fa-user-tie"></i> Assign Driver
                 </button>`);
@@ -1571,12 +1608,17 @@ function renderOrdersTable(orders) {
             actionButtonsHTML = '<span style="color: #999;">—</span>';
         }
         
-        // Make row clickable to show order details
+        // Use action buttons directly (receipt buttons removed - receipt accessible via row click)
+        const allActionsHTML = actionButtonsHTML;
+        
+        // Make row clickable to show order details (which includes receipt access)
         if (order.id) {
             row.style.cursor = 'pointer';
             row.onclick = function(e) {
                 // Don't trigger if clicking on action buttons
-                if (!e.target.closest('.order-action-buttons') && !e.target.closest('.order-action-btn') && !e.target.closest('select')) {
+                if (!e.target.closest('.order-action-buttons') && 
+                    !e.target.closest('.order-action-btn') && 
+                    !e.target.closest('select')) {
                     viewOrderDetails(order.id);
                 }
             };
@@ -1592,7 +1634,7 @@ function renderOrdersTable(orders) {
             <td class="status-column">${statusDisplay}</td>
             <td class="time-column">${escapeHtml(orderTime)}</td>
             <td class="actions-column">
-                ${actionButtonsHTML}
+                ${allActionsHTML}
             </td>
         `;
         tableBody.appendChild(row);
@@ -2009,6 +2051,37 @@ function filterOrders() {
     }
 }
 
+// Apply filters from orders.html dropdowns
+function applyOrderFilters() {
+    const sortFilter = document.getElementById('orderSortFilter');
+    const statusFilter = document.getElementById('orderStatusFilter');
+    const serviceTypeFilter = document.getElementById('orderServiceTypeFilter');
+    
+    // Get sort value
+    let filterValue = 'new-to-old';
+    if (sortFilter && sortFilter.value) {
+        filterValue = sortFilter.value;
+    }
+    
+    // Combine status and service type filters if they exist
+    const parts = [];
+    if (serviceTypeFilter && serviceTypeFilter.value) {
+        parts.push(`type:${serviceTypeFilter.value}`);
+    }
+    if (statusFilter && statusFilter.value) {
+        parts.push(`status:${statusFilter.value}`);
+    }
+    
+    if (parts.length > 0) {
+        orderFilters.filter = parts.join('|');
+    } else {
+        orderFilters.filter = filterValue;
+    }
+    
+    ordersCurrentPage = 1; // Reset to first page when filter changes
+    renderOrdersTable(ordersState);
+}
+
 function changeOrdersPage(direction) {
     const filteredOrders = filterOrdersByCriteria(ordersState);
     const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
@@ -2139,7 +2212,7 @@ async function updateOrderStatus(orderId, newStatus) {
         statusValid = (isReady && isDineIn) || (isReadyForPickup && isPickUp) || (isOutForDelivery && isDeliveryOrder);
         
         if (!statusValid) {
-            errorMessage = 'Order must be "Ready" (dine-in), "Ready for Pick-up" (pickup), or "Out for Delivery" (delivery) before marking as delivered.';
+            errorMessage = 'Order must be "Ready" (dine-in), "Ready for Pick-up" (pickup), or "Out for Delivery" (delivery) before marking as done.';
         }
     } else {
         errorMessage = `Invalid status transition to "${newStatus}".`;
@@ -2148,6 +2221,16 @@ async function updateOrderStatus(orderId, newStatus) {
     if (!statusValid) {
         showNotification(errorMessage, 'error');
         return;
+    }
+    
+    // Require a driver before marking delivery orders as "On the Way"
+    if ((normalizedNewStatus === 'out for delivery' || normalizedNewStatus === 'out_for_delivery') && isDeliveryOrder) {
+        const hasDriver = !!(order.driverId && (typeof order.driverId === 'string' ? order.driverId.trim() : order.driverId));
+        if (!hasDriver) {
+            showNotification('Please assign a driver before marking the order as On the Way.', 'error');
+            openDriverSelectionForOrder(orderId);
+            return;
+        }
     }
     
     // NOTE: Daily servings are now deducted when orders are created (status: "new" or "pending")
@@ -2167,7 +2250,7 @@ async function updateOrderStatus(orderId, newStatus) {
         'ready for pickup': 'Ready for Pick-up',
         'out for delivery': 'Out for Delivery',
         'out_for_delivery': 'Out for Delivery',
-        'delivered': 'Delivered'
+        'delivered': 'Done'
     };
     const statusLabel = statusLabels[normalizedNewStatus] || newStatus;
     
@@ -2208,6 +2291,13 @@ async function updateOrderStatus(orderId, newStatus) {
         
         await fns.updateDoc(orderRef, updateData);
         
+        // Print kitchen receipt when order moves to In Kitchen (cashier gives to kitchen)
+        if (actualNewStatus === 'preparing' || preparingStatuses.includes(normalizedNewStatus)) {
+            if (typeof printKitchenReceipt === 'function') {
+                printKitchenReceipt(order);
+            }
+        }
+        
         // Handle "out for delivery" - create for_delivery document if needed
         if ((normalizedNewStatus === 'out for delivery' || normalizedNewStatus === 'out_for_delivery') && isDeliveryOrder) {
             try {
@@ -2235,26 +2325,14 @@ async function updateOrderStatus(orderId, newStatus) {
                 console.error('Error creating/updating for_delivery document:', deliveryError);
                 // Don't fail the whole operation
             }
-            
-            // Automatically open driver selection modal if no driver is assigned
-            if (!order.driverId) {
-                // Update local state first
-                const orderIndex = ordersState.findIndex(o => o.id === orderId);
-                if (orderIndex !== -1) {
-                    ordersState[orderIndex].status = normalizedNewStatus;
-                }
-                
-                // Refresh the orders table
-                renderOrdersTable(ordersState);
-                
-                // Show notification
-                showNotification(`Order ${order.trackingId || orderId} marked as "${statusLabel}"! Please assign a driver.`, 'success');
-                
-                // Automatically open driver selection modal
-                setTimeout(async () => {
-                    await openDriverSelectionForOrder(orderId);
-                }, 500); // Small delay to ensure UI updates
-                return; // Exit early, don't show duplicate notification
+        }
+        
+        // Print customer copy receipt when order is On The Way or Ready to Pickup
+        const isOutForDeliveryStatus = ['out for delivery', 'out_for_delivery', 'out-for-delivery', 'in-transit', 'in_transit', 'on-the-way', 'on_the_way'].includes(normalizedNewStatus);
+        const isReadyForPickupStatus = ['ready for pick-up', 'ready_for_pickup', 'ready for pickup'].includes(normalizedNewStatus);
+        if (isOutForDeliveryStatus || isReadyForPickupStatus) {
+            if (typeof printCustomerReceipt === 'function') {
+                printCustomerReceipt(order);
             }
         }
         
@@ -2401,17 +2479,40 @@ async function deductDailyServingsForOrder(order) {
         const qty = Number(orderItem.quantity) > 0 ? Number(orderItem.quantity) : 1;
         const menuItemName = orderItem.name || orderItem.itemName || 'Unknown Item';
         
-        // Find menu item to get ID, maxServingsPerDay and ingredients
         const menuItem = findMenuItemByOrderItem(orderItem);
-        
         if (!menuItem) {
             console.warn('deductDailyServingsForOrder: Could not find menu item for order item', orderItem);
             continue;
         }
         
-        // Use the menu item's ID (not the order item's ID)
-        const menuItemId = menuItem.id;
-        const maxServings = menuItem.maxServingsPerDay !== null && menuItem.maxServingsPerDay !== undefined ? menuItem.maxServingsPerDay : 0;
+        let menuItemId, maxServings;
+        const orderName = (orderItem.name || orderItem.itemName || '').toLowerCase();
+        const orderId = (orderItem.itemId || orderItem.id || '').toLowerCase();
+        const hasVariations = Array.isArray(menuItem.variations) && menuItem.variations.length > 0;
+        
+        if (hasVariations) {
+            let matched = null;
+            for (let i = 0; i < menuItem.variations.length; i++) {
+                const v = menuItem.variations[i];
+                const vName = (v.name || '').toLowerCase();
+                const vId = (v.variationId || v.id || '').toLowerCase();
+                if (vName && (orderName === vName || orderName.includes(vName) || vName.includes(orderName)) ||
+                    vId && (orderId === vId || orderId.includes(vId) || vId.includes(orderId))) {
+                    matched = v;
+                    break;
+                }
+            }
+            if (matched) {
+                menuItemId = matched.variationId || matched.id;
+                maxServings = (matched.quantity !== undefined && matched.quantity !== null) ? Number(matched.quantity) : 0;
+            } else {
+                menuItemId = menuItem.id;
+                maxServings = menuItem.maxServingsPerDay !== null && menuItem.maxServingsPerDay !== undefined ? menuItem.maxServingsPerDay : 0;
+            }
+        } else {
+            menuItemId = menuItem.id;
+            maxServings = menuItem.maxServingsPerDay !== null && menuItem.maxServingsPerDay !== undefined ? menuItem.maxServingsPerDay : 0;
+        }
         
         console.log(`deductDailyServingsForOrder: Deducting ${qty} servings for ${menuItemName} (menuItemId: ${menuItemId})`);
         
@@ -2419,7 +2520,6 @@ async function deductDailyServingsForOrder(order) {
             await DailyServingsStore.incrementServing(menuItemId, menuItemName, maxServings, qty);
             console.log(`deductDailyServingsForOrder: Successfully incremented serving for ${menuItemName} (${menuItemId})`);
             
-            // Update cache
             const currentCount = todayServingsCache[menuItemId] || 0;
             todayServingsCache[menuItemId] = currentCount + qty;
             console.log(`deductDailyServingsForOrder: Updated cache for ${menuItemId}: ${currentCount} -> ${todayServingsCache[menuItemId]}`);
@@ -2540,20 +2640,46 @@ async function syncDailyServingsForExistingOrders() {
         let syncedCount = 0;
         for (const order of ordersToProcess) {
             try {
-                // Process each item in the order
+                // Process each item in the order (resolve variation so we use variation-specific id and quantity)
                 for (const orderItem of order.items) {
                     const qty = Number(orderItem.quantity) > 0 ? Number(orderItem.quantity) : 1;
-                    const menuItemId = orderItem.menuItemId || orderItem.id || orderItem.itemId;
                     const menuItemName = orderItem.name || orderItem.itemName || 'Unknown Item';
+                    
+                    const menuItem = findMenuItemByOrderItem(orderItem);
+                    if (!menuItem) continue;
+                    
+                    let menuItemId, maxServings;
+                    const orderName = (orderItem.name || orderItem.itemName || '').toLowerCase();
+                    const orderId = (orderItem.itemId || orderItem.id || orderItem.menuItemId || '').toLowerCase();
+                    const hasVariations = Array.isArray(menuItem.variations) && menuItem.variations.length > 0;
+                    
+                    if (hasVariations) {
+                        let matched = null;
+                        for (let i = 0; i < menuItem.variations.length; i++) {
+                            const v = menuItem.variations[i];
+                            const vName = (v.name || '').toLowerCase();
+                            const vId = (v.variationId || v.id || '').toLowerCase();
+                            if ((vName && (orderName === vName || orderName.includes(vName) || vName.includes(orderName))) ||
+                                (vId && (orderId === vId || orderId.includes(vId) || vId.includes(orderId)))) {
+                                matched = v;
+                                break;
+                            }
+                        }
+                        if (matched) {
+                            menuItemId = matched.variationId || matched.id;
+                            maxServings = (matched.quantity !== undefined && matched.quantity !== null) ? Number(matched.quantity) : null;
+                        } else {
+                            menuItemId = menuItem.id;
+                            maxServings = menuItem.maxServingsPerDay != null ? menuItem.maxServingsPerDay : null;
+                        }
+                    } else {
+                        menuItemId = menuItem.id;
+                        maxServings = menuItem.maxServingsPerDay != null ? menuItem.maxServingsPerDay : null;
+                    }
                     
                     if (!menuItemId) continue;
                     
-                    // Find menu item to get maxServingsPerDay
-                    const menuItem = findMenuItemByOrderItem(orderItem);
-                    const maxServings = menuItem ? (menuItem.maxServingsPerDay || null) : null;
-                    
                     try {
-                        // Use incrementServing which handles transactions and prevents double-counting
                         await DailyServingsStore.incrementServing(menuItemId, menuItemName, maxServings, qty);
                     } catch (error) {
                         console.warn(`Failed to sync serving for ${menuItemId} in order ${order.id}:`, error);
@@ -2571,9 +2697,19 @@ async function syncDailyServingsForExistingOrders() {
         // Mark as synced for today
         sessionStorage.setItem(syncKey, 'true');
         
-        // Refresh serving cache and menu list
+        // Refresh serving cache (include variation ids) and menu list
         if (menuState && menuState.length > 0) {
-            const menuItemIds = menuState.map(item => item.id);
+            const menuItemIds = [];
+            menuState.forEach(function (item) {
+                if (Array.isArray(item.variations) && item.variations.length > 0) {
+                    item.variations.forEach(function (v) {
+                        const id = v.variationId || v.id;
+                        if (id) menuItemIds.push(id);
+                    });
+                } else {
+                    if (item.id) menuItemIds.push(item.id);
+                }
+            });
             await refreshServingsCache(menuItemIds);
             const menuListTable = document.getElementById('menuListTableBody');
             if (menuListTable) {
@@ -2614,7 +2750,7 @@ async function loadDriversForSelection() {
             const staffDocs = staffSnapshot.docs.filter(doc => {
                 const data = doc.data();
                 const role = (data.role || '').toLowerCase();
-                return role === 'driver' || role === 'delivery';
+                return role === 'driver';
             });
             driversState = staffDocs.map(docSnap => normalizeDriverDoc(docSnap));
             renderDriversForSelection();
@@ -3004,91 +3140,184 @@ function viewOrderDetails(orderId) {
         </div>`
         : '';
     
+    const escapedOrderIdForOnclick = String(orderId).replace(/'/g, "\\'").replace(/"/g, '\\"');
+    // Customer receipts should be viewable for all orders (better customer service and record keeping)
+    // Previously only shown for "out for delivery" or "ready for pick-up", but now available anytime
+    const showCustomerReceipt = true; // Always show customer receipt option - orders are saved, so receipts can be generated anytime
+    
     content.innerHTML = `
-        <div class="order-details-section">
-            <h3>Order Information</h3>
-            <div class="detail-row">
-                <span class="detail-label">Order ID:</span>
-                <span class="detail-value">${escapeHtml(order.trackingId || order.id)}</span>
+        <!-- Order Header Card -->
+        <div class="order-details-header-card">
+            <div class="order-header-main">
+                <div class="order-id-display">
+                    <i class="fas fa-hashtag"></i>
+                    <span class="order-id-value">${escapeHtml(order.trackingId || order.id)}</span>
+                </div>
+                <div class="order-status-display">
+                    ${formatOrderStatusBadge(order.status)}
+                </div>
             </div>
-            <div class="detail-row">
-                <span class="detail-label">Customer Name:</span>
-                <span class="detail-value">${escapeHtml(customerName)}</span>
-            </div>
-            ${order.userId ? `
-            <div class="detail-row">
-                <span class="detail-label">User ID:</span>
-                <span class="detail-value">${escapeHtml(order.userId)}</span>
-            </div>
-            ` : ''}
-            <div class="detail-row">
-                <span class="detail-label">Time:</span>
-                <span class="detail-value">${escapeHtml(order.createdLabel || '—')}</span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value">${formatOrderStatusBadge(order.status)}</span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Service Type:</span>
-                <span class="detail-value">${escapeHtml(serviceType)}</span>
-            </div>
-            ${tableNumber ? `
-            <div class="detail-row">
-                <span class="detail-label">Table Number:</span>
-                <span class="detail-value">${escapeHtml(tableNumber)}</span>
-            </div>
-            ` : ''}
-        </div>
-        
-        <div class="order-details-section">
-            <h3>Location Information</h3>
-            ${order.serviceType === 'delivery' ? `
-            <div class="detail-row">
-                <span class="detail-label">Delivery Address:</span>
-                <span class="detail-value">${escapeHtml(address)}</span>
-            </div>
-            ` : ''}
-            ${order.serviceType === 'pick-up' || order.serviceType === 'pickup' ? `
-            <div class="detail-row">
-                <span class="detail-label">Pick-up Location:</span>
-                <span class="detail-value">${escapeHtml(restaurantAddress)}</span>
-            </div>
-            ` : ''}
-            ${!order.serviceType || (order.serviceType !== 'delivery' && order.serviceType !== 'pick-up' && order.serviceType !== 'pickup') ? `
-            <div class="detail-row">
-                <span class="detail-label">Location:</span>
-                <span class="detail-value">—</span>
-            </div>
-            ` : ''}
-        </div>
-        
-        <div class="order-details-section">
-            <h3>Order Items</h3>
-            <div class="detail-row">
-                <span class="detail-label">Products:</span>
-                <span class="detail-value">${itemsList}</span>
+            <div class="order-header-meta">
+                <div class="order-meta-item">
+                    <i class="fas fa-clock"></i>
+                    <span>${escapeHtml(order.createdLabel || '—')}</span>
+                </div>
+                <div class="order-meta-item">
+                    <i class="fas fa-tag"></i>
+                    <span>${escapeHtml(serviceType)}</span>
+                </div>
             </div>
         </div>
-        
-        <div class="order-details-section">
-            <h3>Payment Information</h3>
-            <div class="detail-row">
-                <span class="detail-label">Amount:</span>
-                <span class="detail-value">${formatCurrency(order.total)}</span>
+
+        <!-- Customer Information Card -->
+        <div class="order-details-card">
+            <div class="order-card-header">
+                <i class="fas fa-user"></i>
+                <h3>Customer Information</h3>
             </div>
-            <div class="detail-row">
-                <span class="detail-label">Payment Mode:</span>
-                <span class="detail-value">${escapeHtml(order.paymentMode || 'Unspecified')}</span>
+            <div class="order-card-body">
+                <div class="detail-row-enhanced">
+                    <div class="detail-label-enhanced">
+                        <i class="fas fa-user-circle"></i>
+                        <span>Customer Name</span>
+                    </div>
+                    <div class="detail-value-enhanced">${escapeHtml(customerName)}</div>
+                </div>
+                ${order.userId ? `
+                <div class="detail-row-enhanced">
+                    <div class="detail-label-enhanced">
+                        <i class="fas fa-id-card"></i>
+                        <span>User ID</span>
+                    </div>
+                    <div class="detail-value-enhanced">${escapeHtml(order.userId)}</div>
+                </div>
+                ` : ''}
             </div>
-            ${paymentStatusHtml}
         </div>
-        
-        <div class="order-details-section">
-            <h3>Driver Information</h3>
-            <div class="detail-row">
-                <span class="detail-label">Driver ID:</span>
-                <span class="detail-value">${escapeHtml(order.driverId || '—')}</span>
+
+        <!-- Location Information Card -->
+        <div class="order-details-card">
+            <div class="order-card-header">
+                <i class="fas fa-map-marker-alt"></i>
+                <h3>Location Information</h3>
+            </div>
+            <div class="order-card-body">
+                ${order.serviceType === 'delivery' ? `
+                <div class="detail-row-enhanced">
+                    <div class="detail-label-enhanced">
+                        <i class="fas fa-truck"></i>
+                        <span>Delivery Address</span>
+                    </div>
+                    <div class="detail-value-enhanced">${escapeHtml(address)}</div>
+                </div>
+                ` : ''}
+                ${order.serviceType === 'pick-up' || order.serviceType === 'pickup' ? `
+                <div class="detail-row-enhanced">
+                    <div class="detail-label-enhanced">
+                        <i class="fas fa-store"></i>
+                        <span>Pick-up Location</span>
+                    </div>
+                    <div class="detail-value-enhanced">${escapeHtml(restaurantAddress)}</div>
+                </div>
+                ` : ''}
+                ${tableNumber ? `
+                <div class="detail-row-enhanced">
+                    <div class="detail-label-enhanced">
+                        <i class="fas fa-chair"></i>
+                        <span>Table Number</span>
+                    </div>
+                    <div class="detail-value-enhanced">${escapeHtml(tableNumber)}</div>
+                </div>
+                ` : ''}
+                ${!order.serviceType || (order.serviceType !== 'delivery' && order.serviceType !== 'pick-up' && order.serviceType !== 'pickup' && !tableNumber) ? `
+                <div class="detail-row-enhanced">
+                    <div class="detail-label-enhanced">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>Location</span>
+                    </div>
+                    <div class="detail-value-enhanced">—</div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+
+        <!-- Order Items Card -->
+        <div class="order-details-card order-items-card">
+            <div class="order-card-header">
+                <i class="fas fa-shopping-basket"></i>
+                <h3>Order Items</h3>
+            </div>
+            <div class="order-card-body">
+                <div class="order-items-list">
+                    ${itemsList}
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Information Card -->
+        <div class="order-details-card payment-card">
+            <div class="order-card-header">
+                <i class="fas fa-credit-card"></i>
+                <h3>Payment Information</h3>
+            </div>
+            <div class="order-card-body">
+                <div class="payment-amount-display">
+                    <div class="payment-amount-label">Total Amount</div>
+                    <div class="payment-amount-value">${formatCurrency(order.total)}</div>
+                </div>
+                <div class="detail-row-enhanced">
+                    <div class="detail-label-enhanced">
+                        <i class="fas fa-money-bill-wave"></i>
+                        <span>Payment Mode</span>
+                    </div>
+                    <div class="detail-value-enhanced">${escapeHtml(order.paymentMode || 'Unspecified')}</div>
+                </div>
+                ${paymentStatusHtml ? `<div class="payment-status-wrapper">${paymentStatusHtml}</div>` : ''}
+            </div>
+        </div>
+
+        ${order.driverId ? `
+        <!-- Driver Information Card -->
+        <div class="order-details-card">
+            <div class="order-card-header">
+                <i class="fas fa-car"></i>
+                <h3>Driver Information</h3>
+            </div>
+            <div class="order-card-body">
+                <div class="detail-row-enhanced">
+                    <div class="detail-label-enhanced">
+                        <i class="fas fa-id-badge"></i>
+                        <span>Driver ID</span>
+                    </div>
+                    <div class="detail-value-enhanced">${escapeHtml(order.driverId)}</div>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+
+        <!-- Receipts Card -->
+        <div class="order-details-card receipt-section-prominent">
+            <div class="order-card-header">
+                <i class="fas fa-receipt"></i>
+                <h3>Receipts</h3>
+            </div>
+            <div class="order-card-body">
+                <div class="receipt-actions-grid">
+                    <button type="button" class="btn btn-receipt-kitchen" onclick="event.stopPropagation(); viewKitchenReceipt('${escapedOrderIdForOnclick}');">
+                        <i class="fas fa-utensils"></i>
+                        <span>View Kitchen Receipt</span>
+                    </button>
+                    ${showCustomerReceipt ? `
+                    <button type="button" class="btn btn-receipt-customer" onclick="event.stopPropagation(); viewCustomerReceipt('${escapedOrderIdForOnclick}');">
+                        <i class="fas fa-receipt"></i>
+                        <span>View Customer Receipt</span>
+                    </button>
+                    <button type="button" class="btn btn-receipt-print" onclick="event.stopPropagation(); quickPrintCustomerReceipt('${escapedOrderIdForOnclick}');">
+                        <i class="fas fa-print"></i>
+                        <span>Quick Print</span>
+                    </button>
+                    ` : ''}
+                </div>
             </div>
         </div>
     `;
@@ -4250,28 +4479,772 @@ async function reopenOrder(orderId) {
 
 function formatOrderItemsForDetails(items) {
     if (!Array.isArray(items) || !items.length) {
-        return '—';
+        return '<div class="order-item-empty">—</div>';
     }
-    const itemsList = items.map(item => {
+    const itemsList = items.map((item, index) => {
         if (typeof item === 'string') {
-            return escapeHtml(item);
+            return `<div class="order-item-row">
+                <div class="order-item-name">${escapeHtml(item)}</div>
+            </div>`;
         }
         const name = item.name || item.itemName || item.itemId || 'Item';
         const quantity = typeof item.quantity === 'number' && item.quantity > 0
-            ? ` x${item.quantity}`
-            : '';
+            ? item.quantity
+            : 1;
         const price = typeof item.price === 'number' && item.price > 0
-            ? ` (${formatCurrency(item.price)})`
-            : '';
-        return `${escapeHtml(name)}${quantity}${price}`;
+            ? item.price
+            : null;
+        const totalPrice = price ? price * quantity : null;
+        
+        let itemHtml = `<div class="order-item-row">
+            <div class="order-item-main">
+                <span class="order-item-quantity">${quantity}x</span>
+                <span class="order-item-name">${escapeHtml(name)}</span>
+            </div>`;
+        
+        if (totalPrice) {
+            itemHtml += `<div class="order-item-price">${formatCurrency(totalPrice)}</div>`;
+        } else if (price) {
+            itemHtml += `<div class="order-item-price">${formatCurrency(price)}</div>`;
+        }
+        
+        itemHtml += `</div>`;
+        return itemHtml;
     });
-    return itemsList.length > 0 ? itemsList.join('<br>') : '—';
+    return itemsList.length > 0 ? itemsList.join('') : '<div class="order-item-empty">—</div>';
+}
+
+/**
+ * Open the kitchen receipt in a new window for viewing. User can then click Print in that window.
+ * Called from the order details modal.
+ */
+function viewKitchenReceipt(orderId) {
+    const order = ordersState.find(o => o.id === orderId);
+    if (!order) {
+        showNotification('Order not found.', 'error');
+        return;
+    }
+    showReceiptPreview(order, 'kitchen');
+}
+
+/**
+ * Print a kitchen-only receipt when an order moves to In Kitchen.
+ * The cashier gives this to the kitchen so they know what to prepare.
+ * No prices—only order info, service type, location, and items.
+ * @param {object} order - Order object
+ * @param {boolean} [autoPrint=true] - If true, opens print dialog automatically. If false, shows a Print button for viewing first.
+ */
+function printKitchenReceipt(order, autoPrint) {
+    if (!order) return;
+    if (autoPrint === undefined) autoPrint = true;
+    const orderId = escapeHtml(String(order.trackingId || order.id));
+    const serviceType = (order.serviceType || '').toLowerCase().trim();
+    const isDineIn = serviceType === 'dine-in' || serviceType === 'dinein';
+    const isPickUp = serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up';
+    const isDelivery = !isDineIn && !isPickUp;
+
+    let serviceLabel = (order.serviceType || '—').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    let locationText = '';
+    if (isDineIn) {
+        const tbl = order.tableNumber != null ? String(order.tableNumber) : '—';
+        locationText = `Table: ${escapeHtml(tbl)}`;
+    } else if (isDelivery) {
+        const addr = order.address || order.deliveryInfo?.address || '—';
+        locationText = `Address: ${escapeHtml(addr)}`;
+    } else if (isPickUp) {
+        locationText = 'Pick-up';
+    }
+
+    const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
+    const orderNotes = (order.notes || order.specialInstructions || '').trim();
+
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemsHtml = items.length
+        ? items.map(item => {
+            const name = escapeHtml(String(item.name || item.itemName || item.itemId || 'Item'));
+            const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
+            const notes = [item.notes, item.instructions, item.specialInstructions].filter(Boolean).map(s => String(s).trim()).join('; ');
+            const notePart = notes ? ` <span class="item-note">(${escapeHtml(notes)})</span>` : '';
+            return `<div class="kitchen-receipt-item"><span class="qty">${qty}x</span> <span class="name">${name}${notePart}</span></div>`;
+        }).join('')
+        : '<div class="kitchen-receipt-item">—</div>';
+
+    const now = new Date().toLocaleString();
+    const receiptHTML = `
+        <div class="kitchen-receipt">
+            <div class="kitchen-receipt-items">
+                <h2 class="kitchen-receipt-items-title">ITEMS TO PREPARE</h2>
+                ${itemsHtml}
+            </div>
+            <div class="kitchen-receipt-header">
+                <p class="kitchen-receipt-meta"><strong>KITCHEN COPY</strong> · #${orderId}</p>
+                <p><strong>Service:</strong> ${escapeHtml(serviceLabel)} · ${escapeHtml(locationText)}</p>
+                <p><strong>Customer:</strong> ${escapeHtml(customerName)} · <strong>Time:</strong> ${escapeHtml(now)}</p>
+                ${orderNotes ? `<p><strong>Order notes:</strong> ${escapeHtml(orderNotes)}</p>` : ''}
+            </div>
+            <div class="kitchen-receipt-footer">
+                <p>— PABLO'S PERI PERI —</p>
+            </div>
+        </div>
+        ${!autoPrint ? '<div class="kitchen-receipt-actions"><button type="button" onclick="window.print()">Print</button></div>' : ''}`;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showNotification('Pop-up blocked. Please allow pop-ups to view the kitchen receipt.', 'error');
+        return;
+    }
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Kitchen Receipt - ${orderId}</title>
+            <meta charset="UTF-8">
+            <style>
+                @page { size: 80mm auto; margin: 0; }
+                @media print { body { margin: 0; padding: 5mm; width: 80mm; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .kitchen-receipt-actions { display: none !important; } }
+                body { font-family: 'Courier New', monospace; padding: 5mm; margin: 0; background: #fff; max-width: 80mm; font-size: 10px; line-height: 1.3; }
+                .kitchen-receipt { width: 100%; }
+                .kitchen-receipt-items { margin: 0 0 10px 0; padding-bottom: 10px; border-bottom: 2px solid #000; }
+                .kitchen-receipt-items-title { margin: 0 0 8px 0; font-size: 11px; font-weight: bold; text-align: center; letter-spacing: 0.5px; }
+                .kitchen-receipt-item { margin-bottom: 8px; font-size: 15px; line-height: 1.35; display: flex; align-items: flex-start; gap: 6px; }
+                .kitchen-receipt-item .qty { flex-shrink: 0; font-weight: bold; font-size: 16px; min-width: 28px; }
+                .kitchen-receipt-item .name { flex: 1; word-wrap: break-word; font-size: 15px; font-weight: 500; }
+                .kitchen-receipt-item .item-note { font-size: 11px; color: #333; font-weight: normal; }
+                .kitchen-receipt-header { padding: 6px 0; border-bottom: 1px dashed #000; }
+                .kitchen-receipt-header p { margin: 3px 0; font-size: 8px; text-align: left; line-height: 1.4; }
+                .kitchen-receipt-meta { font-size: 9px; text-align: center; margin-bottom: 4px !important; }
+                .kitchen-receipt-footer { text-align: center; margin-top: 8px; padding-top: 6px; font-size: 8px; }
+                .kitchen-receipt-actions { text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #ccc; }
+                .kitchen-receipt-actions button { padding: 6px 16px; font-size: 12px; cursor: pointer; }
+            </style>
+        </head>
+        <body>${receiptHTML}</body>
+        </html>`);
+    printWindow.document.close();
+    if (autoPrint) {
+        setTimeout(() => { printWindow.print(); }, 250);
+    }
+}
+
+/**
+ * Open the customer receipt in a modal preview for viewing. User can then click Print in that modal.
+ * Shown when order is On The Way or Ready to Pickup.
+ */
+function viewCustomerReceipt(orderId) {
+    const order = ordersState.find(o => o.id === orderId);
+    if (!order) {
+        showNotification('Order not found.', 'error');
+        return;
+    }
+    showReceiptPreview(order, 'customer');
+}
+
+/**
+ * Print a customer copy receipt (POS-style). Used when order is On The Way or Ready to Pickup.
+ * Structure copied from pos.html / pos-script.js showReceipt and printReceipt.
+ * @param {object} order - Order object
+ * @param {boolean} [autoPrint=true] - If true, opens print dialog automatically. If false, shows a Print button.
+ */
+function printCustomerReceipt(order, autoPrint) {
+    if (!order) return;
+    if (autoPrint === undefined) autoPrint = true;
+    const orderId = escapeHtml(String(order.trackingId || order.id));
+    const subtotal = typeof order.subtotal === 'number' ? order.subtotal : (order.total || 0);
+    const total = typeof order.total === 'number' ? order.total : 0;
+    const discount = order.discount;
+    const paymentMode = escapeHtml(String(order.paymentMode || 'Cash'));
+    const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
+    const serviceType = (order.serviceType || '').toLowerCase().trim();
+    let serviceLabel = 'DINE IN';
+    if (serviceType === 'delivery') serviceLabel = 'DELIVERY';
+    else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up') serviceLabel = 'PICK UP';
+    else if (serviceType === 'take-out' || serviceType === 'takeout') serviceLabel = 'TAKE OUT';
+    else if (serviceType === 'dine-in' || serviceType === 'dinein') serviceLabel = 'DINE IN';
+
+    let extraLine = '';
+    if (serviceType === 'dine-in' || serviceType === 'dinein') {
+        const tbl = order.tableNumber != null ? String(order.tableNumber) : '—';
+        extraLine = `<p>Table: ${escapeHtml(tbl)}</p>`;
+    } else if (serviceType === 'delivery') {
+        const addr = order.address || order.deliveryInfo?.address || '—';
+        extraLine = `<p>Delivery to: ${escapeHtml(addr)}</p>`;
+    } else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up') {
+        extraLine = '<p>Pick-up</p>';
+    }
+
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemsHtml = items.map(item => {
+        const name = escapeHtml(String(item.name || item.itemName || item.itemId || 'Item'));
+        const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
+        const price = typeof item.price === 'number' ? item.price : 0;
+        const lineTotal = price * qty;
+        const freeNote = item.freeWithPeriRibs ? ' (Free with Peri Chicken & Ribs)' : '';
+        return `<div class="pos-receipt-item"><div class="pos-receipt-item-name">${name}${freeNote}</div><div class="pos-receipt-item-qty">${qty}x</div><div class="pos-receipt-item-price">₱${lineTotal.toFixed(2)}</div></div>`;
+    }).join('');
+
+    const discountHtml = discount && typeof discount.amount === 'number' && discount.amount > 0
+        ? `<div class="pos-receipt-total-row"><span>Discount (${escapeHtml(String(discount.type || ''))} ${Number(discount.percent) || 0}%):</span><span>-₱${(discount.amount).toFixed(2)}</span></div>`
+        : '';
+
+    const now = new Date().toLocaleString();
+    const receiptHTML = `
+        <div class="pos-receipt-content">
+            <div class="pos-receipt-header">
+                <h3>PABLO'S PERI PERI</h3>
+                <p><strong>CUSTOMER COPY</strong></p>
+                <p><strong>${serviceLabel}</strong></p>
+                <p>Order ID: ${orderId}</p>
+                <p>Customer: ${escapeHtml(customerName)}</p>
+                ${extraLine}
+                <p>Date: ${escapeHtml(now)}</p>
+            </div>
+            <div class="pos-receipt-items">${itemsHtml}</div>
+            <div class="pos-receipt-total">
+                <div class="pos-receipt-total-row"><span>Subtotal:</span><span>₱${subtotal.toFixed(2)}</span></div>
+                ${discountHtml}
+                <div class="pos-receipt-total-row"><span>Total:</span><span>₱${total.toFixed(2)}</span></div>
+                <div class="pos-receipt-total-row"><span>Payment Method:</span><span><strong>${paymentMode}</strong></span></div>
+                <div class="pos-receipt-total-row final"><span>Amount Paid:</span><span>₱${total.toFixed(2)}</span></div>
+            </div>
+            <div class="pos-receipt-footer">
+                <p>Thank you for your order!</p>
+                <p>Please come again</p>
+            </div>
+        </div>
+        ${!autoPrint ? '<div class="customer-receipt-actions"><button type="button" onclick="window.print()">Print</button></div>' : ''}`;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showNotification('Pop-up blocked. Please allow pop-ups to view the customer receipt.', 'error');
+        return;
+    }
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Customer Receipt - ${orderId}</title>
+            <meta charset="UTF-8">
+            <style>
+                @page { size: 80mm auto; margin: 0; padding: 0; }
+                @media print { body { margin: 0; padding: 5mm; width: 80mm; font-size: 10px; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .customer-receipt-actions { display: none !important; } }
+                body { font-family: 'Courier New', monospace; padding: 5mm; margin: 0; background: white; width: 80mm; max-width: 80mm; font-size: 10px; line-height: 1.2; }
+                .pos-receipt-content { background: white; width: 100%; max-width: 80mm; margin: 0; padding: 0; }
+                .pos-receipt-header { text-align: center; margin-bottom: 8px; border-bottom: 1px dashed #000; padding-bottom: 8px; }
+                .pos-receipt-header h3 { margin: 0 0 4px 0; font-size: 14px; font-weight: bold; line-height: 1.2; }
+                .pos-receipt-header p { margin: 2px 0; font-size: 9px; line-height: 1.2; }
+                .pos-receipt-items { margin: 8px 0; }
+                .pos-receipt-item { display: flex; justify-content: space-between; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px dotted #ccc; font-size: 9px; line-height: 1.3; }
+                .pos-receipt-item-name { flex: 1; text-align: left; word-wrap: break-word; padding-right: 4px; }
+                .pos-receipt-item-qty { margin: 0 4px; text-align: center; min-width: 20px; flex-shrink: 0; }
+                .pos-receipt-item-price { text-align: right; min-width: 50px; flex-shrink: 0; }
+                .pos-receipt-total { border-top: 1px solid #000; padding-top: 6px; margin-top: 8px; }
+                .pos-receipt-total-row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 10px; line-height: 1.3; }
+                .pos-receipt-total-row.final { font-weight: bold; font-size: 12px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #000; }
+                .pos-receipt-footer { text-align: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #000; font-size: 9px; line-height: 1.3; }
+                .customer-receipt-actions { text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #ccc; }
+                .customer-receipt-actions button { padding: 6px 16px; font-size: 12px; cursor: pointer; }
+            </style>
+        </head>
+        <body>${receiptHTML}</body>
+        </html>`);
+    printWindow.document.close();
+    if (autoPrint) {
+        setTimeout(() => { printWindow.print(); }, 250);
+    }
+}
+
+// Receipt Preview Modal Functions
+let currentReceiptPreviewOrder = null;
+let currentReceiptPreviewType = null;
+let currentReceiptZoom = 100;
+
+/**
+ * Show receipt preview in modal
+ * @param {object} order - Order object
+ * @param {string} type - 'kitchen' or 'customer'
+ */
+function showReceiptPreview(order, type) {
+    if (!order) return;
+    
+    currentReceiptPreviewOrder = order;
+    currentReceiptPreviewType = type;
+    currentReceiptZoom = 100;
+    
+    const modal = document.getElementById('receiptPreviewModal');
+    const titleEl = document.getElementById('receiptPreviewTitle');
+    const contentEl = document.getElementById('receiptPreviewContent');
+    
+    if (!modal || !titleEl || !contentEl) {
+        // Fallback to old method if modal doesn't exist
+        if (type === 'kitchen') {
+            printKitchenReceipt(order, false);
+        } else {
+            printCustomerReceipt(order, false);
+        }
+        return;
+    }
+    
+    // Set title with order info
+    const orderId = escapeHtml(String(order.trackingId || order.id));
+    if (type === 'kitchen') {
+        titleEl.textContent = `Kitchen Receipt Preview - Order #${orderId}`;
+    } else {
+        titleEl.textContent = `Customer Receipt Preview - Order #${orderId}`;
+    }
+    
+    // Generate receipt HTML
+    let receiptHTML = '';
+    if (type === 'kitchen') {
+        receiptHTML = generateKitchenReceiptHTML(order);
+    } else {
+        receiptHTML = generateCustomerReceiptHTML(order);
+    }
+    
+    // Add receipt metadata
+    const receiptMeta = generateReceiptMetadata(order, type);
+    
+    // Wrap in preview container
+    contentEl.innerHTML = `
+        <div class="receipt-metadata-bar">${receiptMeta}</div>
+        <div class="receipt-preview-content-wrapper zoom-100">${receiptHTML}</div>
+    `;
+    
+    // Show modal with animation
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    
+    // Update zoom indicator
+    updateZoomIndicator();
+    
+    // Focus management - focus on close button for accessibility
+    setTimeout(() => {
+        const closeBtn = modal.querySelector('.close-modal');
+        if (closeBtn) closeBtn.focus();
+    }, 100);
+    
+    // Scroll to top of receipt
+    const wrapper = contentEl.querySelector('.receipt-preview-content-wrapper');
+    if (wrapper) {
+        wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+/**
+ * Generate kitchen receipt HTML for preview
+ */
+function generateKitchenReceiptHTML(order) {
+    if (!order) return '';
+    
+    const orderId = escapeHtml(String(order.trackingId || order.id));
+    const serviceType = (order.serviceType || '').toLowerCase().trim();
+    const isDineIn = serviceType === 'dine-in' || serviceType === 'dinein';
+    const isPickUp = serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up';
+    const isDelivery = !isDineIn && !isPickUp;
+
+    let serviceLabel = (order.serviceType || '—').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    let locationText = '';
+    if (isDineIn) {
+        const tbl = order.tableNumber != null ? String(order.tableNumber) : '—';
+        locationText = `Table: ${escapeHtml(tbl)}`;
+    } else if (isDelivery) {
+        const addr = order.address || order.deliveryInfo?.address || '—';
+        locationText = `Address: ${escapeHtml(addr)}`;
+    } else if (isPickUp) {
+        locationText = 'Pick-up';
+    }
+
+    const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
+    const orderNotes = (order.notes || order.specialInstructions || '').trim();
+
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemsHtml = items.length
+        ? items.map(item => {
+            const name = escapeHtml(String(item.name || item.itemName || item.itemId || 'Item'));
+            const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
+            const notes = [item.notes, item.instructions, item.specialInstructions].filter(Boolean).map(s => String(s).trim()).join('; ');
+            const notePart = notes ? ` <span class="item-note">(${escapeHtml(notes)})</span>` : '';
+            return `<div class="kitchen-receipt-item"><span class="qty">${qty}x</span> <span class="name">${name}${notePart}</span></div>`;
+        }).join('')
+        : '<div class="kitchen-receipt-item">—</div>';
+
+    const now = new Date().toLocaleString();
+    
+    return `
+        <div class="kitchen-receipt">
+            <div class="kitchen-receipt-items">
+                <h2 class="kitchen-receipt-items-title">ITEMS TO PREPARE</h2>
+                ${itemsHtml}
+            </div>
+            <div class="kitchen-receipt-header">
+                <p class="kitchen-receipt-meta"><strong>KITCHEN COPY</strong> · #${orderId}</p>
+                <p><strong>Service:</strong> ${escapeHtml(serviceLabel)} · ${escapeHtml(locationText)}</p>
+                <p><strong>Customer:</strong> ${escapeHtml(customerName)} · <strong>Time:</strong> ${escapeHtml(now)}</p>
+                ${orderNotes ? `<p><strong>Order notes:</strong> ${escapeHtml(orderNotes)}</p>` : ''}
+            </div>
+            <div class="kitchen-receipt-footer">
+                <p>— PABLO'S PERI PERI —</p>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Generate customer receipt HTML for preview
+ */
+function generateCustomerReceiptHTML(order) {
+    if (!order) return '';
+    
+    const orderId = escapeHtml(String(order.trackingId || order.id));
+    const subtotal = typeof order.subtotal === 'number' ? order.subtotal : (order.total || 0);
+    const total = typeof order.total === 'number' ? order.total : 0;
+    const discount = order.discount;
+    const paymentMode = escapeHtml(String(order.paymentMode || 'Cash'));
+    const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
+    const serviceType = (order.serviceType || '').toLowerCase().trim();
+    let serviceLabel = 'DINE IN';
+    if (serviceType === 'delivery') serviceLabel = 'DELIVERY';
+    else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up') serviceLabel = 'PICK UP';
+    else if (serviceType === 'take-out' || serviceType === 'takeout') serviceLabel = 'TAKE OUT';
+    else if (serviceType === 'dine-in' || serviceType === 'dinein') serviceLabel = 'DINE IN';
+
+    let extraLine = '';
+    if (serviceType === 'dine-in' || serviceType === 'dinein') {
+        const tbl = order.tableNumber != null ? String(order.tableNumber) : '—';
+        extraLine = `<p>Table: ${escapeHtml(tbl)}</p>`;
+    } else if (serviceType === 'delivery') {
+        const addr = order.address || order.deliveryInfo?.address || '—';
+        extraLine = `<p>Delivery to: ${escapeHtml(addr)}</p>`;
+    } else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up') {
+        extraLine = '<p>Pick-up</p>';
+    }
+
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemsHtml = items.map(item => {
+        const name = escapeHtml(String(item.name || item.itemName || item.itemId || 'Item'));
+        const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
+        const price = typeof item.price === 'number' ? item.price : 0;
+        const lineTotal = price * qty;
+        const freeNote = item.freeWithPeriRibs ? ' (Free with Peri Chicken & Ribs)' : '';
+        return `<div class="pos-receipt-item"><div class="pos-receipt-item-name">${name}${freeNote}</div><div class="pos-receipt-item-qty">${qty}x</div><div class="pos-receipt-item-price">₱${lineTotal.toFixed(2)}</div></div>`;
+    }).join('');
+
+    const discountHtml = discount && typeof discount.amount === 'number' && discount.amount > 0
+        ? `<div class="pos-receipt-total-row"><span>Discount (${escapeHtml(String(discount.type || ''))} ${Number(discount.percent) || 0}%):</span><span>-₱${(discount.amount).toFixed(2)}</span></div>`
+        : '';
+
+    const now = new Date().toLocaleString();
+    
+    return `
+        <div class="pos-receipt-content">
+            <div class="pos-receipt-header">
+                <h3>PABLO'S PERI PERI</h3>
+                <p><strong>CUSTOMER COPY</strong></p>
+                <p><strong>${serviceLabel}</strong></p>
+                <p>Order ID: ${orderId}</p>
+                <p>Customer: ${escapeHtml(customerName)}</p>
+                ${extraLine}
+                <p>Date: ${escapeHtml(now)}</p>
+            </div>
+            <div class="pos-receipt-items">${itemsHtml}</div>
+            <div class="pos-receipt-total">
+                <div class="pos-receipt-total-row"><span>Subtotal:</span><span>₱${subtotal.toFixed(2)}</span></div>
+                ${discountHtml}
+                <div class="pos-receipt-total-row"><span>Total:</span><span>₱${total.toFixed(2)}</span></div>
+                <div class="pos-receipt-total-row"><span>Payment Method:</span><span><strong>${paymentMode}</strong></span></div>
+                <div class="pos-receipt-total-row final"><span>Amount Paid:</span><span>₱${total.toFixed(2)}</span></div>
+            </div>
+            <div class="pos-receipt-footer">
+                <p>Thank you for your order!</p>
+                <p>Please come again</p>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Close receipt preview modal
+ */
+function closeReceiptPreviewModal() {
+    const modal = document.getElementById('receiptPreviewModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    currentReceiptPreviewOrder = null;
+    currentReceiptPreviewType = null;
+    currentReceiptZoom = 100;
+    
+    // Update zoom indicator
+    updateZoomIndicator();
+}
+
+/**
+ * Zoom receipt preview
+ */
+function zoomReceiptPreview(action) {
+    const wrapper = document.querySelector('.receipt-preview-content-wrapper');
+    if (!wrapper) return;
+    
+    if (action === 'in') {
+        if (currentReceiptZoom < 200) {
+            currentReceiptZoom = Math.min(200, currentReceiptZoom + 25);
+        }
+    } else if (action === 'out') {
+        if (currentReceiptZoom > 50) {
+            currentReceiptZoom = Math.max(50, currentReceiptZoom - 25);
+        }
+    } else if (action === 'reset') {
+        currentReceiptZoom = 100;
+    }
+    
+    // Remove all zoom classes
+    wrapper.classList.remove('zoom-50', 'zoom-75', 'zoom-100', 'zoom-125', 'zoom-150', 'zoom-200');
+    wrapper.style.transform = '';
+    
+    // Add appropriate zoom class
+    if (currentReceiptZoom === 50) wrapper.classList.add('zoom-50');
+    else if (currentReceiptZoom === 75) wrapper.classList.add('zoom-75');
+    else if (currentReceiptZoom === 100) wrapper.classList.add('zoom-100');
+    else if (currentReceiptZoom === 125) wrapper.classList.add('zoom-125');
+    else if (currentReceiptZoom === 150) wrapper.classList.add('zoom-150');
+    else if (currentReceiptZoom === 200) wrapper.classList.add('zoom-200');
+    else {
+        // Custom zoom using inline style
+        wrapper.style.transform = `scale(${currentReceiptZoom / 100})`;
+    }
+    
+    // Update zoom indicator
+    updateZoomIndicator();
+}
+
+/**
+ * Update zoom level indicator
+ */
+function updateZoomIndicator() {
+    const indicator = document.getElementById('zoomIndicator');
+    if (indicator) {
+        indicator.textContent = `${currentReceiptZoom}%`;
+    }
+}
+
+/**
+ * Print receipt from preview modal
+ */
+function printReceiptFromPreview() {
+    if (!currentReceiptPreviewOrder || !currentReceiptPreviewType) return;
+    
+    // Close modal first
+    closeReceiptPreviewModal();
+    
+    // Use the existing print functions
+    if (currentReceiptPreviewType === 'kitchen') {
+        printKitchenReceipt(currentReceiptPreviewOrder, true);
+    } else {
+        printCustomerReceipt(currentReceiptPreviewOrder, true);
+    }
+}
+
+/**
+ * Quick print customer receipt without preview (for table row quick action)
+ */
+function quickPrintCustomerReceipt(orderId) {
+    const order = ordersState.find(o => o.id === orderId);
+    if (!order) {
+        showNotification('Order not found.', 'error');
+        return;
+    }
+    // Print directly without showing preview
+    printCustomerReceipt(order, true);
+}
+
+/**
+ * Generate receipt metadata display
+ */
+function generateReceiptMetadata(order, type) {
+    if (!order) return '';
+    
+    const orderId = escapeHtml(String(order.trackingId || order.id));
+    const status = escapeHtml(String(order.status || '—'));
+    const serviceType = escapeHtml(String(order.serviceType || '—'));
+    const paymentMode = escapeHtml(String(order.paymentMode || 'Cash'));
+    const orderDate = order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleString() : new Date().toLocaleString();
+    
+    // Status badge color
+    let statusClass = 'status-badge';
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('pending') || statusLower.includes('new')) {
+        statusClass += ' status-pending';
+    } else if (statusLower.includes('preparing') || statusLower.includes('kitchen')) {
+        statusClass += ' status-preparing';
+    } else if (statusLower.includes('ready')) {
+        statusClass += ' status-ready';
+    } else if (statusLower.includes('delivered')) {
+        statusClass += ' status-delivered';
+    } else if (statusLower.includes('declined')) {
+        statusClass += ' status-declined';
+    }
+    
+    return `
+        <div class="receipt-metadata-item">
+            <span class="metadata-label">Order ID:</span>
+            <span class="metadata-value">#${orderId}</span>
+        </div>
+        <div class="receipt-metadata-item">
+            <span class="metadata-label">Status:</span>
+            <span class="${statusClass}">${status}</span>
+        </div>
+        <div class="receipt-metadata-item">
+            <span class="metadata-label">Service:</span>
+            <span class="metadata-value">${serviceType}</span>
+        </div>
+        <div class="receipt-metadata-item">
+            <span class="metadata-label">Payment:</span>
+            <span class="metadata-value">${paymentMode}</span>
+        </div>
+        <div class="receipt-metadata-item">
+            <span class="metadata-label">Date:</span>
+            <span class="metadata-value">${orderDate}</span>
+        </div>
+    `;
+}
+
+/**
+ * Copy receipt text to clipboard
+ */
+async function copyReceiptText() {
+    if (!currentReceiptPreviewOrder || !currentReceiptPreviewType) {
+        showNotification('No receipt available to copy.', 'error');
+        return;
+    }
+    
+    try {
+        const wrapper = document.querySelector('.receipt-preview-content-wrapper');
+        if (!wrapper) {
+            showNotification('Receipt content not found.', 'error');
+            return;
+        }
+        
+        // Get text content from receipt
+        const receiptText = extractReceiptText(currentReceiptPreviewOrder, currentReceiptPreviewType);
+        
+        // Copy to clipboard
+        await navigator.clipboard.writeText(receiptText);
+        showNotification('Receipt text copied to clipboard!', 'success');
+    } catch (error) {
+        console.error('Error copying receipt text:', error);
+        showNotification('Failed to copy receipt text.', 'error');
+    }
+}
+
+/**
+ * Extract receipt text for copying
+ */
+function extractReceiptText(order, type) {
+    if (!order) return '';
+    
+    const orderId = String(order.trackingId || order.id);
+    const serviceType = (order.serviceType || '').toUpperCase();
+    const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
+    const now = new Date().toLocaleString();
+    
+    let text = `PABLO'S PERI PERI\n`;
+    text += `${'='.repeat(40)}\n\n`;
+    
+    if (type === 'kitchen') {
+        text += `KITCHEN COPY\n`;
+        text += `Order ID: ${orderId}\n`;
+        text += `Service: ${serviceType}\n`;
+        text += `Customer: ${customerName}\n`;
+        text += `Time: ${now}\n\n`;
+        text += `ITEMS TO PREPARE:\n`;
+        text += `${'-'.repeat(40)}\n`;
+        
+        const items = Array.isArray(order.items) ? order.items : [];
+        items.forEach(item => {
+            const name = String(item.name || item.itemName || 'Item');
+            const qty = typeof item.quantity === 'number' ? item.quantity : 1;
+            const notes = [item.notes, item.instructions, item.specialInstructions].filter(Boolean).join('; ');
+            text += `${qty}x ${name}`;
+            if (notes) text += ` (${notes})`;
+            text += `\n`;
+        });
+    } else {
+        text += `CUSTOMER COPY\n`;
+        text += `Service: ${serviceType}\n`;
+        text += `Order ID: ${orderId}\n`;
+        text += `Customer: ${customerName}\n`;
+        if (order.tableNumber) text += `Table: ${order.tableNumber}\n`;
+        if (order.address) text += `Address: ${order.address}\n`;
+        text += `Date: ${now}\n\n`;
+        text += `ITEMS:\n`;
+        text += `${'-'.repeat(40)}\n`;
+        
+        const items = Array.isArray(order.items) ? order.items : [];
+        items.forEach(item => {
+            const name = String(item.name || item.itemName || 'Item');
+            const qty = typeof item.quantity === 'number' ? item.quantity : 1;
+            const price = typeof item.price === 'number' ? item.price : 0;
+            const total = price * qty;
+            text += `${name} - ${qty}x - ₱${total.toFixed(2)}\n`;
+        });
+        
+        text += `\n${'-'.repeat(40)}\n`;
+        const subtotal = typeof order.subtotal === 'number' ? order.subtotal : (order.total || 0);
+        const total = typeof order.total === 'number' ? order.total : 0;
+        text += `Subtotal: ₱${subtotal.toFixed(2)}\n`;
+        if (order.discount && order.discount.amount) {
+            text += `Discount: -₱${order.discount.amount.toFixed(2)}\n`;
+        }
+        text += `Total: ₱${total.toFixed(2)}\n`;
+        text += `Payment Method: ${order.paymentMode || 'Cash'}\n`;
+        text += `Amount Paid: ₱${total.toFixed(2)}\n`;
+    }
+    
+    text += `\n${'='.repeat(40)}\n`;
+    text += `Thank you for your order!\n`;
+    text += `Please come again\n`;
+    
+    return text;
+}
+
+/**
+ * Download receipt as file
+ */
+function downloadReceipt() {
+    if (!currentReceiptPreviewOrder || !currentReceiptPreviewType) {
+        showNotification('No receipt available to download.', 'error');
+        return;
+    }
+    
+    try {
+        const orderId = String(currentReceiptPreviewOrder.trackingId || currentReceiptPreviewOrder.id);
+        const receiptText = extractReceiptText(currentReceiptPreviewOrder, currentReceiptPreviewType);
+        const receiptType = currentReceiptPreviewType === 'kitchen' ? 'Kitchen' : 'Customer';
+        const filename = `Receipt_${receiptType}_${orderId}_${new Date().toISOString().split('T')[0]}.txt`;
+        
+        // Create blob and download
+        const blob = new Blob([receiptText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showNotification('Receipt downloaded successfully!', 'success');
+    } catch (error) {
+        console.error('Error downloading receipt:', error);
+        showNotification('Failed to download receipt.', 'error');
+    }
 }
 
 // Close modal when clicking outside of it
 window.onclick = function(event) {
     const orderModal = document.getElementById('orderDetailsModal');
     const receiptModal = document.getElementById('paymentReceiptModal');
+    const receiptPreviewModal = document.getElementById('receiptPreviewModal');
     const driverSelectionModal = document.getElementById('driverSelectionModal');
     const driverProfileModal = document.getElementById('driverProfileModal');
     
@@ -4281,6 +5254,9 @@ window.onclick = function(event) {
     if (event.target === receiptModal) {
         closePaymentReceiptModal();
     }
+    if (event.target === receiptPreviewModal) {
+        closeReceiptPreviewModal();
+    }
     if (event.target === driverSelectionModal) {
         closeDriverSelectionModal();
     }
@@ -4288,6 +5264,56 @@ window.onclick = function(event) {
         closeDriverProfileModal();
     }
 }
+
+// Keyboard shortcuts for receipt preview modal
+document.addEventListener('keydown', function(event) {
+    const receiptPreviewModal = document.getElementById('receiptPreviewModal');
+    if (!receiptPreviewModal || receiptPreviewModal.style.display === 'none') {
+        return; // Modal is not open
+    }
+    
+    // ESC to close
+    if (event.key === 'Escape' || event.keyCode === 27) {
+        event.preventDefault();
+        closeReceiptPreviewModal();
+        return;
+    }
+    
+    // Ctrl/Cmd + Plus to zoom in
+    if ((event.ctrlKey || event.metaKey) && (event.key === '+' || event.key === '=')) {
+        event.preventDefault();
+        zoomReceiptPreview('in');
+        return;
+    }
+    
+    // Ctrl/Cmd + Minus to zoom out
+    if ((event.ctrlKey || event.metaKey) && event.key === '-') {
+        event.preventDefault();
+        zoomReceiptPreview('out');
+        return;
+    }
+    
+    // Ctrl/Cmd + 0 to reset zoom
+    if ((event.ctrlKey || event.metaKey) && event.key === '0') {
+        event.preventDefault();
+        zoomReceiptPreview('reset');
+        return;
+    }
+    
+    // Plus key (without modifier) to zoom in
+    if (event.key === '+' && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        zoomReceiptPreview('in');
+        return;
+    }
+    
+    // Minus key (without modifier) to zoom out
+    if (event.key === '-' && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        zoomReceiptPreview('out');
+        return;
+    }
+});
 
 // Driver management functions
 function editDriver(driverId) {
@@ -4454,6 +5480,65 @@ function getDateRangeForPeriod(period) {
     return { startDate, endDate };
 }
 
+// Get previous period date range for comparison
+function getPreviousPeriodRange(period) {
+    const now = new Date();
+    let startDate, endDate;
+    switch(period) {
+        case 'weekly':
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - 14);
+            endDate = new Date(now);
+            endDate.setDate(now.getDate() - 8);
+            break;
+        case 'monthly':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+            break;
+        case 'yearly':
+            startDate = new Date(now.getFullYear() - 1, 0, 1);
+            endDate = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
+            break;
+        default:
+            startDate = new Date(now);
+            startDate.setDate(now.getDate() - 14);
+            endDate = new Date(now);
+            endDate.setDate(now.getDate() - 8);
+    }
+    return { startDate, endDate };
+}
+
+// Compare current period to previous; returns { pctRevenue, pctOrders, pctAvg } or null
+function calculatePeriodComparison(orders, period) {
+    if (!orders || !orders.length) return null;
+    const prev = getPreviousPeriodRange(period);
+    const prevPaid = orders.filter(o => isOrderPaid(o) && isOrderInDateRange(o, prev.startDate, prev.endDate));
+    const prevRevenue = prevPaid.reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
+    const prevOrders = prevPaid.length;
+    const prevItems = prevPaid.reduce((s, o) => {
+        if (!o.items || !Array.isArray(o.items)) return s;
+        return s + o.items.reduce((a, i) => a + (typeof i.quantity === 'number' ? i.quantity : 1), 0);
+    }, 0);
+    const prevAvg = prevOrders > 0 ? prevRevenue / prevOrders : 0;
+    const curr = getDateRangeForPeriod(period);
+    const currPaid = orders.filter(o => isOrderPaid(o) && isOrderInDateRange(o, curr.startDate, curr.endDate));
+    const currRevenue = currPaid.reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
+    const currOrders = currPaid.length;
+    const currAvg = currOrders > 0 ? currRevenue / currOrders : 0;
+    return {
+        pctRevenue: prevRevenue > 0 ? ((currRevenue - prevRevenue) / prevRevenue) * 100 : (currRevenue > 0 ? 100 : 0),
+        pctOrders: prevOrders > 0 ? ((currOrders - prevOrders) / prevOrders) * 100 : (currOrders > 0 ? 100 : 0),
+        pctAvg: prevAvg > 0 ? ((currAvg - prevAvg) / prevAvg) * 100 : (currAvg > 0 ? 100 : 0)
+    };
+}
+
+// Format date range for display
+function formatDateRangeLabel(period) {
+    const { startDate, endDate } = getDateRangeForPeriod(period);
+    const f = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${f(startDate)} – ${f(endDate)}`;
+}
+
 // Check if order is within date range
 function isOrderInDateRange(order, startDate, endDate) {
     if (!order.createdAt) return false;
@@ -4497,6 +5582,18 @@ function calculateSalesMetrics(orders, period) {
         'pick-up': 0,
         'delivery': 0
     };
+    // Track by order source: Walk-in vs Online
+    let revenueByOrderSource = {
+        'walk-in': { revenue: 0, orders: 0, breakdown: { 'dine-in': { revenue: 0, orders: 0 }, 'take-out': { revenue: 0, orders: 0 } } },
+        'online': { revenue: 0, orders: 0, breakdown: { 'delivery': { revenue: 0, orders: 0 }, 'pick-up': { revenue: 0, orders: 0 } } }
+    };
+    // Keep legacy tracking for backward compatibility
+    let walkInRevenue = 0;
+    let walkInOrderCount = 0;
+    let walkInByServiceType = {
+        'dine-in': { revenue: 0, orders: 0 },
+        'pick-up': { revenue: 0, orders: 0 }
+    };
     
     paidOrders.forEach(order => {
         const orderTotal = parseFloat(order.total || 0);
@@ -4510,12 +5607,52 @@ function calculateSalesMetrics(orders, period) {
             });
         }
         
-        // Service type breakdown
-        const serviceType = (order.serviceType || '').toLowerCase().trim();
+        // Determine if walk-in or online order
+        const isWalkIn = order.walkin === true || order.deliveryInfo?.walkin === true;
+        let serviceType = (order.serviceType || order.deliveryInfo?.serviceType || order.deliveryInfo?.deliveryMethod || '').toLowerCase().trim();
+        
+        if (isWalkIn) {
+            // Walk-in orders: Dine-in or Take-out
+            walkInRevenue += orderTotal;
+            walkInOrderCount++;
+            
+            if (serviceType === 'dine-in' || serviceType === 'dinein') {
+                revenueByOrderSource['walk-in'].revenue += orderTotal;
+                revenueByOrderSource['walk-in'].orders++;
+                revenueByOrderSource['walk-in'].breakdown['dine-in'].revenue += orderTotal;
+                revenueByOrderSource['walk-in'].breakdown['dine-in'].orders++;
+                walkInByServiceType['dine-in'].revenue += orderTotal;
+                walkInByServiceType['dine-in'].orders++;
+                serviceType = 'dine-in';
+            } else if (serviceType === 'take-out' || serviceType === 'takeout') {
+                revenueByOrderSource['walk-in'].revenue += orderTotal;
+                revenueByOrderSource['walk-in'].orders++;
+                revenueByOrderSource['walk-in'].breakdown['take-out'].revenue += orderTotal;
+                revenueByOrderSource['walk-in'].breakdown['take-out'].orders++;
+                walkInByServiceType['pick-up'].revenue += orderTotal;
+                walkInByServiceType['pick-up'].orders++;
+                serviceType = 'pick-up';
+            }
+        } else {
+            // Online orders: Delivery or Pick-up
+            if (serviceType === 'delivery') {
+                revenueByOrderSource['online'].revenue += orderTotal;
+                revenueByOrderSource['online'].orders++;
+                revenueByOrderSource['online'].breakdown['delivery'].revenue += orderTotal;
+                revenueByOrderSource['online'].breakdown['delivery'].orders++;
+            } else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up') {
+                revenueByOrderSource['online'].revenue += orderTotal;
+                revenueByOrderSource['online'].orders++;
+                revenueByOrderSource['online'].breakdown['pick-up'].revenue += orderTotal;
+                revenueByOrderSource['online'].breakdown['pick-up'].orders++;
+            }
+        }
+        
+        // Legacy: Categorize by service type (for backward compatibility)
         if (serviceType === 'dine-in' || serviceType === 'dinein') {
             revenueByServiceType['dine-in'] += orderTotal;
             orderCountByServiceType['dine-in']++;
-        } else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up') {
+        } else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up' || serviceType === 'take-out' || serviceType === 'takeout') {
             revenueByServiceType['pick-up'] += orderTotal;
             orderCountByServiceType['pick-up']++;
         } else {
@@ -4544,6 +5681,10 @@ function calculateSalesMetrics(orders, period) {
         revenueByServiceType,
         revenueByPaymentMethod,
         orderCountByServiceType,
+        revenueByOrderSource,
+        walkInRevenue,
+        walkInOrderCount,
+        walkInByServiceType,
         startDate,
         endDate
     };
@@ -4713,6 +5854,173 @@ function calculateDailySales(orders, period) {
     return dailySales;
 }
 
+// Calculate peak hours (busiest hours of the day)
+function calculatePeakHours(orders, period) {
+    const { startDate, endDate } = getDateRangeForPeriod(period);
+    const paidOrders = orders.filter(order => {
+        if (!isOrderPaid(order)) return false;
+        return isOrderInDateRange(order, startDate, endDate);
+    });
+    
+    const hourStats = {};
+    for (let h = 0; h < 24; h++) {
+        hourStats[h] = { hour: h, orders: 0, revenue: 0 };
+    }
+    
+    paidOrders.forEach(order => {
+        let orderDate;
+        if (order.createdAt?.toDate) orderDate = order.createdAt.toDate();
+        else if (order.createdAt instanceof Date) orderDate = order.createdAt;
+        else if (order.createdAt?.seconds) orderDate = new Date(order.createdAt.seconds * 1000);
+        else orderDate = new Date(order.createdAt);
+        
+        const hour = orderDate.getHours();
+        hourStats[hour].orders++;
+        hourStats[hour].revenue += parseFloat(order.total || 0);
+    });
+    
+    return Object.values(hourStats)
+        .filter(h => h.orders > 0)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+}
+
+// Calculate best days of the week
+function calculateBestDays(orders, period) {
+    const { startDate, endDate } = getDateRangeForPeriod(period);
+    const paidOrders = orders.filter(order => {
+        if (!isOrderPaid(order)) return false;
+        return isOrderInDateRange(order, startDate, endDate);
+    });
+    
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayStats = {};
+    dayNames.forEach((name, idx) => {
+        dayStats[idx] = { day: name, dayIndex: idx, orders: 0, revenue: 0 };
+    });
+    
+    paidOrders.forEach(order => {
+        let orderDate;
+        if (order.createdAt?.toDate) orderDate = order.createdAt.toDate();
+        else if (order.createdAt instanceof Date) orderDate = order.createdAt;
+        else if (order.createdAt?.seconds) orderDate = new Date(order.createdAt.seconds * 1000);
+        else orderDate = new Date(order.createdAt);
+        
+        const dayIndex = orderDate.getDay();
+        dayStats[dayIndex].orders++;
+        dayStats[dayIndex].revenue += parseFloat(order.total || 0);
+    });
+    
+    return Object.values(dayStats)
+        .filter(d => d.orders > 0)
+        .sort((a, b) => b.revenue - a.revenue);
+}
+
+// Calculate category performance
+function calculateCategoryPerformance(orders, period) {
+    const { startDate, endDate } = getDateRangeForPeriod(period);
+    const paidOrders = orders.filter(order => {
+        if (!isOrderPaid(order)) return false;
+        return isOrderInDateRange(order, startDate, endDate);
+    });
+    
+    const categoryStats = {};
+    
+    paidOrders.forEach(order => {
+        if (!order.items || !Array.isArray(order.items)) return;
+        
+        order.items.forEach(item => {
+            const itemId = item.itemId || item.id || '';
+            const itemName = item.name || item.itemName || 'Unknown';
+            const quantity = typeof item.quantity === 'number' ? item.quantity : 1;
+            const price = parseFloat(item.price || item.itemPrice || 0);
+            const revenue = price * quantity;
+            
+            const menuItem = menuState.find(m => 
+                !m.isDeleted &&
+                ((m.id === itemId || m.menuId === itemId) ||
+                (m.name && m.name.toLowerCase() === itemName.toLowerCase()))
+            );
+            
+            if (!menuItem) return;
+            
+            const category = menuItem.category || 'Uncategorized';
+            if (!categoryStats[category]) {
+                categoryStats[category] = {
+                    category: category,
+                    revenue: 0,
+                    quantity: 0,
+                    orders: new Set()
+                };
+            }
+            
+            categoryStats[category].revenue += revenue;
+            categoryStats[category].quantity += quantity;
+            categoryStats[category].orders.add(order.id);
+        });
+    });
+    
+    return Object.values(categoryStats)
+        .map(cat => ({
+            ...cat,
+            orders: cat.orders.size,
+            avgOrderValue: cat.orders.size > 0 ? cat.revenue / cat.orders.size : 0
+        }))
+        .sort((a, b) => b.revenue - a.revenue);
+}
+
+// Calculate low performers (items with low sales that may need attention)
+function calculateLowPerformers(orders, period, mostOrdered) {
+    const { startDate, endDate } = getDateRangeForPeriod(period);
+    const paidOrders = orders.filter(order => {
+        if (!isOrderPaid(order)) return false;
+        return isOrderInDateRange(order, startDate, endDate);
+    });
+    
+    // Get all items that exist in menu but have low or no sales
+    if (!menuState || menuState.length === 0) return [];
+    const allMenuItems = menuState.filter(m => !m.isDeleted && m.isActive !== false);
+    const topItemNames = new Set(mostOrdered.map(item => item.name.toLowerCase()));
+    
+    const itemSales = {};
+    paidOrders.forEach(order => {
+        if (!order.items || !Array.isArray(order.items)) return;
+        order.items.forEach(item => {
+            const itemName = (item.name || item.itemName || '').toLowerCase();
+            if (!itemSales[itemName]) {
+                itemSales[itemName] = { quantity: 0, revenue: 0 };
+            }
+            itemSales[itemName].quantity += (typeof item.quantity === 'number' ? item.quantity : 1);
+            itemSales[itemName].revenue += parseFloat(item.price || item.itemPrice || 0) * (typeof item.quantity === 'number' ? item.quantity : 1);
+        });
+    });
+    
+    // Find items with low or zero sales
+    const lowPerformers = allMenuItems
+        .filter(menuItem => {
+            const itemName = (menuItem.name || '').toLowerCase();
+            const sales = itemSales[itemName] || { quantity: 0, revenue: 0 };
+            // Low performer: not in top sellers and has low sales
+            return !topItemNames.has(itemName) && (sales.quantity < 5 || sales.revenue < 500);
+        })
+        .map(menuItem => {
+            const itemName = (menuItem.name || '').toLowerCase();
+            const sales = itemSales[itemName] || { quantity: 0, revenue: 0 };
+            return {
+                name: menuItem.name,
+                category: menuItem.category || 'Uncategorized',
+                quantity: sales.quantity,
+                revenue: sales.revenue,
+                price: menuItem.price || 0,
+                menuId: menuItem.id || menuItem.menuId
+            };
+        })
+        .sort((a, b) => a.quantity - b.quantity)
+        .slice(0, 10);
+    
+    return lowPerformers;
+}
+
 // Update sales report with calculated data
 async function updateSalesReport() {
     if (!ordersState || ordersState.length === 0) {
@@ -4726,10 +6034,27 @@ async function updateSalesReport() {
     
     // Calculate metrics
     const metrics = calculateSalesMetrics(ordersState, currentReportPeriod);
+    const comparison = calculatePeriodComparison(ordersState, currentReportPeriod);
     const mostOrdered = calculateMostOrderedItems(ordersState, currentReportPeriod, 20);
     const forecast = calculateSalesForecast(ordersState, currentReportPeriod);
     const dailySales = calculateDailySales(ordersState, currentReportPeriod);
     const loyalCustomers = calculateLoyalCustomers(ordersState, 4);
+    
+    // Ensure menu state is loaded for category and low performer analysis
+    if (!menuState || menuState.length === 0) {
+        await ensureMenuStateLoaded();
+    }
+    
+    // Calculate new analytics
+    const peakHours = calculatePeakHours(ordersState, currentReportPeriod);
+    const bestDays = calculateBestDays(ordersState, currentReportPeriod);
+    const categoryPerformance = calculateCategoryPerformance(ordersState, currentReportPeriod);
+    const lowPerformers = calculateLowPerformers(ordersState, currentReportPeriod, mostOrdered);
+    
+    // Update KPI strip, date range label, and today snapshot
+    updateSalesKpiStrip(metrics, comparison);
+    updateSalesDateRangeLabel(currentReportPeriod);
+    updateTodaySnapshot(ordersState);
     
     // Update all sections
     updateSalesSummary(metrics);
@@ -4739,13 +6064,84 @@ async function updateSalesReport() {
     updateBestSeller(mostOrdered);
     updateInDepthViewTable(mostOrdered);
     
+    // Update new analytics sections
+    updatePeakHours(peakHours);
+    updateBestDays(bestDays);
+    updateCategoryPerformance(categoryPerformance);
+    updateLowPerformers(lowPerformers);
+    
     // Update legacy sections (if they exist)
     updateSalesSummaryMetrics(metrics);
-    updateSalesChart(dailySales, currentReportPeriod);
+    // updateSalesChart removed - revenue over time chart removed from UI
     updateSalesForecast(forecast);
     
     // Update daily sales report
     updateDailySalesReport();
+}
+
+// Refresh sales: reload orders then update report
+async function refreshSalesReport() {
+    const btn = document.querySelector('.sales-refresh-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.querySelector('i')?.classList.add('fa-spin');
+    }
+    try {
+        await loadOrdersCollectionOnce();
+        await updateSalesReport();
+        if (typeof showNotification === 'function') {
+            showNotification('Sales report refreshed', 'success');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.querySelector('i')?.classList.remove('fa-spin');
+        }
+    }
+}
+
+function updateSalesKpiStrip(metrics, comparison) {
+    const revenueEl = document.getElementById('salesKpiRevenue');
+    const ordersEl = document.getElementById('salesKpiOrders');
+    const avgEl = document.getElementById('salesKpiAvg');
+    const vsEl = document.getElementById('salesKpiVsPrior');
+    if (revenueEl) revenueEl.textContent = formatCurrency(metrics.totalRevenue);
+    if (ordersEl) ordersEl.textContent = metrics.totalOrders.toLocaleString();
+    if (avgEl) avgEl.textContent = formatCurrency(metrics.averageOrderValue);
+    if (vsEl) {
+        if (!comparison || (comparison.pctRevenue === 0 && comparison.pctOrders === 0)) {
+            vsEl.textContent = '—';
+            vsEl.className = 'sales-kpi-value sales-kpi-trend';
+        } else {
+            const pct = comparison.pctRevenue;
+            const sign = pct >= 0 ? '+' : '';
+            vsEl.textContent = `${sign}${pct.toFixed(1)}%`;
+            vsEl.className = 'sales-kpi-value sales-kpi-trend ' + (pct >= 0 ? 'sales-kpi-up' : 'sales-kpi-down');
+        }
+    }
+}
+
+function updateSalesDateRangeLabel(period) {
+    const el = document.getElementById('salesDateRangeLabel');
+    if (el) el.textContent = formatDateRangeLabel(period);
+}
+
+function updateTodaySnapshot(orders) {
+    const el = document.getElementById('salesKpiToday');
+    if (!el) return;
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const dayOrders = (orders || []).filter(o => {
+        if (!isOrderPaid(o) || !o.createdAt) return false;
+        let d;
+        if (o.createdAt.toDate) d = o.createdAt.toDate();
+        else if (o.createdAt instanceof Date) d = o.createdAt;
+        else if (o.createdAt.seconds) d = new Date(o.createdAt.seconds * 1000);
+        else d = new Date(o.createdAt);
+        return d.toISOString().split('T')[0] === todayStr;
+    });
+    const rev = dayOrders.reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
+    el.textContent = formatCurrency(rev) + ' · ' + dayOrders.length + ' orders';
 }
 
 // Update sales summary metrics
@@ -4833,7 +6229,7 @@ function updateSalesSummaryMetrics(metrics) {
 
 // Update sales chart
 function updateSalesChart(dailySales, period) {
-    const chartPlaceholder = document.querySelector('.chart-placeholder');
+    const chartPlaceholder = document.getElementById('salesRevenueChart') || document.querySelector('#sales .chart-placeholder');
     if (!chartPlaceholder) return;
     
     // Get dates for the period
@@ -4947,15 +6343,10 @@ function updateRevenueBreakdowns(metrics) {
     if (!breakdownContent) return;
     
     const total = metrics.totalRevenue;
-    
-    // Service Type Breakdown
-    const serviceTypeItems = Object.entries(metrics.revenueByServiceType)
-        .filter(([_, revenue]) => revenue > 0)
-        .map(([type, revenue]) => {
-            const percentage = total > 0 ? (revenue / total * 100).toFixed(1) : 0;
-            const orderCount = metrics.orderCountByServiceType[type] || 0;
-            return { type, revenue, percentage, orderCount };
-        });
+    const orderSource = metrics.revenueByOrderSource || {
+        'walk-in': { revenue: 0, orders: 0, breakdown: { 'dine-in': { revenue: 0, orders: 0 }, 'take-out': { revenue: 0, orders: 0 } } },
+        'online': { revenue: 0, orders: 0, breakdown: { 'delivery': { revenue: 0, orders: 0 }, 'pick-up': { revenue: 0, orders: 0 } } }
+    };
     
     // Payment Method Breakdown
     const paymentMethodItems = Object.entries(metrics.revenueByPaymentMethod)
@@ -4966,29 +6357,129 @@ function updateRevenueBreakdowns(metrics) {
             return { method, revenue, percentage };
         });
     
+    const walkIn = orderSource['walk-in'] || { revenue: 0, orders: 0, breakdown: { 'dine-in': { revenue: 0, orders: 0 }, 'take-out': { revenue: 0, orders: 0 } } };
+    const online = orderSource['online'] || { revenue: 0, orders: 0, breakdown: { 'delivery': { revenue: 0, orders: 0 }, 'pick-up': { revenue: 0, orders: 0 } } };
+    
+    const walkInPercentage = total > 0 ? (walkIn.revenue / total * 100).toFixed(1) : 0;
+    const onlinePercentage = total > 0 ? (online.revenue / total * 100).toFixed(1) : 0;
+    
     breakdownContent.innerHTML = `
-        <div class="revenue-breakdown-item">
+        <div class="revenue-breakdown-item revenue-breakdown-walkin">
             <div class="revenue-breakdown-item-header">
-                <h4 class="revenue-breakdown-item-title">By Service Type</h4>
-                <span class="revenue-breakdown-item-value">${formatCurrency(total)}</span>
+                <h4 class="revenue-breakdown-item-title">
+                    <i class="fas fa-walking" style="margin-right: 8px; color: #7E2021;"></i>
+                    Walk-in Orders
+                </h4>
+                <span class="revenue-breakdown-item-value">${formatCurrency(walkIn.revenue)}</span>
             </div>
             <div class="revenue-breakdown-item-content">
-                ${serviceTypeItems.map(item => `
-                    <div class="revenue-breakdown-bar-item">
+                <div class="revenue-breakdown-bar-item">
+                    <div class="revenue-breakdown-bar-label">
+                        <span>Total Walk-in</span>
+                        <span>${walkIn.orders} orders</span>
+                    </div>
+                    <div class="revenue-breakdown-bar">
+                        <div class="revenue-breakdown-bar-fill" style="width: ${walkInPercentage}%; background: linear-gradient(90deg, #7E2021 0%, #a0282a 100%);">
+                            ${walkInPercentage > 10 ? `${walkInPercentage}%` : ''}
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #495057; margin-top: 4px;">
+                        ${formatCurrency(walkIn.revenue)} of ${formatCurrency(total)}
+                    </div>
+                </div>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e9ecef;">
+                    <div style="font-size: 12px; color: #6c757d; margin-bottom: 10px; font-weight: 600;">Breakdown:</div>
+                    ${walkIn.breakdown['dine-in'].orders > 0 ? `
+                    <div class="revenue-breakdown-bar-item" style="margin-bottom: 10px;">
                         <div class="revenue-breakdown-bar-label">
-                            <span>${item.type.charAt(0).toUpperCase() + item.type.slice(1).replace('-', ' ')}</span>
-                            <span>${item.orderCount} orders</span>
+                            <span>Dine-in</span>
+                            <span>${walkIn.breakdown['dine-in'].orders} orders</span>
                         </div>
                         <div class="revenue-breakdown-bar">
-                            <div class="revenue-breakdown-bar-fill" style="width: ${item.percentage}%">
-                                ${item.percentage > 10 ? `${item.percentage}%` : ''}
+                            <div class="revenue-breakdown-bar-fill" style="width: ${walkIn.revenue > 0 ? (walkIn.breakdown['dine-in'].revenue / walkIn.revenue * 100).toFixed(1) : 0}%; background: linear-gradient(90deg, #7E2021 0%, #9a2a2b 100%);">
                             </div>
                         </div>
                         <div style="font-size: 12px; color: #495057; margin-top: 4px;">
-                            ${formatCurrency(item.revenue)}
+                            ${formatCurrency(walkIn.breakdown['dine-in'].revenue)}
                         </div>
                     </div>
-                `).join('')}
+                    ` : ''}
+                    ${walkIn.breakdown['take-out'].orders > 0 ? `
+                    <div class="revenue-breakdown-bar-item">
+                        <div class="revenue-breakdown-bar-label">
+                            <span>Take-out</span>
+                            <span>${walkIn.breakdown['take-out'].orders} orders</span>
+                        </div>
+                        <div class="revenue-breakdown-bar">
+                            <div class="revenue-breakdown-bar-fill" style="width: ${walkIn.revenue > 0 ? (walkIn.breakdown['take-out'].revenue / walkIn.revenue * 100).toFixed(1) : 0}%; background: linear-gradient(90deg, #7E2021 0%, #9a2a2b 100%);">
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: #495057; margin-top: 4px;">
+                            ${formatCurrency(walkIn.breakdown['take-out'].revenue)}
+                        </div>
+                    </div>
+                    ` : ''}
+                    ${walkIn.orders === 0 ? '<div style="text-align: center; color: #6c757d; padding: 10px;">No walk-in orders</div>' : ''}
+                </div>
+            </div>
+        </div>
+        <div class="revenue-breakdown-item revenue-breakdown-online">
+            <div class="revenue-breakdown-item-header">
+                <h4 class="revenue-breakdown-item-title">
+                    <i class="fas fa-shopping-cart" style="margin-right: 8px; color: #2d8c6f;"></i>
+                    Online Orders
+                </h4>
+                <span class="revenue-breakdown-item-value">${formatCurrency(online.revenue)}</span>
+            </div>
+            <div class="revenue-breakdown-item-content">
+                <div class="revenue-breakdown-bar-item">
+                    <div class="revenue-breakdown-bar-label">
+                        <span>Total Online</span>
+                        <span>${online.orders} orders</span>
+                    </div>
+                    <div class="revenue-breakdown-bar">
+                        <div class="revenue-breakdown-bar-fill" style="width: ${onlinePercentage}%; background: linear-gradient(90deg, #2d8c6f 0%, #44a08d 100%);">
+                            ${onlinePercentage > 10 ? `${onlinePercentage}%` : ''}
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #495057; margin-top: 4px;">
+                        ${formatCurrency(online.revenue)} of ${formatCurrency(total)}
+                    </div>
+                </div>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e9ecef;">
+                    <div style="font-size: 12px; color: #6c757d; margin-bottom: 10px; font-weight: 600;">Breakdown:</div>
+                    ${online.breakdown['delivery'].orders > 0 ? `
+                    <div class="revenue-breakdown-bar-item" style="margin-bottom: 10px;">
+                        <div class="revenue-breakdown-bar-label">
+                            <span>Delivery</span>
+                            <span>${online.breakdown['delivery'].orders} orders</span>
+                        </div>
+                        <div class="revenue-breakdown-bar">
+                            <div class="revenue-breakdown-bar-fill" style="width: ${online.revenue > 0 ? (online.breakdown['delivery'].revenue / online.revenue * 100).toFixed(1) : 0}%; background: linear-gradient(90deg, #2d8c6f 0%, #44a08d 100%);">
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: #495057; margin-top: 4px;">
+                            ${formatCurrency(online.breakdown['delivery'].revenue)}
+                        </div>
+                    </div>
+                    ` : ''}
+                    ${online.breakdown['pick-up'].orders > 0 ? `
+                    <div class="revenue-breakdown-bar-item">
+                        <div class="revenue-breakdown-bar-label">
+                            <span>Pick-up</span>
+                            <span>${online.breakdown['pick-up'].orders} orders</span>
+                        </div>
+                        <div class="revenue-breakdown-bar">
+                            <div class="revenue-breakdown-bar-fill" style="width: ${online.revenue > 0 ? (online.breakdown['pick-up'].revenue / online.revenue * 100).toFixed(1) : 0}%; background: linear-gradient(90deg, #2d8c6f 0%, #44a08d 100%);">
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: #495057; margin-top: 4px;">
+                            ${formatCurrency(online.breakdown['pick-up'].revenue)}
+                        </div>
+                    </div>
+                    ` : ''}
+                    ${online.orders === 0 ? '<div style="text-align: center; color: #6c757d; padding: 10px;">No online orders</div>' : ''}
+                </div>
             </div>
         </div>
         <div class="revenue-breakdown-item">
@@ -5015,6 +6506,129 @@ function updateRevenueBreakdowns(metrics) {
             </div>
         </div>
     `;
+}
+
+// Update peak hours section
+function updatePeakHours(peakHours) {
+    const content = document.getElementById('peakHoursContent');
+    if (!content) return;
+    
+    if (!peakHours || peakHours.length === 0) {
+        content.innerHTML = '<div class="empty-state" style="text-align: center; padding: 40px; color: #6c757d;">No data available</div>';
+        return;
+    }
+    
+    const maxRevenue = Math.max(...peakHours.map(h => h.revenue), 1);
+    
+    content.innerHTML = peakHours.map(hour => {
+        const hourLabel = hour.hour === 0 ? '12 AM' : hour.hour < 12 ? `${hour.hour} AM` : hour.hour === 12 ? '12 PM' : `${hour.hour - 12} PM`;
+        const barHeight = (hour.revenue / maxRevenue) * 100;
+        return `
+            <div class="peak-hour-item">
+                <div class="peak-hour-label">${hourLabel}</div>
+                <div class="peak-hour-bar-container">
+                    <div class="peak-hour-bar" style="height: ${barHeight}%"></div>
+                </div>
+                <div class="peak-hour-stats">
+                    <div class="peak-hour-revenue">${formatCurrency(hour.revenue)}</div>
+                    <div class="peak-hour-orders">${hour.orders} orders</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Update best days section
+function updateBestDays(bestDays) {
+    const content = document.getElementById('bestDaysContent');
+    if (!content) return;
+    
+    if (!bestDays || bestDays.length === 0) {
+        content.innerHTML = '<div class="empty-state" style="text-align: center; padding: 40px; color: #6c757d;">No data available</div>';
+        return;
+    }
+    
+    const maxRevenue = Math.max(...bestDays.map(d => d.revenue), 1);
+    
+    content.innerHTML = bestDays.map((day, index) => {
+        const barWidth = (day.revenue / maxRevenue) * 100;
+        const isTop = index === 0;
+        return `
+            <div class="best-day-item ${isTop ? 'top-day' : ''}">
+                <div class="best-day-label">
+                    <span>${day.day}</span>
+                    ${isTop ? '<span class="top-badge"><i class="fas fa-trophy"></i> Best</span>' : ''}
+                </div>
+                <div class="best-day-bar-container">
+                    <div class="best-day-bar" style="width: ${barWidth}%"></div>
+                </div>
+                <div class="best-day-stats">
+                    <span>${formatCurrency(day.revenue)}</span>
+                    <span>${day.orders} orders</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Update category performance section
+function updateCategoryPerformance(categoryPerformance) {
+    const content = document.getElementById('categoryPerformanceContent');
+    if (!content) return;
+    
+    if (!categoryPerformance || categoryPerformance.length === 0) {
+        content.innerHTML = '<div class="empty-state" style="text-align: center; padding: 40px; color: #6c757d;">No data available</div>';
+        return;
+    }
+    
+    const totalRevenue = categoryPerformance.reduce((sum, cat) => sum + cat.revenue, 0);
+    
+    content.innerHTML = categoryPerformance.map(cat => {
+        const percentage = totalRevenue > 0 ? (cat.revenue / totalRevenue * 100).toFixed(1) : 0;
+        return `
+            <div class="category-performance-item">
+                <div class="category-performance-header">
+                    <span class="category-name">${escapeHtml(cat.category)}</span>
+                    <span class="category-percentage">${percentage}%</span>
+                </div>
+                <div class="category-performance-bar">
+                    <div class="category-performance-bar-fill" style="width: ${percentage}%"></div>
+                </div>
+                <div class="category-performance-stats">
+                    <span>${formatCurrency(cat.revenue)}</span>
+                    <span>${cat.quantity} items</span>
+                    <span>${cat.orders} orders</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Update low performers section
+function updateLowPerformers(lowPerformers) {
+    const content = document.getElementById('lowPerformersContent');
+    if (!content) return;
+    
+    if (!lowPerformers || lowPerformers.length === 0) {
+        content.innerHTML = '<div class="empty-state" style="text-align: center; padding: 40px; color: #6c757d;">All items performing well!</div>';
+        return;
+    }
+    
+    content.innerHTML = lowPerformers.map(item => {
+        const statusClass = item.quantity === 0 ? 'zero-sales' : 'low-sales';
+        return `
+            <div class="low-performer-item ${statusClass}">
+                <div class="low-performer-info">
+                    <span class="low-performer-name">${escapeHtml(item.name)}</span>
+                    <span class="low-performer-category">${escapeHtml(item.category)}</span>
+                </div>
+                <div class="low-performer-stats">
+                    <span class="low-performer-qty">${item.quantity} sold</span>
+                    <span class="low-performer-revenue">${formatCurrency(item.revenue)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // Update sales forecast
@@ -5232,15 +6846,72 @@ function calculateDailySalesByPaymentMethod(orders, selectedDate) {
         .sort((a, b) => b.revenue - a.revenue);
 }
 
+// Calculate daily sales by service type
+function calculateDailySalesByServiceType(orders, selectedDate) {
+    if (!orders || !orders.length) return [];
+    const selectedDateStr = selectedDate.toISOString().split('T')[0];
+    const dailyOrders = orders.filter(order => {
+        if (!isOrderPaid(order) || !order.createdAt) return false;
+        let orderDate;
+        if (order.createdAt.toDate) orderDate = order.createdAt.toDate();
+        else if (order.createdAt instanceof Date) orderDate = order.createdAt;
+        else if (order.createdAt.seconds) orderDate = new Date(order.createdAt.seconds * 1000);
+        else orderDate = new Date(order.createdAt);
+        return orderDate.toISOString().split('T')[0] === selectedDateStr;
+    });
+    if (!dailyOrders.length) return [];
+    const typeLabels = { 'dine-in': 'Dine-in', 'dinein': 'Dine-in', 'pick-up': 'Pick-up', 'pickup': 'Pick-up', 'pick_up': 'Pick-up', 'take-out': 'Pick-up', 'takeout': 'Pick-up', 'delivery': 'Delivery' };
+    const stats = {};
+    let totalRevenue = 0;
+    let walkInStats = { 'dine-in': { orders: 0, revenue: 0 }, 'pick-up': { orders: 0, revenue: 0 } };
+    dailyOrders.forEach(order => {
+        // Handle walk-in orders: check walkin flag first, then serviceType
+        const isWalkIn = order.walkin === true || order.deliveryInfo?.walkin === true;
+        let st = (order.serviceType || order.deliveryInfo?.serviceType || order.deliveryInfo?.deliveryMethod || 'delivery').toLowerCase().trim();
+        
+        // For walk-in orders, ensure serviceType is properly normalized
+        if (isWalkIn) {
+            // If walk-in order has take-out, map it to pick-up for consistency
+            if (st === 'take-out' || st === 'takeout') {
+                st = 'pick-up';
+                walkInStats['pick-up'].orders++;
+                walkInStats['pick-up'].revenue += parseFloat(order.total || 0);
+            }
+            // If walk-in order has dine-in, keep it as dine-in
+            if (st === 'dine-in' || st === 'dinein') {
+                st = 'dine-in';
+                walkInStats['dine-in'].orders++;
+                walkInStats['dine-in'].revenue += parseFloat(order.total || 0);
+            }
+        }
+        
+        const type = st === 'dine-in' || st === 'dinein' ? 'dine-in' : (st === 'pick-up' || st === 'pickup' || st === 'pick_up' || st === 'take-out' || st === 'takeout' ? 'pick-up' : 'delivery');
+        const label = typeLabels[type] || type;
+        const rev = parseFloat(order.total || 0);
+        totalRevenue += rev;
+        if (!stats[type]) stats[type] = { type, label, orders: 0, revenue: 0, walkInOrders: 0, walkInRevenue: 0 };
+        stats[type].orders++;
+        stats[type].revenue += rev;
+        if (isWalkIn && (type === 'dine-in' || type === 'pick-up')) {
+            stats[type].walkInOrders = (stats[type].walkInOrders || 0) + 1;
+            stats[type].walkInRevenue = (stats[type].walkInRevenue || 0) + rev;
+        }
+    });
+    return Object.values(stats)
+        .map(s => ({ ...s, percentage: totalRevenue > 0 ? (s.revenue / totalRevenue) * 100 : 0 }))
+        .sort((a, b) => b.revenue - a.revenue);
+}
+
 // Update daily sales report tables
 async function updateDailySalesReport() {
     const dateInput = document.getElementById('dailyReportDate');
     const categoryTableBody = document.getElementById('dailyCategoryTableBody');
     const paymentTableBody = document.getElementById('dailyPaymentTableBody');
+    const serviceTypeTableBody = document.getElementById('dailyServiceTypeTableBody');
+    const summaryEl = document.getElementById('dailyReportSummaryText');
     
     if (!dateInput || !categoryTableBody || !paymentTableBody) return;
     
-    // Get selected date or default to today
     let selectedDate;
     if (dateInput.value) {
         selectedDate = new Date(dateInput.value);
@@ -5249,21 +6920,24 @@ async function updateDailySalesReport() {
         dateInput.value = selectedDate.toISOString().split('T')[0];
     }
     
-    // Ensure orders are loaded
-    if (!ordersState || ordersState.length === 0) {
-        await loadOrdersCollectionOnce();
-    }
+    if (!ordersState || ordersState.length === 0) await loadOrdersCollectionOnce();
+    if (!menuState || menuState.length === 0) await ensureMenuStateLoaded();
     
-    // Ensure menu state is loaded
-    if (!menuState || menuState.length === 0) {
-        await ensureMenuStateLoaded();
-    }
-    
-    // Calculate data
     const categoryData = calculateDailySalesByCategory(ordersState, selectedDate);
     const paymentData = calculateDailySalesByPaymentMethod(ordersState, selectedDate);
+    const serviceTypeData = calculateDailySalesByServiceType(ordersState, selectedDate);
     
-    // Render category table
+    // Day summary
+    const dayRevenue = paymentData.reduce((s, p) => s + p.revenue, 0);
+    const dayOrders = paymentData.reduce((s, p) => s + p.transactions, 0);
+    if (summaryEl) {
+        const d = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+        summaryEl.textContent = dayOrders === 0 && dayRevenue === 0
+            ? 'No sales for this date'
+            : `${d}: ${dayOrders} orders · ${formatCurrency(dayRevenue)}`;
+    }
+    
+    // Category table
     if (categoryData.length === 0) {
         categoryTableBody.innerHTML = '<tr><td colspan="5" class="empty-table">No sales data for selected date</td></tr>';
     } else {
@@ -5278,7 +6952,7 @@ async function updateDailySalesReport() {
         `).join('');
     }
     
-    // Render payment method table
+    // Payment method table
     if (paymentData.length === 0) {
         paymentTableBody.innerHTML = '<tr><td colspan="5" class="empty-table">No sales data for selected date</td></tr>';
     } else {
@@ -5292,54 +6966,65 @@ async function updateDailySalesReport() {
             </tr>
         `).join('');
     }
+    
+    // Service type table
+    if (serviceTypeTableBody) {
+        if (serviceTypeData.length === 0) {
+            serviceTypeTableBody.innerHTML = '<tr><td colspan="4" class="empty-table">No sales data for selected date</td></tr>';
+        } else {
+            serviceTypeTableBody.innerHTML = serviceTypeData.map(stat => {
+                const walkInInfo = (stat.walkInOrders > 0 || stat.walkInRevenue > 0) 
+                    ? ` <span style="color: #7E2021; font-weight: 600; font-size: 12px;">(${stat.walkInOrders} walk-in: ${formatCurrency(stat.walkInRevenue)})</span>`
+                    : '';
+                return `
+                <tr>
+                    <td>${escapeHtml(stat.label)}${walkInInfo}</td>
+                    <td>${stat.orders}</td>
+                    <td>${formatCurrency(stat.revenue)}</td>
+                    <td>${stat.percentage.toFixed(2)}%</td>
+                </tr>
+            `;
+            }).join('');
+        }
+    }
 }
 
-// Update sales donut chart
+// Update sales donut chart – Revenue by service type (dine-in, pick-up, delivery)
 function updateSalesDonutChart(metrics) {
     const donutChart = document.getElementById('salesDonutChart');
     if (!donutChart) return;
     
-    const menuSold = metrics.totalItems;
     const revenue = metrics.totalRevenue;
-    const safe = revenue * 0.2;
+    const byType = metrics.revenueByServiceType || {};
+    const segments = [
+        { key: 'dine-in', label: 'Dine-in', value: byType['dine-in'] || 0, color: '#7E2021' },
+        { key: 'pick-up', label: 'Pick-up', value: byType['pick-up'] || 0, color: '#f6c056' },
+        { key: 'delivery', label: 'Delivery', value: byType['delivery'] || 0, color: '#2d8c6f' }
+    ].filter(s => s.value > 0);
     
-    // For donut chart, we'll show proportional segments
-    // Normalize values to create visual segments
-    const maxValue = Math.max(menuSold, revenue, safe, 1);
-    const menuSoldPercent = (menuSold / maxValue) * 100;
-    const revenuePercent = (revenue / maxValue) * 100;
-    const safePercent = (safe / maxValue) * 100;
-    
-    // Create SVG donut chart with three segments
     const radius = 80;
     const circumference = 2 * Math.PI * radius;
+    const total = segments.reduce((s, x) => s + x.value, 0) || 1;
     
-    // Calculate segment sizes (normalized to 100%)
-    const totalPercent = menuSoldPercent + revenuePercent + safePercent;
-    const menuSoldSegment = totalPercent > 0 ? (menuSoldPercent / totalPercent) * 100 : 33.33;
-    const revenueSegment = totalPercent > 0 ? (revenuePercent / totalPercent) * 100 : 33.33;
-    const safeSegment = totalPercent > 0 ? (safePercent / totalPercent) * 100 : 33.34;
-    
-    const menuSoldArc = (menuSoldSegment / 100) * circumference;
-    const revenueArc = (revenueSegment / 100) * circumference;
-    const safeArc = (safeSegment / 100) * circumference;
+    let offset = 0;
+    const circles = segments.map(s => {
+        const pct = (s.value / total) * 100;
+        const arc = (pct / 100) * circumference;
+        const dashOffset = -offset;
+        offset += arc;
+        return `<circle cx="100" cy="100" r="${radius}" fill="none" stroke="${s.color}" stroke-width="20" 
+            stroke-dasharray="${arc} ${circumference}" stroke-dashoffset="${dashOffset}" 
+            transform="rotate(-90 100 100)"/>`;
+    }).join('');
     
     donutChart.innerHTML = `
         <svg viewBox="0 0 200 200">
             <circle cx="100" cy="100" r="${radius}" fill="none" stroke="#e9ecef" stroke-width="20"/>
-            <circle cx="100" cy="100" r="${radius}" fill="none" stroke="#7E2021" stroke-width="20" 
-                stroke-dasharray="${menuSoldArc} ${circumference}" stroke-dashoffset="0" 
-                transform="rotate(-90 100 100)"/>
-            <circle cx="100" cy="100" r="${radius}" fill="none" stroke="#f6c056" stroke-width="20" 
-                stroke-dasharray="${revenueArc} ${circumference}" stroke-dashoffset="${-menuSoldArc}" 
-                transform="rotate(-90 100 100)"/>
-            <circle cx="100" cy="100" r="${radius}" fill="none" stroke="#a0282a" stroke-width="20" 
-                stroke-dasharray="${safeArc} ${circumference}" stroke-dashoffset="${-(menuSoldArc + revenueArc)}" 
-                transform="rotate(-90 100 100)"/>
+            ${circles}
         </svg>
         <div class="donut-chart-center">
             <div class="donut-chart-center-value">${formatCurrency(revenue)}</div>
-            <div class="donut-chart-center-label">Total Revenue</div>
+            <div class="donut-chart-center-label">Revenue by channel</div>
         </div>
     `;
 }
@@ -5398,7 +7083,7 @@ function updateLoyalCustomers(loyalCustomers) {
                 <div class="loyal-customer-avatar">${initials}</div>
                 <div class="loyal-customer-info">
                     <h4 class="loyal-customer-name">${escapeHtml(customer.displayName)}</h4>
-                    <p class="loyal-customer-orders">${customer.orderCount} Times order</p>
+                    <p class="loyal-customer-orders">${customer.orderCount} orders · ${formatCurrency(customer.totalSpent || 0)}</p>
                 </div>
             </div>
         `;
@@ -5544,6 +7229,7 @@ async function exportReport() {
         
         // Create CSV content
         let csv = `Sales Report - ${currentReportPeriod.charAt(0).toUpperCase() + currentReportPeriod.slice(1)}\n`;
+        csv += `Period: ${formatDateRangeLabel(currentReportPeriod)}\n`;
         csv += `Generated: ${new Date().toLocaleString()}\n\n`;
         
         // Summary
@@ -5603,6 +7289,202 @@ async function exportReport() {
     }
 }
 
+async function exportReportAsPDF() {
+    try {
+        if (typeof window.jspdf === 'undefined') {
+            showNotification('PDF library not loaded. Please refresh the page.', 'error');
+            return;
+        }
+
+        if (!ordersState || ordersState.length === 0) {
+            await loadOrdersCollectionOnce();
+        }
+        
+        const metrics = calculateSalesMetrics(ordersState, currentReportPeriod);
+        const mostOrdered = calculateMostOrderedItems(ordersState, currentReportPeriod, 100);
+        const comparison = calculatePeriodComparison(ordersState, currentReportPeriod);
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        let yPos = 20;
+        const margin = 15;
+        const lineHeight = 7;
+        const sectionSpacing = 10;
+        
+        // Helper function to add a new page if needed
+        const checkNewPage = (requiredSpace = 20) => {
+            if (yPos + requiredSpace > pageHeight - margin) {
+                doc.addPage();
+                yPos = margin;
+                return true;
+            }
+            return false;
+        };
+        
+        // Header
+        doc.setFontSize(20);
+        doc.setFont(undefined, 'bold');
+        doc.text('Sales Report', margin, yPos);
+        yPos += lineHeight;
+        
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'normal');
+        doc.text(`${currentReportPeriod.charAt(0).toUpperCase() + currentReportPeriod.slice(1)} Report`, margin, yPos);
+        yPos += lineHeight;
+        doc.text(`Period: ${formatDateRangeLabel(currentReportPeriod)}`, margin, yPos);
+        yPos += lineHeight;
+        doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
+        yPos += sectionSpacing * 1.5;
+        
+        // Summary Section
+        checkNewPage(30);
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text('Summary', margin, yPos);
+        yPos += lineHeight * 1.5;
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        const summaryData = [
+            ['Total Revenue', formatCurrency(metrics.totalRevenue)],
+            ['Total Orders', metrics.totalOrders.toString()],
+            ['Average Order Value', formatCurrency(metrics.averageOrderValue)],
+            ['Average Items Per Order', metrics.averageItemsPerOrder.toFixed(2)],
+            ['Total Items Sold', metrics.totalItems.toString()]
+        ];
+        
+        if (comparison && (comparison.pctRevenue !== 0 || comparison.pctOrders !== 0)) {
+            summaryData.push(['vs Prior Period', `${comparison.pctRevenue >= 0 ? '+' : ''}${comparison.pctRevenue.toFixed(1)}%`]);
+        }
+        
+        summaryData.forEach(([label, value]) => {
+            doc.setFont(undefined, 'bold');
+            doc.text(label + ':', margin, yPos);
+            doc.setFont(undefined, 'normal');
+            doc.text(value, margin + 60, yPos);
+            yPos += lineHeight;
+        });
+        yPos += sectionSpacing;
+        
+        // Revenue by Service Type
+        checkNewPage(30);
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text('Revenue by Service Type', margin, yPos);
+        yPos += lineHeight * 1.5;
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text('Service Type', margin, yPos);
+        doc.text('Revenue', margin + 60, yPos);
+        doc.text('Orders', margin + 100, yPos);
+        doc.text('%', margin + 130, yPos);
+        yPos += lineHeight;
+        
+        doc.setFont(undefined, 'normal');
+        Object.entries(metrics.revenueByServiceType).forEach(([type, revenue]) => {
+            if (revenue > 0) {
+                const percentage = metrics.totalRevenue > 0 ? (revenue / metrics.totalRevenue * 100).toFixed(1) : 0;
+                const orderCount = metrics.orderCountByServiceType[type] || 0;
+                const typeLabel = type === 'dine-in' ? 'Dine-in' : (type === 'pick-up' ? 'Pick-up' : 'Delivery');
+                doc.text(typeLabel, margin, yPos);
+                doc.text(formatCurrency(revenue), margin + 60, yPos);
+                doc.text(orderCount.toString(), margin + 100, yPos);
+                doc.text(percentage + '%', margin + 130, yPos);
+                yPos += lineHeight;
+            }
+        });
+        yPos += sectionSpacing;
+        
+        // Revenue by Payment Method
+        checkNewPage(30);
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text('Revenue by Payment Method', margin, yPos);
+        yPos += lineHeight * 1.5;
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text('Payment Method', margin, yPos);
+        doc.text('Revenue', margin + 60, yPos);
+        doc.text('%', margin + 100, yPos);
+        yPos += lineHeight;
+        
+        doc.setFont(undefined, 'normal');
+        Object.entries(metrics.revenueByPaymentMethod)
+            .sort(([_, a], [__, b]) => b - a)
+            .forEach(([method, revenue]) => {
+                if (revenue > 0) {
+                    const percentage = metrics.totalRevenue > 0 ? (revenue / metrics.totalRevenue * 100).toFixed(1) : 0;
+                    const methodLabel = method.charAt(0).toUpperCase() + method.slice(1);
+                    doc.text(methodLabel, margin, yPos);
+                    doc.text(formatCurrency(revenue), margin + 60, yPos);
+                    doc.text(percentage + '%', margin + 100, yPos);
+                    yPos += lineHeight;
+                }
+            });
+        yPos += sectionSpacing;
+        
+        // Most Ordered Items
+        checkNewPage(40);
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text('Most Ordered Items', margin, yPos);
+        yPos += lineHeight * 1.5;
+        
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'bold');
+        doc.text('Rank', margin, yPos);
+        doc.text('Item Name', margin + 10, yPos);
+        doc.text('Category', margin + 70, yPos);
+        doc.text('Qty', margin + 100, yPos);
+        doc.text('Price', margin + 110, yPos);
+        doc.text('Revenue', margin + 140, yPos);
+        yPos += lineHeight;
+        
+        doc.setFont(undefined, 'normal');
+        const maxItems = Math.min(mostOrdered.length, 30); // Limit to 30 items per page
+        for (let i = 0; i < maxItems; i++) {
+            checkNewPage(10);
+            const item = mostOrdered[i];
+            const itemName = item.name.length > 25 ? item.name.substring(0, 22) + '...' : item.name;
+            doc.text((i + 1).toString(), margin, yPos);
+            doc.text(itemName, margin + 10, yPos);
+            doc.text(item.category || '—', margin + 70, yPos);
+            doc.text(item.quantity.toString(), margin + 100, yPos);
+            doc.text(formatCurrency(item.price), margin + 110, yPos);
+            doc.text(formatCurrency(item.revenue), margin + 140, yPos);
+            yPos += lineHeight;
+        }
+        
+        // Footer on last page
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'italic');
+            doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin - 20, pageHeight - 10);
+            doc.text('Pablo\'s Peri Peri - Sales Report', margin, pageHeight - 10);
+        }
+        
+        // Save PDF
+        const fileName = `sales_report_${currentReportPeriod}_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(fileName);
+        
+        showNotification('PDF exported successfully!', 'success');
+    } catch (error) {
+        console.error('Error exporting PDF:', error);
+        showNotification('Failed to export PDF. Please try again.', 'error');
+    }
+}
+
 function changePage(page) {
     if (page === 'prev' || page === 'next') {
         alert(`Navigate to ${page} page`);
@@ -5619,10 +7501,7 @@ function changePage(page) {
     }
 }
 
-function exportReport() {
-    alert('Export functionality - In a real application, this would download a report file');
-    // Note: Export buttons don't need backend functionality as per requirements
-}
+// exportReport: real implementation is the async function above (CSV download)
 
 // exportInventoryReport removed - system is now recipe-based
 
@@ -6243,73 +8122,87 @@ async function getMenuRemainingServings(menuItemId) {
     return cached;
 }
 
-// Get menu item's daily serving availability info
-function getMenuServingInfo(item) {
-    const maxServings = item.maxServingsPerDay;
-    const todayCount = todayServingsCache[item.id] || 0;
-    
-    // Default to 0 (unavailable) if maxServings is null/undefined/0
-    const effectiveMaxServings = maxServings !== null && maxServings !== undefined && maxServings > 0 ? maxServings : 0;
-    
-    if (effectiveMaxServings === 0) {
+// Get menu item's serving availability: quantity = actual stock, dailyLimit = max per day, available = min(quantity, dailyLimit - servedToday).
+// If variation is provided, uses that variation's quantity (stock) and maxServingsPerDay (daily limit; fallback variation.quantity for old data).
+// If item has variations and variation is null, aggregates across all variations for parent row.
+function getMenuServingInfo(item, variation) {
+    let stock, effectiveDailyLimit, todayCount;
+
+    if (variation != null) {
+        // Variation: quantity = actual stock; maxServingsPerDay = daily limit (fallback to quantity for old data)
+        const varId = variation.variationId || variation.id;
+        stock = (variation.quantity !== undefined && variation.quantity !== null) ? Number(variation.quantity) : 0;
+        const limitVal = (variation.maxServingsPerDay !== undefined && variation.maxServingsPerDay !== null) ? Number(variation.maxServingsPerDay) : null;
+        effectiveDailyLimit = (limitVal != null && limitVal > 0) ? limitVal : (stock > 0 ? stock : null); // fallback for old data
+        todayCount = (varId && todayServingsCache[varId] !== undefined) ? todayServingsCache[varId] : 0;
+    } else if (Array.isArray(item.variations) && item.variations.length > 0) {
+        // Parent with variations: aggregate from each variation
+        let sumRemaining = 0, sumMax = 0, sumToday = 0, sumStock = 0;
+        item.variations.forEach(function (v) {
+            const si = getMenuServingInfo(item, v);
+            sumRemaining += si.remaining;
+            sumMax += (si.maxServings != null ? si.maxServings : 0);
+            sumToday += si.todayCount;
+            sumStock += (si.rawQuantity != null ? si.rawQuantity : 0);
+        });
+        const remaining = sumRemaining;
+        let label = remaining <= 0 ? 'Out of Stock' : 'Available';
+        let className = remaining <= 0 ? 'unavailable' : 'available';
         return {
-            remaining: 0,
-            maxServings: 0,
-            todayCount: todayCount,
-            label: 'Unavailable',
-            className: 'unavailable'
+            remaining,
+            maxServings: sumMax || null,
+            todayCount: sumToday,
+            rawQuantity: sumStock,
+            label,
+            className
         };
-    }
-    
-    const remaining = Math.max(0, effectiveMaxServings - todayCount);
-    
-    // Status: "Out of Stock" when remaining = 0, otherwise "Available"
-    let label, className;
-    if (remaining <= 0) {
-        label = 'Out of Stock';
-        className = 'unavailable';
     } else {
-        label = 'Available';
-        className = 'available';
+        // No variations: quantity = stock; maxServingsPerDay = daily limit (fallback to quantity for old data)
+        stock = (item.quantity !== undefined && item.quantity !== null) ? Number(item.quantity) : 0;
+        const limitVal = (item.maxServingsPerDay !== undefined && item.maxServingsPerDay !== null) ? Number(item.maxServingsPerDay) : null;
+        effectiveDailyLimit = (limitVal != null && limitVal > 0) ? limitVal : (stock > 0 ? stock : null);
+        todayCount = todayServingsCache[item.id] || 0;
     }
-    
+
+    // remainingFromLimit: how many more allowed today by daily cap (null = unlimited)
+    const remainingFromLimit = (effectiveDailyLimit != null && effectiveDailyLimit > 0)
+        ? Math.max(0, effectiveDailyLimit - todayCount)
+        : null;
+    // available = min(stock, remainingFromLimit); if unlimited, available = stock
+    const remaining = remainingFromLimit === null ? stock : Math.min(stock, remainingFromLimit);
+
+    let label = remaining <= 0 ? 'Out of Stock' : 'Available';
+    let className = remaining <= 0 ? 'unavailable' : 'available';
+
     return {
-        remaining: remaining,
-        maxServings: effectiveMaxServings,
-        todayCount: todayCount,
-        label: label,
-        className: className
+        remaining,
+        maxServings: (effectiveDailyLimit != null && effectiveDailyLimit > 0) ? effectiveDailyLimit : null,
+        todayCount,
+        rawQuantity: stock,
+        label,
+        className
     };
 }
 
 // Legacy function - kept for backward compatibility but now uses serving info
-function getMenuQuantity(item, variation = null) {
-    // For backward compatibility, return remaining servings if available
-    // Otherwise fall back to old quantity calculation
-    const servingInfo = getMenuServingInfo(item);
-    
+function getMenuQuantity(item, variation) {
+    const servingInfo = getMenuServingInfo(item, variation || undefined);
     if (servingInfo.remaining !== null) {
         return servingInfo.remaining;
     }
-    
     // Fallback to old calculation for items without serving limits
     const ordersSold = getMenuItemOrderCount(item);
     let baseQuantity = 0;
-    
     if (variation) {
-        const variationQty = (variation.quantity !== undefined && variation.quantity !== null) 
-            ? Number(variation.quantity) 
+        const variationQty = (variation.quantity !== undefined && variation.quantity !== null)
+            ? Number(variation.quantity)
             : null;
-        const itemQty = (item.quantity !== undefined && item.quantity !== null) 
-            ? Number(item.quantity) 
-            : 0;
+        const itemQty = (item.quantity !== undefined && item.quantity !== null) ? Number(item.quantity) : 0;
         baseQuantity = (variationQty !== null && variationQty > 0) ? variationQty : itemQty;
     } else {
         baseQuantity = (item.quantity !== undefined && item.quantity !== null) ? Number(item.quantity) : 0;
     }
-    
-    const remaining = Math.max(0, baseQuantity - ordersSold);
-    return remaining;
+    return Math.max(0, baseQuantity - ordersSold);
 }
 
 // Apply filter to menu list
@@ -6444,9 +8337,19 @@ async function renderMenuListTable() {
         resetTimeHeader.textContent = `(Resets: ${resetInfo.resetTime})`;
     }
     
-    // Refresh serving cache for all menu items
+    // Refresh serving cache: for items with variations use each variation's id; otherwise use item id
     if (menuState && menuState.length > 0) {
-        const menuItemIds = menuState.map(item => item.id);
+        const menuItemIds = [];
+        menuState.forEach(function (item) {
+            if (Array.isArray(item.variations) && item.variations.length > 0) {
+                item.variations.forEach(function (v) {
+                    const id = v.variationId || v.id;
+                    if (id) menuItemIds.push(id);
+                });
+            } else {
+                if (item.id) menuItemIds.push(item.id);
+            }
+        });
         await refreshServingsCache(menuItemIds);
     }
 
@@ -6497,20 +8400,9 @@ async function renderMenuListTable() {
             const minPrice = variationPrices.length > 0 ? Math.min(...variationPrices) : 0;
             const maxPrice = variationPrices.length > 0 ? Math.max(...variationPrices) : 0;
             
-            // Get serving info for parent item
+            // Get serving info for parent (aggregates across variations)
             const parentServingInfo = getMenuServingInfo(item);
-            
-            // Aggregate remaining servings: sum of all variation servings (for display)
-            const totalVariationQuantity = item.variations.reduce((sum, variation) => {
-                const varQty = getMenuQuantity(item, variation);
-                return sum + varQty;
-            }, 0);
-            
-            // Parent is available if ANY variation has servings remaining
-            const hasAnyStock = item.variations.some(variation => {
-                const varQty = getMenuQuantity(item, variation);
-                return varQty > 0 || varQty === null; // null means unlimited
-            });
+            const parentStockStatus = { label: parentServingInfo.label, className: parentServingInfo.className };
             
             // Display price: show range if different, or single price if same
             const parentPriceDisplay = minPrice === maxPrice 
@@ -6520,17 +8412,13 @@ async function renderMenuListTable() {
             const parentRow = document.createElement('tr');
             parentRow.className = 'menu-list-parent-row';
             
-            // Use getMenuItemStatus for status (Available/Unavailable only)
-            const parentStockStatus = getMenuItemStatus(item);
-            
-            // Format remaining servings display: show only remaining number
-            const remainingDisplay = parentServingInfo.remaining;
-            
             const imageUrl = item.imageDataUrl || '';
             const imageCell = imageUrl 
                 ? `<td class="menu-list-image"><img src="${imageUrl}" alt="${escapeHtml(baseDisplayName)}" class="menu-list-item-image"></td>`
                 : `<td class="menu-list-image"><div class="menu-list-item-image-placeholder">${(baseDisplayName || '?').charAt(0).toUpperCase()}</div></td>`;
             
+            const parentQty = (parentServingInfo.rawQuantity != null) ? parentServingInfo.rawQuantity : 0;
+            const parentLimit = (parentServingInfo.maxServings != null && parentServingInfo.maxServings > 0) ? parentServingInfo.maxServings : '∞';
             parentRow.innerHTML = `
                 ${imageCell}
                 <td class="menu-list-id">${menuId}</td>
@@ -6538,10 +8426,8 @@ async function renderMenuListTable() {
                     <span class="menu-list-parent-name">${escapeHtml(baseDisplayName)}</span>
                     <span class="menu-list-variation-count">(${variationCount} variations)</span>
                 </td>
-                <td class="menu-list-quantity" title="Remaining Servings" style="text-align: center;">
-                    <span>${remainingDisplay}</span>
-                </td>
-                <td class="menu-list-daily-servings" style="text-align: center;">${maxServingsPerDay}</td>
+                <td class="menu-list-quantity" title="Actual stock" style="text-align: center;">${parentQty}</td>
+                <td class="menu-list-daily-servings" style="text-align: center;">${parentLimit}</td>
                 <td class="menu-list-status" style="text-align: center;"><span class="status ${parentStockStatus.className}">${parentStockStatus.label}</span></td>
                 <td class="menu-list-price">PHP ${parentPriceDisplay}</td>
             `;
@@ -6557,7 +8443,7 @@ async function renderMenuListTable() {
             
             tableBody.appendChild(parentRow);
             
-            // Create variation rows for each variation
+            // Create variation rows for each variation (quantity and remaining are per variation)
             item.variations.forEach((variation, index) => {
                 const variationRow = document.createElement('tr');
                 variationRow.className = 'menu-list-variation-row';
@@ -6575,21 +8461,15 @@ async function renderMenuListTable() {
                     variation.cost ??
                     0
                 );
-                const variationQuantity = getMenuQuantity(item, variation);
-                // Get serving info for variation (use parent item's serving limit)
-                const variationServingInfo = getMenuServingInfo(item);
-                // Use getMenuItemStatus for status (Available/Unavailable only)
-                const stockStatus = getMenuItemStatus(item);
-                
-                // Format remaining servings display for variation: show only remaining number
-                const varRemainingDisplay = variationServingInfo.remaining;
+                const variationServingInfo = getMenuServingInfo(item, variation);
+                const varQty = (variationServingInfo.rawQuantity != null) ? variationServingInfo.rawQuantity : 0;
+                const varLimit = (variationServingInfo.maxServings != null && variationServingInfo.maxServings > 0) ? variationServingInfo.maxServings : '∞';
                 
                 const variationImageUrl = item.imageDataUrl || '';
                 const variationImageCell = variationImageUrl 
                     ? `<td class="menu-list-image"><img src="${variationImageUrl}" alt="${escapeHtml(variationName)}" class="menu-list-item-image"></td>`
                     : `<td class="menu-list-image"><div class="menu-list-item-image-placeholder">${(variationName || '?').charAt(0).toUpperCase()}</div></td>`;
                 
-                // Use variation ID (child ID) instead of parent menuId for variations
                 const childId = variation.variationId || variation.id || menuId;
                 
                 variationRow.innerHTML = `
@@ -6599,11 +8479,9 @@ async function renderMenuListTable() {
                         <span class="menu-list-variation-indicator">└─</span>
                         <span class="menu-list-variation-name">${escapeHtml(variationName)}</span>
                     </td>
-                    <td class="menu-list-quantity" title="Remaining Servings" style="text-align: center;">
-                        <span>${varRemainingDisplay}</span>
-                    </td>
-                    <td class="menu-list-daily-servings" style="text-align: center;">${maxServingsPerDay}</td>
-                    <td class="menu-list-status" style="text-align: center;"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
+                    <td class="menu-list-quantity" title="Actual stock" style="text-align: center;">${varQty}</td>
+                    <td class="menu-list-daily-servings" style="text-align: center;">${varLimit}</td>
+                    <td class="menu-list-status" style="text-align: center;"><span class="status ${variationServingInfo.className}">${variationServingInfo.label}</span></td>
                     <td class="menu-list-price">PHP ${variationPrice.toFixed(2)}</td>
                 `;
                 
@@ -6619,8 +8497,7 @@ async function renderMenuListTable() {
                 tableBody.appendChild(variationRow);
             });
         } else if (hasVariations && variationCount === 1) {
-            // If there's exactly 1 variation, show it as a single row (no parent row)
-            // This is because 1 variation doesn't need grouping - it's just a regular menu item
+            // If there's exactly 1 variation, show it as a single row (no parent row); use variation's quantity
             const variation = item.variations[0];
             const variationName = variation.name || baseDisplayName;
             const variationPrice = parseMoney(
@@ -6634,19 +8511,13 @@ async function renderMenuListTable() {
                 variation.cost ??
                 0
             );
-            const variationQuantity = getMenuQuantity(item, variation);
-            // Get serving info for single variation
-            const variationServingInfo = getMenuServingInfo(item);
-            // Use getMenuItemStatus for status (Available/Unavailable only)
-            const stockStatus = getMenuItemStatus(item);
-            
-            // Format remaining servings display: show only remaining number
-            const varRemainingDisplay = variationServingInfo.remaining;
+            const variationServingInfo = getMenuServingInfo(item, variation);
+            const varQty = (variationServingInfo.rawQuantity != null) ? variationServingInfo.rawQuantity : 0;
+            const varLimit = (variationServingInfo.maxServings != null && variationServingInfo.maxServings > 0) ? variationServingInfo.maxServings : '∞';
                 
             const row = document.createElement('tr');
             row.className = 'menu-list-item-row';
             
-            // Use variation ID (child ID) instead of parent menuId for single variation
             const childId = variation.variationId || variation.id || menuId;
             
             const variationImageUrl = item.imageDataUrl || '';
@@ -6654,17 +8525,15 @@ async function renderMenuListTable() {
                 ? `<td class="menu-list-image"><img src="${variationImageUrl}" alt="${escapeHtml(variationName)}" class="menu-list-item-image"></td>`
                 : `<td class="menu-list-image"><div class="menu-list-item-image-placeholder">${(variationName || '?').charAt(0).toUpperCase()}</div></td>`;
             
-                row.innerHTML = `
+            row.innerHTML = `
                 ${variationImageCell}
                 <td class="menu-list-id">${escapeHtml(childId)}</td>
                 <td class="menu-list-name">${escapeHtml(variationName)}</td>
-                <td class="menu-list-quantity" title="Remaining Servings" style="text-align: center;">
-                    <span>${varRemainingDisplay}</span>
-                </td>
-                <td class="menu-list-daily-servings" style="text-align: center;">${maxServingsPerDay}</td>
-                <td class="menu-list-status" style="text-align: center;"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
+                <td class="menu-list-quantity" title="Actual stock" style="text-align: center;">${varQty}</td>
+                <td class="menu-list-daily-servings" style="text-align: center;">${varLimit}</td>
+                <td class="menu-list-status" style="text-align: center;"><span class="status ${variationServingInfo.className}">${variationServingInfo.label}</span></td>
                 <td class="menu-list-price">PHP ${variationPrice.toFixed(2)}</td>
-                `;
+            `;
                 
                 // Make row clickable
                 row.style.cursor = 'pointer';
@@ -6681,18 +8550,12 @@ async function renderMenuListTable() {
             const row = document.createElement('tr');
             row.className = 'menu-list-item-row';
             
-            const quantity = getMenuQuantity(item);
-            // Get serving info for item
+            // Get serving info for item (remaining = available = min(quantity, dailyLimit - servedToday))
             const servingInfo = getMenuServingInfo(item);
-            // Use getMenuItemStatus for status (Available/Unavailable only)
             const stockStatus = getMenuItemStatus(item);
             const price = getMenuItemDisplayPrice(item).toFixed(2);
-            
-            // Store maxServingsPerDay at the start to ensure it doesn't change during rendering
-            const maxServingsPerDay = item.maxServingsPerDay !== null && item.maxServingsPerDay !== undefined ? item.maxServingsPerDay : 0;
-            
-            // Format remaining servings display: show only remaining number
-            const remainingDisplay = servingInfo.remaining;
+            const itemQty = (servingInfo.rawQuantity != null) ? servingInfo.rawQuantity : 0;
+            const itemLimit = (servingInfo.maxServings != null && servingInfo.maxServings > 0) ? servingInfo.maxServings : '∞';
             
             const itemImageUrl = item.imageDataUrl || '';
             const itemImageCell = itemImageUrl 
@@ -6703,10 +8566,8 @@ async function renderMenuListTable() {
                 ${itemImageCell}
                 <td class="menu-list-id">${menuId}</td>
                 <td class="menu-list-name">${escapeHtml(baseDisplayName)}</td>
-                <td class="menu-list-quantity" title="Remaining Servings" style="text-align: center;">
-                    <span>${remainingDisplay}</span>
-                </td>
-                <td class="menu-list-daily-servings" style="text-align: center;">${maxServingsPerDay}</td>
+                <td class="menu-list-quantity" title="Actual stock" style="text-align: center;">${itemQty}</td>
+                <td class="menu-list-daily-servings" style="text-align: center;">${itemLimit}</td>
                 <td class="menu-list-status" style="text-align: center;"><span class="status ${stockStatus.className}">${stockStatus.label}</span></td>
                 <td class="menu-list-price">PHP ${price}</td>
             `;
@@ -6922,10 +8783,35 @@ async function updateMenuServingLimit(itemId, newLimit) {
     }
 }
 
-// Legacy function - kept for backward compatibility
+// Update menu item quantity (actual stock). Separate from daily serving limit.
 async function updateMenuQuantity(itemId, newQuantity) {
-    // Redirect to serving limit update
-    await updateMenuServingLimit(itemId, newQuantity);
+    if (!itemId) return;
+    const qty = newQuantity === '' || newQuantity === null || newQuantity === undefined
+        ? 0
+        : parseInt(newQuantity, 10);
+    if (isNaN(qty) || qty < 0) {
+        showNotification('Invalid quantity. Use 0 or a positive number.', 'error');
+        return;
+    }
+    try {
+        if (!isFirestoreReady()) {
+            showNotification('Database is not ready. Please try again.', 'error');
+            return;
+        }
+        const fns = window.firestoreFunctions;
+        const itemRef = fns.doc(window.db, 'menu', itemId);
+        await fns.updateDoc(itemRef, { quantity: qty, updatedAt: fns.serverTimestamp() });
+        menuState = await MenuStore.getItems();
+        await renderMenuListTable();
+        const detailPanel = document.getElementById('menuListDetailPanel');
+        if (detailPanel && detailPanel.style.display !== 'none' && detailPanel.dataset.currentItemId === itemId) {
+            showMenuListDetail(itemId);
+        }
+        showNotification('Quantity updated successfully.', 'success');
+    } catch (e) {
+        console.error('Error updating quantity:', e);
+        showNotification('Failed to update quantity.', 'error');
+    }
 }
 
 // Update variation serving limit (maxServingsPerDay)
@@ -7000,6 +8886,50 @@ async function updateMenuVariationQuantity(itemId, variationId, newLimit) {
     }
 }
 
+// Update variation quantity (actual stock). Separate from daily serving limit.
+async function updateMenuVariationStock(itemId, variationId, newQuantity) {
+    if (!itemId || !variationId) return;
+    const qty = newQuantity === '' || newQuantity === null || newQuantity === undefined
+        ? 0
+        : parseInt(newQuantity, 10);
+    if (isNaN(qty) || qty < 0) {
+        showNotification('Invalid quantity. Use 0 or a positive number.', 'error');
+        return;
+    }
+    try {
+        if (!isFirestoreReady()) {
+            showNotification('Database is not ready. Please try again.', 'error');
+            return;
+        }
+        const fns = window.firestoreFunctions;
+        const itemRef = fns.doc(window.db, 'menu', itemId);
+        const itemDoc = await fns.getDoc(itemRef);
+        if (!itemDoc.exists()) {
+            showNotification('Menu item not found.', 'error');
+            return;
+        }
+        const itemData = itemDoc.data();
+        const variations = Array.isArray(itemData.variations) ? [...itemData.variations] : [];
+        const vi = variations.findIndex(v => (v.variationId || v.id) === variationId);
+        if (vi === -1) {
+            showNotification('Variation not found.', 'error');
+            return;
+        }
+        variations[vi] = { ...variations[vi], quantity: qty };
+        await fns.updateDoc(itemRef, { variations, updatedAt: fns.serverTimestamp() });
+        menuState = await MenuStore.getItems();
+        await renderMenuListTable();
+        const detailPanel = document.getElementById('menuListDetailPanel');
+        if (detailPanel && detailPanel.style.display !== 'none' && detailPanel.dataset.currentItemId === itemId) {
+            showMenuListDetail(itemId);
+        }
+        showNotification('Quantity updated successfully.', 'success');
+    } catch (e) {
+        console.error('Error updating variation quantity:', e);
+        showNotification('Failed to update quantity.', 'error');
+    }
+}
+
 // Show menu detail in right panel
 function showMenuListDetail(itemId) {
     try {
@@ -7038,18 +8968,17 @@ function showMenuListDetail(itemId) {
         detailPanel.style.visibility = 'visible';
         detailPanel.dataset.currentItemId = itemId; // Store current item ID for refresh
         
-        // Resize the left panel and tan container to make room for the detail panel
+        // Shrink the tan container so the detail panel fits beside it; left-panel fills the tan container
         const leftPanel = document.querySelector('.menu-list-left-panel');
         const tanContainer = document.querySelector('.menu-list-tan-container');
-        const calculatedWidth = 'calc(100% - 420px)'; // 400px panel + 20px gap
-        if (leftPanel) {
-            leftPanel.style.flex = '1 1 auto';
-            leftPanel.style.maxWidth = calculatedWidth;
-            leftPanel.style.width = calculatedWidth;
-        }
         if (tanContainer) {
-            tanContainer.style.maxWidth = calculatedWidth;
-            tanContainer.style.width = calculatedWidth;
+            tanContainer.style.flex = '1 1 0%';
+            tanContainer.style.maxWidth = 'none';
+            tanContainer.style.width = 'auto';
+        }
+        if (leftPanel) {
+            leftPanel.style.maxWidth = '100%';
+            leftPanel.style.width = '100%';
         }
         
         // Update title
@@ -7126,8 +9055,8 @@ function showMenuListDetail(itemId) {
                 <span class="menu-list-detail-value">PHP ${price}</span>
             </div>
             <div class="menu-list-detail-row">
-                <span class="menu-list-detail-label">Remaining Servings Today:</span>
-                <span class="menu-list-detail-value">${servingInfo.maxServings > 0 ? `${servingInfo.remaining} / ${servingInfo.maxServings}` : '0'}</span>
+                <span class="menu-list-detail-label">Available (to serve):</span>
+                <span class="menu-list-detail-value">${servingInfo.remaining} <small style="color:#666">(min of Quantity and Daily Limit − Served Today)</small></span>
             </div>
             <div class="menu-list-detail-row">
                 <span class="menu-list-detail-label">Status:</span>
@@ -7164,6 +9093,10 @@ function showMenuListDetail(itemId) {
                            </div>
                            <div style="margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                   <span style="color: #666;">Quantity (total):</span>
+                                   <strong>${servingInfo.rawQuantity != null ? servingInfo.rawQuantity : '—'}</strong>
+                               </div>
+                               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                                    <span style="color: #666;">Daily Limit:</span>
                                    <strong>${item.maxServingsPerDay || 'Unlimited'}</strong>
                                </div>
@@ -7172,11 +9105,22 @@ function showMenuListDetail(itemId) {
                                    <strong style="color: #7E2021;">${servingInfo.todayCount || 0}</strong>
                                </div>
                                <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #ddd;">
-                                   <span style="color: #666;">Remaining Today:</span>
+                                   <span style="color: #666;">Available:</span>
                                    <strong style="color: ${servingInfo.remaining > 0 ? '#28a745' : '#dc3545'};">${servingInfo.remaining}</strong>
                                </div>
                            </div>`
-                        : `<label for="menuListDetailLimitInput">Max Servings Per Day (0 = Unlimited):</label>
+                        : `<label for="menuListDetailQuantityInput">Quantity (Actual stock):</label>
+                           <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; margin-bottom: 12px;">
+                               <input type="number" id="menuListDetailQuantityInput" class="form-control" 
+                                      value="${item.quantity != null ? item.quantity : 0}" min="0" step="1" 
+                                      style="width: 120px;"
+                                      onchange="updateMenuQuantity('${escapeHtml(itemId)}', this.value)">
+                               <button type="button" class="btn btn-sm btn-primary" 
+                                       onclick="const i = document.getElementById('menuListDetailQuantityInput'); updateMenuQuantity('${escapeHtml(itemId)}', i.value);">
+                                   <i class="fas fa-save"></i> Save
+                               </button>
+                           </div>
+                           <label for="menuListDetailLimitInput">Daily Serving Limit (0 = Unlimited):</label>
                            <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px;">
                                <input type="number" id="menuListDetailLimitInput" class="form-control" 
                                       value="${item.maxServingsPerDay || ''}" min="0" step="1" 
@@ -7190,6 +9134,10 @@ function showMenuListDetail(itemId) {
                            </div>
                            <div style="margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px;">
                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                   <span style="color: #666;">Quantity:</span>
+                                   <strong>${servingInfo.rawQuantity != null ? servingInfo.rawQuantity : 0}</strong>
+                               </div>
+                               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                                    <span style="color: #666;">Daily Limit:</span>
                                    <strong>${item.maxServingsPerDay || 'Unlimited'}</strong>
                                </div>
@@ -7198,7 +9146,7 @@ function showMenuListDetail(itemId) {
                                    <strong style="color: #7E2021;">${servingInfo.todayCount || 0}</strong>
                                </div>
                                <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #ddd;">
-                                   <span style="color: #666;">Remaining Today:</span>
+                                   <span style="color: #666;">Available:</span>
                                    <strong style="color: ${servingInfo.remaining > 0 ? '#28a745' : '#dc3545'};">${servingInfo.remaining}</strong>
                                </div>
                            </div>`
@@ -7236,56 +9184,43 @@ function showMenuListDetail(itemId) {
                     variation.cost ??
                     0
                 );
-                // Get serving info for this variation (check if variation has its own maxServingsPerDay, otherwise use parent's)
-                const varMaxServings = variation.maxServingsPerDay !== undefined && variation.maxServingsPerDay !== null
-                    ? variation.maxServingsPerDay
-                    : (item.maxServingsPerDay || null);
+                const varSi = getMenuServingInfo(item, variation);
+                const varQty = (variation.quantity !== undefined && variation.quantity !== null) ? Number(variation.quantity) : 0;
+                const varLimit = (variation.maxServingsPerDay !== undefined && variation.maxServingsPerDay !== null) ? variation.maxServingsPerDay : '';
                 
-                // Get today's serving count for this variation (using variation ID or parent item ID)
-                const varTodayCount = todayServingsCache[varId] || todayServingsCache[itemId] || 0;
-                const varRemaining = varMaxServings !== null && varMaxServings > 0
-                    ? Math.max(0, varMaxServings - varTodayCount)
-                    : null;
-                
-                const varLimit = variation.maxServingsPerDay !== undefined && variation.maxServingsPerDay !== null
-                    ? variation.maxServingsPerDay
-                    : '';
-                
+                const availClass = varSi.remaining > 0 ? 'variation-avail--ok' : 'variation-avail--out';
                 detailHTML += `
-                    <li style="padding: 16px; background: #f8f9fa; border-radius: 6px; margin-bottom: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <strong>${escapeHtml(varName)}</strong>
-                            <span>PHP ${varPrice.toFixed(2)}</span>
+                    <li class="menu-list-detail-variation-card">
+                        <div class="menu-list-detail-variation-head">
+                            <span class="menu-list-detail-variation-name">${escapeHtml(varName)}</span>
+                            <span class="menu-list-detail-variation-meta">
+                                <span class="menu-list-detail-variation-price">PHP ${varPrice.toFixed(2)}</span>
+                                <span class="menu-list-detail-variation-id">ID: ${escapeHtml(String(varId))}</span>
+                            </span>
                         </div>
-                        <div style="font-size: 0.875rem; color: #6c757d; margin-bottom: 8px;">ID: ${escapeHtml(varId)}</div>
-                        <div style="margin-top: 12px;">
-                            <label style="font-size: 0.875rem; color: #666; display: block; margin-bottom: 6px;">Daily Serving Limit (0 = Unlimited):</label>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <input type="number" class="form-control" 
-                                       value="${varLimit}" min="0" step="1" 
-                                       style="width: 120px; font-size: 0.875rem;"
-                                       placeholder="Unlimited"
-                                       onchange="updateMenuVariationQuantity('${escapeHtml(itemId)}', '${escapeHtml(varId)}', this.value)">
-                                <button type="button" class="btn btn-sm btn-primary" 
-                                        onclick="const input = event.target.previousElementSibling; updateMenuVariationQuantity('${escapeHtml(itemId)}', '${escapeHtml(varId)}', input.value);"
-                                        style="font-size: 0.75rem; padding: 4px 8px;">
-                                    <i class="fas fa-save"></i> Save
-                                </button>
-                            </div>
-                            <div style="margin-top: 8px; padding: 8px; background: #fff; border-radius: 4px; font-size: 0.875rem;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span style="color: #666;">Daily Limit:</span>
-                                    <strong>${varMaxServings || 'Unlimited'}</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span style="color: #666;">Served Today:</span>
-                                    <strong style="color: #7E2021;">${varTodayCount || 0}</strong>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; padding-top: 4px; border-top: 1px solid #ddd;">
-                                    <span style="color: #666;">Remaining Today:</span>
-                                    <strong style="color: ${varRemaining !== null && varRemaining > 0 ? '#28a745' : '#dc3545'};">${varRemaining !== null ? varRemaining : 'Unlimited'}</strong>
+                        <div class="menu-list-detail-variation-controls">
+                            <div class="menu-list-detail-variation-field">
+                                <label>Quantity (Actual stock)</label>
+                                <div class="menu-list-detail-variation-input-row">
+                                    <input type="number" class="form-control" value="${varQty}" min="0" step="1"
+                                           onchange="updateMenuVariationStock('${escapeHtml(itemId)}', '${escapeHtml(String(varId))}', this.value)">
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="var r=event.target.closest('.menu-list-detail-variation-input-row'); var i=r?r.querySelector('input[type=number]'):null; if(i) updateMenuVariationStock('${escapeHtml(itemId)}', '${escapeHtml(String(varId))}', i.value);"><i class="fas fa-save"></i> Save</button>
                                 </div>
                             </div>
+                            <div class="menu-list-detail-variation-field">
+                                <label>Daily Serving Limit (0 = Unlimited)</label>
+                                <div class="menu-list-detail-variation-input-row">
+                                    <input type="number" class="form-control" value="${varLimit}" min="0" step="1" placeholder="Unlimited"
+                                           onchange="updateMenuVariationQuantity('${escapeHtml(itemId)}', '${escapeHtml(String(varId))}', this.value)">
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="var r=event.target.closest('.menu-list-detail-variation-input-row'); var i=r?r.querySelector('input[type=number]'):null; if(i) updateMenuVariationQuantity('${escapeHtml(itemId)}', '${escapeHtml(String(varId))}', i.value);"><i class="fas fa-save"></i> Save</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="menu-list-detail-variation-summary">
+                            <span>Qty: ${varSi.rawQuantity != null ? varSi.rawQuantity : 0}</span>
+                            <span>Limit: ${(varSi.maxServings != null && varSi.maxServings > 0) ? varSi.maxServings : '∞'}</span>
+                            <span>Served: ${varSi.todayCount || 0}</span>
+                            <span class="menu-list-detail-variation-available ${availClass}">Available: ${varSi.remaining}</span>
                         </div>
                     </li>
                 `;
@@ -7336,17 +9271,17 @@ function closeMenuListDetail() {
         detailPanel.style.display = 'none';
     }
     
-    // Restore left panel and tan container to full width
+    // Restore tan container and left panel to full width
     const leftPanel = document.querySelector('.menu-list-left-panel');
     const tanContainer = document.querySelector('.menu-list-tan-container');
+    if (tanContainer) {
+        tanContainer.style.flex = '';
+        tanContainer.style.maxWidth = '';
+        tanContainer.style.width = '';
+    }
     if (leftPanel) {
-        leftPanel.style.flex = '1 1 100%';
         leftPanel.style.maxWidth = '100%';
         leftPanel.style.width = '100%';
-    }
-    if (tanContainer) {
-        tanContainer.style.maxWidth = '100%';
-        tanContainer.style.width = '100%';
     }
 }
 
@@ -7743,23 +9678,9 @@ function getMenuItemStatus(menuItem) {
         return { label: 'Unavailable', className: 'unavailable' };
     }
     
-    // Recipe-based: check daily serving limit
-    // Default to 0 (unavailable) if maxServings is null/undefined/0
-    const maxServings = menuItem.maxServingsPerDay;
-    const effectiveMaxServings = maxServings !== null && maxServings !== undefined && maxServings > 0 ? maxServings : 0;
-    
-    if (effectiveMaxServings === 0) {
-        return { label: 'Unavailable', className: 'unavailable' };
-    }
-    
-    const todayCount = todayServingsCache[menuItem.id] || 0;
-    const remaining = Math.max(0, effectiveMaxServings - todayCount);
-    
-    if (remaining <= 0) {
-        return { label: 'Out of Stock', className: 'unavailable' };
-    }
-    
-    return { label: 'Available', className: 'available' };
+    // Use getMenuServingInfo: available = min(quantity, dailyLimit - servedToday); covers variations
+    const si = getMenuServingInfo(menuItem);
+    return { label: si.label, className: si.className };
 }
 
 function getMenuItemDisplayPrice(menuItem) {
@@ -9246,9 +11167,15 @@ async function handleMenuFormSubmit(event) {
     const description = (form.querySelector('#description')?.value || '').trim();
 
     const hasFormVariations = addFormVariations.length > 0;
+    const hasVariation = !!document.getElementById('hasVariation')?.checked;
+
+    if (hasVariation && addFormVariations.length === 0) {
+        showNotification('Add at least one variation.', 'error');
+        return;
+    }
 
     if (!foodName && !hasFormVariations) {
-        showNotification('Please enter a food name.', 'error');
+        showNotification('Please enter a product name.', 'error');
         return;
     }
 
@@ -9267,19 +11194,16 @@ async function handleMenuFormSubmit(event) {
         return;
     }
 
-    let selectedIngredients = [];
-    if (!hasFormVariations) {
-        try {
-            selectedIngredients = gatherDishIngredients();
-        } catch (ingredientError) {
-            showNotification(ingredientError.message, 'error');
-            return;
-        }
-
-        if (!selectedIngredients.length) {
-            showNotification('Add at least one ingredient from the inventory.', 'error');
-            return;
-        }
+    // When product has variations, use sum of variation quantities and first variation's kcal for top-level
+    let quantityValueFinal = quantityValue;
+    let caloriesValueFinal = caloriesValue;
+    if (hasFormVariations) {
+        quantityValueFinal = addFormVariations.reduce(function (s, v) {
+            return s + (typeof v.quantity === 'number' && !Number.isNaN(v.quantity) ? v.quantity : 0);
+        }, 0);
+        const firstV = addFormVariations[0];
+        caloriesValueFinal = (firstV && firstV.kcal != null && firstV.kcal !== '' && !isNaN(Number(firstV.kcal)))
+            ? parseInt(Number(firstV.kcal), 10) : null;
     }
 
     try {
@@ -9399,92 +11323,38 @@ async function handleMenuFormSubmit(event) {
             }
         }
         
-        let variations = [];
+        let variations;
+        const hasFormVariations = addFormVariations.length > 0;
 
-        if (addFormVariations.length > 0) {
-            // Use the variations collected via the Add Variation button
-            variations = addFormVariations.map((v, index) => ({
-                variationId: v.variationId || v.id || generateVariationId(),
-                id: v.variationId || v.id || generateVariationId(),
-                name: v.name || `${formattedName} Variation ${index + 1}`,
-                price: parseMoney(
-                    v.price ??
-                    v.sellingPrice ??
-                    v.regularPrice ??
-                    v.displayPrice ??
-                    v.amount ??
-                    v.cost ??
-                    0
-                ),
-                quantity: typeof v.quantity === 'number' && !Number.isNaN(v.quantity) ? v.quantity : 0,
-                allergens: v.allergens || '',
-                description: v.description || '',
-                ingredientId: v.ingredientId || null,
-                ingredientName: v.ingredientName || null,
-                amount: typeof v.amount === 'number' ? v.amount : null,
-                displayAmount: v.displayAmount || '',
-                size: v.size || null,
-                kgUsage: null
-            }));
-        } else {
-            // Fallback to the original single-variation logic if no variations were added explicitly
-            const additionalVariations = gatherVariations();
-            
-            // Get the first ingredient for the first variation
-            // The first variation represents the default product details
-            const firstIngredient = selectedIngredients.length > 0 ? selectedIngredients[0] : null;
-            if (!firstIngredient) {
-                showNotification('Add at least one ingredient from the inventory.', 'error');
-                return;
-            }
-            
-            // Create first variation from initial product details (form inputs)
-            // This first variation IS the default product details
-            const firstVariation = {
-                name: formattedName, // Use the food name as variation name
-                price: +Number(priceValue).toFixed(2),
-                description: description || '',
-                ingredientId: firstIngredient.ingredient.id,
-                ingredientName: firstIngredient.ingredient.name,
-                amount: firstIngredient.baseAmount,
-                displayAmount: firstIngredient.displayAmount
-            };
-            
-            // Combine first variation with additional variations
-            variations = [firstVariation, ...additionalVariations];
-        }
-        
-        // Build main ingredients list
-        let allIngredients = [];
-        if (addFormVariations.length > 0) {
-            // Use ingredients captured per variation; de-duplicate by ingredientId
-            const ingredientMap = new Map();
-            addFormVariations.forEach(v => {
-                if (v.ingredientId && !ingredientMap.has(v.ingredientId)) {
-                    ingredientMap.set(v.ingredientId, {
-                        ingredientId: v.ingredientId,
-                        ingredientName: v.ingredientName,
-                        unitType: v.unitType || 'weight',
-                        baseAmountPerDish: typeof v.amount === 'number' ? v.amount : 0,
-                        displayAmount: v.displayAmount || ''
-                    });
-                }
+        if (hasFormVariations) {
+            variations = addFormVariations.map((v, index) => {
+                const q = (typeof v.quantity === 'number' && !Number.isNaN(v.quantity)) ? v.quantity : 0;
+                return {
+                    variationId: v.variationId || v.id || generateVariationId(),
+                    id: v.variationId || v.id || generateVariationId(),
+                    name: v.name || (v.size || 'Default'),
+                    price: parseMoney(
+                        v.price ?? v.sellingPrice ?? v.regularPrice ?? v.displayPrice ?? v.amount ?? v.cost ?? 0
+                    ),
+                    quantity: q,
+                    maxServingsPerDay: (q > 0) ? q : null,
+                    kcal: (v.kcal != null && v.kcal !== '' && !isNaN(Number(v.kcal))) ? parseInt(Number(v.kcal), 10) : null,
+                    allergens: v.allergens || '',
+                    description: v.description || '',
+                    ingredientId: v.ingredientId || null,
+                    ingredientName: v.ingredientName || null,
+                    amount: typeof v.amount === 'number' ? v.amount : null,
+                    displayAmount: v.displayAmount || '',
+                    size: v.size || null,
+                    kgUsage: null
+                };
             });
-            allIngredients = Array.from(ingredientMap.values());
-        } else {
-            // Fallback: use ingredients from the main dish builder
-            allIngredients = selectedIngredients.map(entry => ({
-                ingredientId: entry.ingredient.id,
-                ingredientName: entry.ingredient.name,
-                unitType: entry.ingredient.unitType,
-                baseAmountPerDish: entry.baseAmount,
-                displayAmount: entry.displayAmount
-            }));
         }
-        
+        // When there is no variation: do not add a variations array to Firebase; top-level price, quantity, maxServingsPerDay, kcalUnit are the default product.
+
         // If variations exist, set base price to the smallest variation price
         let finalBasePrice = +Number(priceValue).toFixed(2);
-        if (variations && variations.length > 0) {
+        if (hasFormVariations && variations && variations.length > 0) {
             const variationPrices = variations
                 .map(v => parseMoney(v.price || v.sellingPrice || v.regularPrice || v.displayPrice || 0))
                 .filter(p => p > 0);
@@ -9497,14 +11367,14 @@ async function handleMenuFormSubmit(event) {
             slug,
             data: {
                 menuId: foodId || slug.toUpperCase(),
-                name: formattedName, // Internal name
-                displayName: formattedName, // Customer-facing name uses the same value
+                name: formattedName,
+                displayName: formattedName,
                 category,
-                price: finalBasePrice, // Set to smallest variation price if variations exist
-                quantity: quantityValue, // Keep for backward compatibility
-                maxServingsPerDay: quantityValue, // Set default daily serving limit from quantity field
-                kcalUnit: caloriesValue,
-                deliveryCharge: 0, // Set to 0 since delivery charge field is removed
+                price: finalBasePrice,
+                quantity: quantityValueFinal,
+                maxServingsPerDay: quantityValueFinal,
+                kcalUnit: caloriesValueFinal,
+                deliveryCharge: 0,
                 description,
                 allergens: (document.getElementById('allergens')?.value || '').trim() || null,
                 imageDataUrl: imageUrl,
@@ -9512,8 +11382,8 @@ async function handleMenuFormSubmit(event) {
                 includedSauces: includedSauces.length > 0 ? includedSauces : null,
                 ...(limitedStartDate !== null ? { limitedStartDate } : {}),
                 ...(limitedEndDate !== null ? { limitedEndDate } : {}),
-                variations: variations,
-                ingredients: allIngredients
+                ...(hasFormVariations ? { variations } : {}),
+                ingredients: []
             }
         };
         
@@ -9545,6 +11415,18 @@ let variationCounter = 0;
 let addFormVariations = [];
 let currentFormVariationIndex = null;
 
+function toggleHasVariation() {
+    const has = !!document.getElementById('hasVariation')?.checked;
+    const priceSection = document.getElementById('priceAndStockSection');
+    const variationSection = document.getElementById('variationSection');
+    if (priceSection) priceSection.style.display = has ? 'none' : 'block';
+    if (variationSection) variationSection.style.display = has ? 'block' : 'none';
+    if (!has) {
+        addFormVariations = [];
+        updateFoodVariationsListUI();
+    }
+}
+
 function updateFoodVariationsListUI() {
     const listEl = document.getElementById('foodVariationsList');
     if (!listEl) return;
@@ -9556,9 +11438,11 @@ function updateFoodVariationsListUI() {
 
     listEl.innerHTML = addFormVariations.map((v, index) => {
         const label = v.label || `Variation ${index + 1}`;
-        const nameValue = v.name || '';
-        const priceValue = (typeof v.price === 'number' && !isNaN(v.price)) ? Number(v.price).toFixed(2) : '';
-        const descriptionValue = v.description || '';
+        const nameVal = v.name || '—';
+        const sizeVal = v.size || 'Default';
+        const priceVal = (typeof v.price === 'number' && !isNaN(v.price)) ? `PHP ${Number(v.price).toFixed(2)}` : '—';
+        const qtyVal = typeof v.quantity === 'number' && !isNaN(v.quantity) ? v.quantity : '—';
+        const kcalVal = (v.kcal != null && v.kcal !== '' && !isNaN(Number(v.kcal))) ? v.kcal : '—';
         return `
             <div class="food-variation-item">
                 <div class="food-variation-header">
@@ -9567,61 +11451,50 @@ function updateFoodVariationsListUI() {
                         &#8942;
                     </button>
                 </div>
-                <div class="food-variation-fields">
-                    <div class="form-group">
-                        <label>Variation Name</label>
-                        <input type="text" class="form-control" value="${nameValue}"
-                               oninput="handleFormVariationFieldChange(${index}, 'name', this.value)">
-                    </div>
-                    <div class="form-group">
-                        <label>Price (PHP)</label>
-                        <input type="number" class="form-control" min="0" step="0.01" value="${priceValue}"
-                               oninput="handleFormVariationFieldChange(${index}, 'price', this.value)">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea class="form-control" rows="2"
-                              oninput="handleFormVariationFieldChange(${index}, 'description', this.value)">${descriptionValue}</textarea>
+                <div class="food-variation-fields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+                    <div><strong>Name</strong> ${nameVal}</div>
+                    <div><strong>Size</strong> ${sizeVal}</div>
+                    <div><strong>Price</strong> ${priceVal}</div>
+                    <div><strong>Daily Limit</strong> ${qtyVal}</div>
+                    <div><strong>Kcal</strong> ${kcalVal}</div>
                 </div>
             </div>
         `;
     }).join('');
 }
 
-function handleFormVariationFieldChange(index, field, rawValue) {
-    if (!addFormVariations[index]) return;
-    if (field === 'price') {
-        const price = parseFloat(rawValue);
-        addFormVariations[index].price = isNaN(price) ? 0 : price;
-    } else {
-        addFormVariations[index][field] = rawValue;
-    }
-}
-
 function openFormVariationModal(index) {
-    if (!addFormVariations[index]) return;
-    currentFormVariationIndex = index;
-
-    const v = addFormVariations[index];
     const modal = document.getElementById('formVariationModal');
     if (!modal) return;
 
     const titleEl = document.getElementById('formVariationModalTitle');
-    const nameInput = document.getElementById('variationModalName');
     const priceInput = document.getElementById('variationModalPrice');
-    const descInput = document.getElementById('variationModalDescription');
     const qtyInput = document.getElementById('variationModalQuantity');
-    const allergensInput = document.getElementById('variationModalAllergens');
-    const sizeDisplay = document.getElementById('variationModalSizeDisplay');
+    const sizeSelect = document.getElementById('variationModalSize');
+    const kcalInput = document.getElementById('variationModalKcal');
+    const submitBtn = document.getElementById('variationModalSubmitBtn');
 
-    if (titleEl) titleEl.textContent = v.label || `Variation ${index + 1}`;
-    if (nameInput) nameInput.value = v.name || '';
-    if (priceInput) priceInput.value = (typeof v.price === 'number' && !isNaN(v.price)) ? Number(v.price).toFixed(2) : '';
-    if (descInput) descInput.value = v.description || '';
-    if (qtyInput) qtyInput.value = typeof v.quantity === 'number' && !isNaN(v.quantity) ? v.quantity : 0;
-    if (allergensInput) allergensInput.value = v.allergens || '';
-    if (sizeDisplay) sizeDisplay.textContent = v.size || 'Default';
+    if (index == null) {
+        // Create mode
+        currentFormVariationIndex = null;
+        if (titleEl) titleEl.textContent = 'Add Variation';
+        if (submitBtn) submitBtn.textContent = 'Add Variation';
+        if (sizeSelect) sizeSelect.value = 'default';
+        if (priceInput) priceInput.value = '';
+        if (qtyInput) qtyInput.value = '';
+        if (kcalInput) kcalInput.value = '';
+    } else {
+        // Edit mode
+        if (!addFormVariations[index]) return;
+        currentFormVariationIndex = index;
+        const v = addFormVariations[index];
+        if (titleEl) titleEl.textContent = v.label || `Variation ${index + 1}`;
+        if (submitBtn) submitBtn.textContent = 'Save Changes';
+        if (sizeSelect) sizeSelect.value = (v.size && v.size !== 'Default') ? v.size : 'default';
+        if (priceInput) priceInput.value = (typeof v.price === 'number' && !isNaN(v.price)) ? Number(v.price).toFixed(2) : '';
+        if (qtyInput) qtyInput.value = typeof v.quantity === 'number' && !isNaN(v.quantity) ? v.quantity : '';
+        if (kcalInput) kcalInput.value = (v.kcal != null && v.kcal !== '' && !isNaN(Number(v.kcal))) ? v.kcal : '';
+    }
 
     modal.style.display = 'block';
     modal.setAttribute('aria-hidden', 'false');
@@ -9637,123 +11510,86 @@ function closeFormVariationModal() {
 }
 
 function saveFormVariationModal() {
-    if (currentFormVariationIndex === null || !addFormVariations[currentFormVariationIndex]) {
-        closeFormVariationModal();
-        return;
-    }
-
-    const v = addFormVariations[currentFormVariationIndex];
-    const nameInput = document.getElementById('variationModalName');
+    const sizeSelect = document.getElementById('variationModalSize');
     const priceInput = document.getElementById('variationModalPrice');
-    const descInput = document.getElementById('variationModalDescription');
     const qtyInput = document.getElementById('variationModalQuantity');
-    const allergensInput = document.getElementById('variationModalAllergens');
+    const kcalInput = document.getElementById('variationModalKcal');
 
-    if (nameInput) v.name = nameInput.value.trim();
-    if (priceInput) {
-        const price = parseFloat(priceInput.value || '0');
+    const rawSize = (sizeSelect?.value || 'default').trim();
+    const sizeLabel = (!rawSize || rawSize.toLowerCase() === 'default') ? null : rawSize;
+    const price = parseFloat(priceInput?.value || '0');
+    const qty = parseInt(qtyInput?.value || '0', 10);
+    const kcalRaw = kcalInput?.value;
+    const kcal = (kcalRaw !== '' && kcalRaw != null && !isNaN(Number(kcalRaw))) ? parseInt(kcalRaw, 10) : null;
+
+    if (currentFormVariationIndex === null) {
+        // Create: validate and push
+        const form = document.getElementById('menuItemForm');
+        const foodName = (form?.querySelector('#foodName')?.value || '').trim();
+        if (!foodName) {
+            showNotification('Please enter a product name before adding a variation.', 'error');
+            return;
+        }
+        if (!price || price <= 0) {
+            showNotification('Please enter a price greater than zero.', 'error');
+            return;
+        }
+        if (isNaN(qty) || qty < 0) {
+            showNotification('Default daily serving limit must be zero or a positive whole number.', 'error');
+            return;
+        }
+        const variationName = sizeLabel || 'Default';
+
+        addFormVariations.push({
+            label: `Variation ${addFormVariations.length + 1}`,
+            variationId: generateVariationId(),
+            name: variationName,
+            size: sizeLabel,
+            price: +Number(price).toFixed(2),
+            quantity: isNaN(qty) ? 0 : qty,
+            kcal: kcal,
+            description: '',
+            allergens: '',
+            ingredientId: null,
+            ingredientName: null,
+            unitType: null,
+            amount: null,
+            displayAmount: ''
+        });
+    } else {
+        // Edit: update existing
+        const v = addFormVariations[currentFormVariationIndex];
+        if (!v) {
+            closeFormVariationModal();
+            return;
+        }
+        v.name = sizeLabel || 'Default';
+        v.size = sizeLabel;
         v.price = isNaN(price) ? 0 : price;
-    }
-    if (descInput) v.description = descInput.value.trim();
-    if (qtyInput) {
-        const qty = parseInt(qtyInput.value || '0', 10);
         v.quantity = isNaN(qty) ? 0 : qty;
+        v.kcal = kcal;
+        v.description = '';
+        v.allergens = '';
     }
-    if (allergensInput) v.allergens = allergensInput.value.trim();
 
     updateFoodVariationsListUI();
     closeFormVariationModal();
 }
 
 function handleAddVariationClick() {
+    const hasVariation = !!document.getElementById('hasVariation')?.checked;
+    if (!hasVariation) return;
+
     const form = document.getElementById('menuItemForm');
     if (!form) return;
 
     const foodName = (form.querySelector('#foodName')?.value || '').trim();
-    const priceValue = parseFloat(form.querySelector('#price')?.value || '0');
-    const quantityRaw = form.querySelector('#quantity')?.value || '';
-    const quantityValue = quantityRaw === '' ? 0 : parseInt(quantityRaw, 10);
-    const description = (form.querySelector('#description')?.value || '').trim();
-    const allergens = (form.querySelector('#allergens')?.value || '').trim();
-
     if (!foodName) {
-        showNotification('Please enter a food name before adding a variation.', 'error');
+        showNotification('Please enter a product name before adding a variation.', 'error');
         return;
     }
 
-    if (!priceValue || priceValue <= 0) {
-        showNotification('Please enter a price greater than zero before adding a variation.', 'error');
-        return;
-    }
-
-    if (Number.isNaN(quantityValue) || quantityValue < 0) {
-        showNotification('Quantity must be zero or a positive whole number.', 'error');
-        return;
-    }
-
-    if (!description) {
-        showNotification('Please enter a description before adding a variation.', 'error');
-        return;
-    }
-
-    // Capture ingredients for this variation from the dish ingredient builder
-    let variationIngredients;
-    try {
-        variationIngredients = gatherDishIngredients();
-    } catch (ingredientError) {
-        showNotification(ingredientError.message, 'error');
-        return;
-    }
-
-    if (!variationIngredients.length) {
-        showNotification('Add at least one ingredient from the inventory for this variation.', 'error');
-        return;
-    }
-
-    // Determine size label and build variation name as "Food Name + Size"
-    const sizeSelect = form.querySelector('#variationSize');
-    const rawSize = (sizeSelect?.value || 'default').trim();
-    const isDefaultSize = !rawSize || rawSize.toLowerCase() === 'default';
-    const sizeLabel = isDefaultSize ? null : rawSize;
-
-    const baseNameFormatted = formatIngredientLabel(foodName);
-    const variationName = sizeLabel ? `${baseNameFormatted} ${sizeLabel}` : baseNameFormatted;
-
-    const firstIngredient = variationIngredients[0];
-
-    addFormVariations.push({
-        label: `Variation ${addFormVariations.length + 1}`,
-        variationId: generateVariationId(),
-        name: variationName,
-        size: sizeLabel,
-        price: +Number(priceValue).toFixed(2),
-        description,
-        quantity: quantityValue,
-        allergens,
-        ingredientId: firstIngredient.ingredient.id,
-        ingredientName: firstIngredient.ingredient.name,
-        unitType: firstIngredient.ingredient.unitType,
-        amount: firstIngredient.baseAmount,
-        displayAmount: firstIngredient.displayAmount
-    });
-
-    updateFoodVariationsListUI();
-
-    // Clear text inputs so the user can add another variation
-    const fieldsToClear = ['foodName', 'price', 'quantity', 'description', 'allergens'];
-    fieldsToClear.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-
-    // Clear ingredient builder for the next variation
-    const dishIngredientsList = document.getElementById('dishIngredientsList');
-    if (dishIngredientsList) {
-        dishIngredientsList.innerHTML = '';
-    }
-    if (typeof ensureDishIngredientBuilderInitialized === 'function') {
-        ensureDishIngredientBuilderInitialized();
-    }
+    openFormVariationModal(null);
 }
 
 function addVariation() {
@@ -10089,6 +11925,11 @@ async function resetMenuForm() {
         });
     }
     
+    // Reset "Has variation" and show/hide Price and Stock vs Variation sections
+    const hasVarEl = document.getElementById('hasVariation');
+    if (hasVarEl) hasVarEl.checked = false;
+    if (typeof toggleHasVariation === 'function') toggleHasVariation();
+    
     // Reset old variations UI (if still present)
     const variationsList = document.getElementById('variationsList');
     if (variationsList) {
@@ -10246,6 +12087,9 @@ async function initMenuManagement() {
         menuForm.addEventListener('submit', handleMenuFormSubmit);
         menuForm.dataset.bound = 'true';
     }
+    
+    // Set initial visibility of Price and Stock vs Variation sections
+    if (typeof toggleHasVariation === 'function') toggleHasVariation();
     
     // Handle category change to show/hide timeline
     const categorySelect = document.getElementById('category');
@@ -10426,7 +12270,7 @@ function formatOrderStatusBadge(status, order = null) {
     
     if (['completed', 'delivered'].includes(normalized)) {
         className = 'delivered';
-        label = 'Delivered';
+        label = 'Done';
     } else if (normalized === 'declined') {
         className = 'cancelled';
         label = 'Declined';
@@ -11052,16 +12896,21 @@ function renderCustomersList() {
         }
         
         const isSelected = selectedCustomerId === customer.id ? 'selected' : '';
+        const hasPendingIdVerification = lastPendingIdCustomerIds && lastPendingIdCustomerIds.has(customer.id);
         
         const displayName = customer.displayName || 'Customer';
         const email = customer.email || '';
         const phoneNumber = customer.phoneNumber || '';
         
+        const pendingBadgeHtml = hasPendingIdVerification
+            ? `<span class="pending-id-badge" title="Pending Senior/PWD ID verification" style="display:inline-flex;align-items:center;justify-content:center;margin-left:8px;min-width:18px;height:18px;padding:0 6px;border-radius:999px;background:#dc3545;color:#fff;font-size:10px;font-weight:700;line-height:1;box-shadow:0 2px 4px rgba(0,0,0,0.15);">ID</span>`
+            : '';
+        
         return `
             <div class="customer-item ${isSelected}" onclick="selectCustomer('${customer.id}')" data-customer-id="${customer.id}">
                 <div class="customer-avatar">${initials}</div>
                 <div class="customer-info">
-                    <div class="customer-name">${escapeHtml(displayName)}</div>
+                    <div class="customer-name">${escapeHtml(displayName)}${pendingBadgeHtml}</div>
                     <div class="customer-email">${email ? escapeHtml(email) : (phoneNumber ? escapeHtml(phoneNumber) : 'No contact info')}</div>
                 </div>
             </div>
@@ -11624,15 +13473,26 @@ async function updateIdVerificationTab(customerId) {
         let statusClass = '';
         
         // Check discountInfo.IDverification if verificationStatus is still pending
+        // IMPORTANT: a previous decline should NOT block a new upload.
+        const hasCurrentUpload = Boolean(foundImageUrl || foundSelfieUrl);
         if (verificationStatus === 'pending' && discountInfo && typeof discountInfo === 'object') {
-            // If there's a decline reason, it's declined, not pending
-            if (discountInfo.idVerificationReason || verificationReason) {
+            // If there is NO current upload but we have a decline reason, treat as declined.
+            if (!hasCurrentUpload && (discountInfo.idVerificationReason || verificationReason)) {
                 verificationStatus = 'declined';
             } else if (discountInfo.IDverification === true) {
                 verificationStatus = 'verified';
             } else if (discountInfo.IDverification === false) {
                 verificationStatus = 'pending';
             }
+        }
+        // If there IS a current upload and status is not verified/confirmed,
+        // always treat it as pending so admin can verify/decline again.
+        if (
+            hasCurrentUpload &&
+            verificationStatus !== 'verified' &&
+            verificationStatus !== 'confirmed'
+        ) {
+            verificationStatus = 'pending';
         }
         
         if (verificationStatus === 'verified' || verificationStatus === true) {
@@ -11807,8 +13667,11 @@ async function verifyId(customerId, imageUrl) {
         
         showNotification('ID verified successfully', 'success');
         
-        // Refresh the customer data and update the tab
+        // Refresh the customer data and update the tab/list so badges update
         await loadCustomers();
+        if (typeof renderCustomersList === 'function') {
+            renderCustomersList();
+        }
         await updateIdVerificationTab(customerId);
     } catch (error) {
         console.error('Error verifying ID:', error);
@@ -11867,8 +13730,11 @@ async function confirmId(customerId, imageUrl) {
         
         showNotification('ID confirmed successfully', 'success');
         
-        // Refresh the customer data and update the tab
+        // Refresh the customer data and update the tab/list so badges update
         await loadCustomers();
+        if (typeof renderCustomersList === 'function') {
+            renderCustomersList();
+        }
         await updateIdVerificationTab(customerId);
     } catch (error) {
         console.error('Error confirming ID:', error);
@@ -11973,9 +13839,10 @@ async function confirmIdDecline() {
         const customerData = customerSnapshot.exists() ? customerSnapshot.data() : {};
         const discountInfo = customerData.discountInfo || {};
         
-        // Delete the image from Firebase Storage
+        // Delete the images from Firebase Storage (ID + selfie)
         // Try to get path from discountInfo first, then from URL
         let imagePathToDelete = discountInfo.proofPath || discountInfo.proofPATH || '';
+        let selfiePathToDelete = discountInfo.selfiePath || discountInfo.selfiePATH || '';
         
         if (!imagePathToDelete && currentDeclineImageUrl) {
             // Extract the path from the URL
@@ -11983,6 +13850,17 @@ async function confirmIdDecline() {
             const urlMatch = currentDeclineImageUrl.match(/\/o\/([^?]+)/);
             if (urlMatch) {
                 imagePathToDelete = decodeURIComponent(urlMatch[1]);
+            }
+        }
+
+        // Fallback: try extracting selfie path from stored fields (if available)
+        if (!selfiePathToDelete) {
+            const selfieUrl = discountInfo.selfieUrl || discountInfo.selfieURL || discountInfo.selfie || '';
+            if (selfieUrl) {
+                const urlMatch = String(selfieUrl).match(/\/o\/([^?]+)/);
+                if (urlMatch) {
+                    selfiePathToDelete = decodeURIComponent(urlMatch[1]);
+                }
             }
         }
         
@@ -11996,6 +13874,17 @@ async function confirmIdDecline() {
                 // Continue with the decline even if image deletion fails
             }
         }
+
+        if (selfiePathToDelete) {
+            try {
+                const selfieRef = storageFns.ref(window.storage, selfiePathToDelete);
+                await storageFns.deleteObject(selfieRef);
+                console.log('Selfie image deleted from Storage:', selfiePathToDelete);
+            } catch (storageError) {
+                console.warn('Could not delete selfie from Storage (may not exist):', storageError);
+                // Continue with the decline even if selfie deletion fails
+            }
+        }
         
         // Update customer document - update discountInfo and remove image references
         const updateData = {
@@ -12005,6 +13894,13 @@ async function confirmIdDecline() {
             'discountInfo.idVerifiedBy': verifiedBy,
             'discountInfo.proofUrl': fns.deleteField(),
             'discountInfo.proofPath': fns.deleteField(),
+            'discountInfo.proofURL': fns.deleteField(),
+            'discountInfo.proofPATH': fns.deleteField(),
+            'discountInfo.selfieUrl': fns.deleteField(),
+            'discountInfo.selfieURL': fns.deleteField(),
+            'discountInfo.selfie': fns.deleteField(),
+            'discountInfo.selfiePath': fns.deleteField(),
+            'discountInfo.selfiePATH': fns.deleteField(),
             // Also update top-level fields for compatibility
             idVerificationStatus: 'declined',
             idVerificationReason: declineReason,
@@ -12017,8 +13913,11 @@ async function confirmIdDecline() {
         showNotification('ID declined and image deleted', 'success');
         closeIdDeclineModal();
         
-        // Refresh the customer data and update the tab
+        // Refresh the customer data and update the tab/list so badges update
         await loadCustomers();
+        if (typeof renderCustomersList === 'function') {
+            renderCustomersList();
+        }
         await updateIdVerificationTab(currentDeclineCustomerId);
         
         currentDeclineCustomerId = null;
@@ -12035,6 +13934,296 @@ window.confirmId = confirmId;
 window.declineId = declineId;
 window.closeIdDeclineModal = closeIdDeclineModal;
 window.confirmIdDecline = confirmIdDecline;
+
+// ============================================================================
+// GLOBAL ALERTS: New Reviews & Senior/PWD ID Verification
+// ============================================================================
+
+async function subscribeToOrderReviewAlerts() {
+    // Listen for any orders that gain a rating / review / feedback
+    if (!isFirestoreReady()) {
+        await waitForFirebaseReady();
+    }
+    const fns = window.firestoreFunctions;
+    if (!fns || !window.db || typeof fns.onSnapshot !== 'function') {
+        return;
+    }
+
+    const ordersCol = fns.collection(window.db, 'orders');
+
+    // Avoid multiple active listeners
+    if (typeof orderReviewAlertUnsubscribe === 'function') {
+        orderReviewAlertUnsubscribe();
+    }
+
+    orderReviewAlertUnsubscribe = fns.onSnapshot(
+        ordersCol,
+        (snapshot) => {
+            const currentReviewed = new Set();
+
+            snapshot.docs.forEach(docSnap => {
+                const data = docSnap.data() || {};
+                const hasReview = Boolean(
+                    data.rating ||
+                    data.review ||
+                    data.feedback
+                );
+                if (hasReview) {
+                    currentReviewed.add(docSnap.id);
+                }
+            });
+
+            if (reviewAlertsInitialized) {
+                const newlyReviewed = [];
+                currentReviewed.forEach(id => {
+                    if (!lastReviewedOrderIds.has(id)) {
+                        newlyReviewed.push(id);
+                    }
+                });
+
+                if (newlyReviewed.length > 0) {
+                    const plural = newlyReviewed.length > 1 ? 's' : '';
+                    showNotification(
+                        `New customer review${plural} received. Open Customer → Reviews to view.`,
+                        'info'
+                    );
+                }
+            }
+
+            lastReviewedOrderIds = currentReviewed;
+            reviewAlertsInitialized = true;
+        },
+        (error) => {
+            console.error('Order review alerts listener error:', error);
+        }
+    );
+}
+
+async function subscribeToIdVerificationAlerts() {
+    // Listen for customers with uploaded Senior/PWD ID awaiting verification
+    if (!isFirestoreReady()) {
+        await waitForFirebaseReady();
+    }
+    const fns = window.firestoreFunctions;
+    if (!fns || !window.db || typeof fns.onSnapshot !== 'function') {
+        return;
+    }
+
+    const customersCol = fns.collection(window.db, 'customers');
+
+    if (typeof idVerificationAlertUnsubscribe === 'function') {
+        idVerificationAlertUnsubscribe();
+    }
+
+    idVerificationAlertUnsubscribe = fns.onSnapshot(
+        customersCol,
+        (snapshot) => {
+            const pendingNow = new Set();
+            const pendingDetails = [];
+
+            snapshot.docs.forEach(docSnap => {
+                const data = docSnap.data() || {};
+                const discountInfo = data.discountInfo || {};
+
+                // Detect if customer has uploaded any ID / selfie related to discount
+                const hasIdImage =
+                    discountInfo.proofUrl ||
+                    discountInfo.proofURL ||
+                    discountInfo.proofPath ||
+                    discountInfo.proofPATH ||
+                    data.idImage ||
+                    data.idImageUrl ||
+                    data.verificationIdImage ||
+                    data.idPhoto ||
+                    data.idPhotoUrl ||
+                    data.photoId ||
+                    data.photoIdUrl ||
+                    data.verificationPhoto ||
+                    data.verificationPhotoUrl ||
+                    data.identityImage ||
+                    data.identityImageUrl ||
+                    data.documentImage ||
+                    data.documentImageUrl;
+
+                // Determine verification status, following same rules as ID tab
+                let verificationStatus = 'pending';
+                if (discountInfo && typeof discountInfo === 'object') {
+                    if (discountInfo.IDverification === true) {
+                        verificationStatus = 'verified';
+                    } else if (discountInfo.IDverification === false) {
+                        verificationStatus = 'pending';
+                    }
+                    if (discountInfo.IDverificationStatus) {
+                        verificationStatus = discountInfo.IDverificationStatus;
+                    }
+                }
+                if (verificationStatus === 'pending') {
+                    verificationStatus =
+                        data.idVerificationStatus ||
+                        data.verificationStatus ||
+                        'pending';
+                }
+
+                // NOTE: Don't block alerts just because there's a previous decline reason.
+                // If the customer uploads again, we want it to show as pending again.
+
+                const isPending =
+                    Boolean(hasIdImage) &&
+                    verificationStatus !== 'verified' &&
+                    verificationStatus !== 'confirmed';
+
+                if (isPending) {
+                    pendingNow.add(docSnap.id);
+
+                    // Build a human-readable customer name for the badge tooltip
+                    let displayName = data.displayName || '';
+                    if (!displayName) {
+                        const first = (data.firstName || '').trim();
+                        const last = (data.lastName || '').trim();
+                        if (first || last) {
+                            displayName = `${first} ${last}`.trim();
+                        }
+                    }
+                    if (!displayName && data.fullName) {
+                        displayName = data.fullName;
+                    }
+                    if (!displayName && data.email) {
+                        const emailName = data.email.split('@')[0].replace(/[._]/g, ' ');
+                        displayName = emailName
+                            .split(' ')
+                            .filter(Boolean)
+                            .map(n => n.charAt(0).toUpperCase() + n.slice(1))
+                            .join(' ');
+                    }
+                    if (!displayName) {
+                        displayName = 'Customer';
+                    }
+
+                    pendingDetails.push({
+                        id: docSnap.id,
+                        name: displayName
+                    });
+                }
+            });
+
+            // Update global state and badge every time snapshot updates
+            pendingIdCustomerDetails = pendingDetails;
+            updateCustomerIdBadge(pendingDetails);
+
+            if (idVerificationAlertInitialized) {
+                const newlyPending = [];
+                pendingNow.forEach(id => {
+                    if (!lastPendingIdCustomerIds.has(id)) {
+                        newlyPending.push(id);
+                    }
+                });
+
+                if (newlyPending.length > 0) {
+                    const count = newlyPending.length;
+                    const newlyPendingNames = newlyPending
+                        .map(id => (pendingDetails.find(p => p.id === id)?.name || 'Customer'))
+                        .slice(0, 3);
+                    const message =
+                        count === 1
+                            ? `New Senior/PWD ID submitted by ${newlyPendingNames[0]}. Please verify in Customer → ID Verification.`
+                            : `${count} new Senior/PWD IDs submitted (${newlyPendingNames.join(', ')}${count > 3 ? ', …' : ''}). Please verify in Customer → ID Verification.`;
+                    showNotification(message, 'info');
+                }
+            }
+
+            lastPendingIdCustomerIds = pendingNow;
+            idVerificationAlertInitialized = true;
+        },
+        (error) => {
+            console.error('ID verification alerts listener error:', error);
+        }
+    );
+}
+
+function updateCustomerIdBadge(pendingList) {
+    // Find the "Customer" nav link in the sidebar
+    const navLinks = document.querySelectorAll('.nav-list .nav-item .nav-link');
+    let customerLink = null;
+    let customerIcon = null;
+
+    navLinks.forEach(link => {
+        const textSpan = link.querySelector('span');
+        if (textSpan && textSpan.textContent.trim().toLowerCase() === 'customer') {
+            customerLink = link;
+            // Find the icon element (first <i> tag)
+            customerIcon = link.querySelector('i:first-of-type, i:first-child');
+        }
+    });
+
+    if (!customerLink || !customerIcon) {
+        return;
+    }
+
+    // Make the nav link position relative so badge can be absolutely positioned
+    if (customerLink.style.position !== 'relative') {
+        customerLink.style.position = 'relative';
+    }
+
+    // Ensure badge element exists
+    let badge = customerLink.querySelector('.customer-id-badge');
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'customer-id-badge';
+        badge.style.position = 'absolute';
+        // Position badge hovering on the left side of the icon area
+        badge.style.top = '-4px';
+        badge.style.left = '4px';
+        badge.style.minWidth = '18px';
+        badge.style.height = '18px';
+        badge.style.borderRadius = '999px';
+        badge.style.backgroundColor = '#dc3545';
+        badge.style.color = '#fff';
+        badge.style.fontSize = '10px';
+        badge.style.fontWeight = '700';
+        badge.style.display = 'flex';
+        badge.style.alignItems = 'center';
+        badge.style.justifyContent = 'center';
+        badge.style.padding = '0 4px';
+        badge.style.boxSizing = 'border-box';
+        badge.style.zIndex = '10';
+        badge.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+        badge.style.border = '2px solid #3d2817';
+
+        customerLink.appendChild(badge);
+    }
+
+    const count = Array.isArray(pendingList) ? pendingList.length : 0;
+
+    if (!count) {
+        badge.style.display = 'none';
+        badge.textContent = '';
+        badge.title = '';
+        return;
+    }
+
+    badge.style.display = 'flex';
+    badge.textContent = String(count);
+
+    // Build tooltip text listing which customers are pending
+    const maxNames = 5;
+    const names = pendingList.slice(0, maxNames).map(c => c.name);
+    let tooltip = 'Pending Senior/PWD ID verification:\n' + names.join('\n');
+    if (pendingList.length > maxNames) {
+        tooltip += `\n+ ${pendingList.length - maxNames} more…`;
+    }
+    badge.title = tooltip;
+}
+
+async function initGlobalAlerts() {
+    try {
+        await Promise.all([
+            subscribeToOrderReviewAlerts(),
+            subscribeToIdVerificationAlerts()
+        ]);
+    } catch (error) {
+        console.error('Failed to initialize global alerts:', error);
+    }
+}
 
 function setupCustomerSearch() {
     const searchInputs = document.querySelectorAll('.customer-profile-panel .search-box input, .search-filter-bar .search-box input');
@@ -12173,7 +14362,7 @@ function populateMenuEditForm(menuItem) {
     }
 
     if (ingredientsList) {
-        if (!menuItem.ingredients.length) {
+        if (!menuItem.ingredients || !menuItem.ingredients.length) {
             ingredientsList.innerHTML = '<li class="empty-state">No ingredients linked yet.</li>';
         } else {
             ingredientsList.innerHTML = menuItem.ingredients
@@ -12723,6 +14912,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000); // Wait 5 seconds for orders to load
     }
 
+    // Global alerts should run on every admin page so staff
+    // see new reviews and Senior/PWD ID verification requests
+    initGlobalAlerts();
+
     // Initialize any remaining page-specific functionality
     if (currentPage === 'customer.html') {
         // Initialize customer management specific functionality
@@ -13010,7 +15203,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update driver statuses if orders changed
                 if (driversState.length > 0) {
                     driversState.forEach(driver => {
-                        // Recalculate driver status based on current orders
+                        // Firebase availability "off" → always Off
+                        if (driver.availabilityFromFirebase === 'off') {
+                            driver.availability = 'off';
+                            driver.status = 'off';
+                            return;
+                        }
+                        // Recalculate driver status based on current orders (when availability is "on")
                         let driverStatus = 'available';
                         if (ordersState && ordersState.length > 0) {
                             const hasActiveDelivery = ordersState.some(order => {
@@ -13116,12 +15315,22 @@ window.togglePromotionTabDropdown = togglePromotionTabDropdown;
 window.toggleAnalyticsTabDropdown = toggleAnalyticsTabDropdown;
 window.acceptOrder = acceptOrder;
 window.viewOrderDetails = viewOrderDetails;
+window.viewKitchenReceipt = viewKitchenReceipt;
+window.viewCustomerReceipt = viewCustomerReceipt;
+window.closeReceiptPreviewModal = closeReceiptPreviewModal;
+window.zoomReceiptPreview = zoomReceiptPreview;
+window.printReceiptFromPreview = printReceiptFromPreview;
+window.copyReceiptText = copyReceiptText;
+window.downloadReceipt = downloadReceipt;
+window.quickPrintCustomerReceipt = quickPrintCustomerReceipt;
 window.closeOrderDetailsModal = closeOrderDetailsModal;
 window.verifyPayment = verifyPayment;
 window.closePaymentReceiptModal = closePaymentReceiptModal;
 window.verifyPaymentConfirm = verifyPaymentConfirm;
 window.DailyServingsStore = DailyServingsStore;
 window.updateMenuServingLimit = updateMenuServingLimit;
+window.updateMenuQuantity = updateMenuQuantity;
+window.updateMenuVariationStock = updateMenuVariationStock;
 window.getMenuServingInfo = getMenuServingInfo;
 window.reopenOrder = reopenOrder;
 // Backfill function to create for_delivery documents for existing orders with drivers
@@ -13225,10 +15434,12 @@ window.printDriver = printDriver;
 window.editItem = editItem;
 window.deleteItem = deleteItem;
 window.switchReport = switchReport;
+window.refreshSalesReport = refreshSalesReport;
 // window.switchAnalyticsTab removed - ingredient logs moved to menu page
 window.switchTime = switchTime;
 window.changePage = changePage;
 window.exportReport = exportReport;
+window.exportReportAsPDF = exportReportAsPDF;
 // window.exportInventoryReport removed - system is now recipe-based
 window.selectCustomer = selectCustomer;
 window.updateDailySalesReport = updateDailySalesReport;
@@ -14724,7 +16935,7 @@ function markPickedUp(orderId) {
             if (actionsElement) {
                 actionsElement.innerHTML = `
                     <button class="btn btn-warning" onclick="markDelivered('${orderId}')">
-                        <i class="fas fa-check-circle"></i> Mark as Delivered
+                        <i class="fas fa-check-circle"></i> Mark as Done
                     </button>
                     <button class="btn btn-danger" onclick="reportIssue('${orderId}')">
                         <i class="fas fa-exclamation-triangle"></i> Report Issue
@@ -14738,7 +16949,7 @@ function markPickedUp(orderId) {
 }
 
 async function markDelivered(orderId) {
-    if (confirm(`Mark order #${orderId} as delivered?`)) {
+    if (confirm(`Mark order #${orderId} as done?`)) {
         try {
             if (!isFirestoreReady()) {
                 await waitForFirebaseReady();
@@ -14816,23 +17027,23 @@ async function markDelivered(orderId) {
             const actionsElement = deliveryCard.querySelector('.delivery-actions');
             
             if (statusElement) {
-                statusElement.textContent = 'Delivered';
+                statusElement.textContent = 'Done';
                 statusElement.className = 'delivery-status delivered';
             }
             
             if (actionsElement) {
                 actionsElement.innerHTML = `
                     <button class="btn btn-success" disabled>
-                        <i class="fas fa-check-circle"></i> Delivered
+                        <i class="fas fa-check-circle"></i> Done
                     </button>
                 `;
             }
         }
         
-        showNotification(`Order #${orderId} marked as delivered!`, 'success');
+        showNotification(`Order #${orderId} marked as done!`, 'success');
         } catch (error) {
             console.error('Error marking order as delivered:', error);
-            showNotification('Failed to mark order as delivered. Please try again.', 'error');
+            showNotification('Failed to mark order as done. Please try again.', 'error');
         }
     }
 }
@@ -15028,7 +17239,7 @@ async function loadDrivers() {
             const staffDocs = staffSnapshot.docs.filter(doc => {
                 const data = doc.data();
                 const role = (data.role || '').toLowerCase();
-                return role === 'driver' || role === 'delivery';
+                return role === 'driver';
             });
             console.log('Found', staffDocs.length, 'drivers in staff collection');
             console.log('Raw staff docs:', staffDocs.map(doc => ({
@@ -15060,7 +17271,7 @@ async function loadDrivers() {
             const staffDocs = staffSnapshot.docs.filter(doc => {
                 const data = doc.data();
                 const role = (data.role || '').toLowerCase();
-                return role === 'driver' || role === 'delivery';
+                return role === 'driver';
             });
             console.log('Found', staffDocs.length, 'drivers in staff collection');
             console.log('Raw staff docs:', staffDocs.map(doc => ({
@@ -15134,6 +17345,10 @@ async function subscribeToDrivers() {
                 fns.onSnapshot(
                     driversQuery,
                     async (snapshot) => {
+                        if (snapshot.empty || !snapshot.docs || snapshot.docs.length === 0) {
+                            await loadDrivers();
+                            return;
+                        }
                         const driversWithShifts = await getDriversWithStartedShifts();
                         driversState = snapshot.docs
                             .map(docSnap => normalizeDriverDoc(docSnap, driversWithShifts))
@@ -15146,8 +17361,28 @@ async function subscribeToDrivers() {
                 );
             }
         } catch (error) {
-            // If drivers collection doesn't exist, that's okay - we'll use staff collection
-            console.log('Could not subscribe to drivers collection:', error);
+            // If drivers collection doesn't exist, subscribe to staff and filter by role: Driver
+            console.log('Could not subscribe to drivers collection, using staff with role Driver:', error);
+            try {
+                const staffRef = fns.collection(window.db, 'staff');
+                if (typeof fns.onSnapshot === 'function') {
+                    fns.onSnapshot(
+                        staffRef,
+                        async (snapshot) => {
+                            const driversWithShifts = await getDriversWithStartedShifts();
+                            const staffDocs = (snapshot.docs || []).filter(doc => {
+                                const d = doc.data() || {};
+                                return ((d.role || '').toLowerCase() === 'driver');
+                            });
+                            driversState = staffDocs.map(doc => normalizeDriverDoc(doc, driversWithShifts)).filter(Boolean);
+                            await updateDriverStatusesWithOrders();
+                        },
+                        (err) => console.error('Staff (Driver) listener error:', err)
+                    );
+                }
+            } catch (staffErr) {
+                console.warn('Could not subscribe to staff for drivers:', staffErr);
+            }
         }
     } catch (error) {
         console.error('Error setting up driver subscriptions:', error);
@@ -15177,6 +17412,13 @@ async function updateDriverStatusesWithOrders() {
     
     // Update each driver's status
     driversState.forEach((driver, index) => {
+        // Firebase availability: "off" → always Off; "on" → Available or Busy based on shift/orders
+        if (driver.availabilityFromFirebase === 'off') {
+            driver.availability = 'off';
+            driver.status = 'off';
+            return;
+        }
+
         const driverId = driver.driverId || driver.id;
         const driverStaffId = driver.staffId || driverId;
         const driverDocId = driver.id; // Document ID from staff collection
@@ -15362,6 +17604,10 @@ function normalizeDriverDoc(docSnap, driversWithShifts = new Set()) {
     // Get phone number
     const phoneNumber = data.phoneNumber || data.phone_number || data.contactNumber || data.contact_number || data.phone || '';
     
+    // Firebase availability: "on" → Active, "off" (or missing) → Inactive (shown in Driver Availability tab)
+    const rawAvailability = data.availability;
+    const availabilityFromFirebase = (rawAvailability === 'on' || rawAvailability === 'ON' || rawAvailability === true || rawAvailability === 'true' || rawAvailability === '1') ? 'on' : 'off';
+    
     // Determine status: will be updated by updateDriverStatusesWithOrders() based on shifts and orders
     // Default to 'off' - will be updated when updateDriverStatusesWithOrders() runs
     let driverStatus = 'off';
@@ -15376,6 +17622,7 @@ function normalizeDriverDoc(docSnap, driversWithShifts = new Set()) {
         phoneNumber: phoneNumber,
         availability: driverStatus,
         status: driverStatus,
+        availabilityFromFirebase: availabilityFromFirebase,
         email: data.email || '',
         createdAt: data.createdAt || null
     };
@@ -15401,7 +17648,7 @@ function renderDriversList() {
         });
     }
     
-    // Apply availability filter
+    // Apply availability filter (only when not "all")
     if (driverFilter === 'available') {
         filteredDrivers = filteredDrivers.filter(driver => driver.availability === 'available');
     } else if (driverFilter === 'busy') {
@@ -15409,11 +17656,15 @@ function renderDriversList() {
     } else if (driverFilter === 'off') {
         filteredDrivers = filteredDrivers.filter(driver => driver.availability === 'off');
     }
-    
+    // driverFilter === 'all' → no filter, show everyone
+
     driversList.innerHTML = '';
 
     if (!filteredDrivers.length) {
-        driversList.innerHTML = '<div class="empty-message">No drivers found matching the current filters.</div>';
+        const msg = driversState.length === 0
+            ? 'No drivers found. Add staff with role: Driver in the staff collection.'
+            : 'No drivers found matching the current filters.';
+        driversList.innerHTML = '<div class="empty-message">' + msg + '</div>';
         return;
     }
 
@@ -15421,16 +17672,10 @@ function renderDriversList() {
         const driverCard = document.createElement('div');
         driverCard.className = 'driver-card';
         
-        let availabilityClass = 'available';
-        let availabilityText = 'AVAILABLE';
-        
-        if (driver.availability === 'busy') {
-            availabilityClass = 'busy';
-            availabilityText = 'BUSY';
-        } else if (driver.availability === 'off') {
-            availabilityClass = 'off';
-            availabilityText = 'OFF';
-        }
+        // Status from driver.availability: Available (availability:on + no delivery), Busy (on + delivery), Off (availability:off)
+        const status = driver.availability || 'off';
+        const availabilityClass = status === 'available' ? 'available' : status === 'busy' ? 'busy' : 'off';
+        const availabilityText = status === 'available' ? 'Available' : status === 'busy' ? 'Busy' : 'Off';
         
         driverCard.innerHTML = `
             <div class="driver-icon">
@@ -15453,6 +17698,7 @@ function setDriverFilter(filter) {
     driverFilter = filter;
     
     // Update button states
+    document.getElementById('filterAll')?.classList.toggle('active', filter === 'all');
     document.getElementById('filterAvailable')?.classList.toggle('active', filter === 'available');
     document.getElementById('filterBusy')?.classList.toggle('active', filter === 'busy');
     document.getElementById('filterOff')?.classList.toggle('active', filter === 'off');
@@ -15852,6 +18098,11 @@ async function assignDriverToOrder(driverId, orderId) {
             console.error('Error creating/updating for_delivery document:', deliveryError);
             // Don't fail the whole operation if for_delivery creation fails
             showNotification('Driver assigned, but failed to create delivery record. Please check console.', 'warning');
+        }
+        
+        // Print customer receipt (order is now On The Way)
+        if (typeof printCustomerReceipt === 'function') {
+            printCustomerReceipt(order);
         }
         
         // Free up previous driver if one was assigned

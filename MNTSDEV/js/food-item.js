@@ -238,6 +238,15 @@
         rightBtn.style.display = sauceScrollPosition < maxScroll ? 'flex' : 'none';
     }
 
+    // Resolve kcal from an object (variation or base item). Tries kcalUnit, calories, kcal.
+    function resolveKcal(obj) {
+        if (!obj) return null;
+        const v = obj.kcalUnit ?? obj.calories ?? obj.kcal;
+        if (v == null || v === '') return null;
+        const n = typeof v === 'number' ? v : parseFloat(v);
+        return (isNaN(n) ? null : n);
+    }
+
     // Load variations
     function loadVariations(item) {
         const variationSection = document.getElementById('variation-section');
@@ -265,11 +274,14 @@
                 ? variation.price 
                 : (typeof variation.price === 'string' ? parseFloat(variation.price) : unitPrice);
             const isSelected = selectedVariation && selectedVariation.index === index;
-            
+            const vq = (variation.quantity ?? 0) || 0;
+            const isVUnavailable = vq <= 0;
+            const varId = variation.variationId || variation.id || '';
             return `
                 <button 
-                    class="variation-btn ${isSelected ? 'active' : ''}" 
+                    class="variation-btn ${isSelected ? 'active' : ''} ${isVUnavailable ? 'unavailable' : ''}" 
                     data-variation-index="${index}"
+                    data-variation-id="${String(varId).replace(/"/g, '&quot;')}"
                     onclick="window.foodItem.selectVariation(${index})"
                 >
                     <span class="variation-name">${variationName}</span>
@@ -360,13 +372,40 @@
             }
         }
 
-        // Update kcal: use variation.kcalUnit if set, else base item's kcalUnit
-        const kcalVal = (variation.kcalUnit != null && variation.kcalUnit !== '') ? variation.kcalUnit : (baseItemData?.kcalUnit);
-        const kcalDisplay = (kcalVal != null && kcalVal !== '') ? `${kcalVal} kcal` : '--';
+        // Update kcal: use selected variation's calories (kcalUnit/calories/kcal), else base item's
+        const kcalVal = resolveKcal(variation) ?? resolveKcal(baseItemData);
+        const kcalDisplay = (kcalVal != null && !isNaN(kcalVal)) ? `${Math.round(kcalVal)} kcal` : '--';
         const kcalValEl = document.querySelector('#food-kcal .food-kcal-value');
         if (kcalValEl) kcalValEl.textContent = kcalDisplay;
 
         changeQty(0);
+        updateAddToCartButtonState();
+    }
+
+    // Get available quantity: for variations use variation.quantity; for non-variation use data.quantity. Null/undefined -> 0.
+    function getAvailableQuantity() {
+        if (selectedVariation) return Math.max(0, (selectedVariation.quantity ?? 0) || 0);
+        if (!baseItemData) return 0;
+        return Math.max(0, (baseItemData.quantity ?? 0) || 0);
+    }
+
+    // Enable/disable Add to Cart based on quantity. When quantity is 0 or null, or available < currentQty, disable.
+    function updateAddToCartButtonState() {
+        const addBtn = document.querySelector('.add-to-cart-btn');
+        if (!addBtn) return;
+        const avail = getAvailableQuantity();
+        if (avail <= 0) {
+            addBtn.disabled = true;
+            addBtn.setAttribute('aria-label', 'Unavailable');
+            return;
+        }
+        if (avail < currentQty) {
+            addBtn.disabled = true;
+            addBtn.setAttribute('aria-label', `Only ${avail} left`);
+            return;
+        }
+        addBtn.disabled = false;
+        addBtn.removeAttribute('aria-label');
     }
 
     // Change quantity
@@ -378,6 +417,7 @@
         const addBtn = document.querySelector('.add-to-cart-btn');
         const totalPrice = unitPrice * currentQty;
         addBtn.querySelector('.total-price').textContent = `₱${totalPrice.toFixed(2)}`;
+        updateAddToCartButtonState();
     }
 
     // Handle quantity input change (when user types)
@@ -400,6 +440,7 @@
         const addBtn = document.querySelector('.add-to-cart-btn');
         const totalPrice = unitPrice * currentQty;
         addBtn.querySelector('.total-price').textContent = `₱${totalPrice.toFixed(2)}`;
+        updateAddToCartButtonState();
     }
 
     // Handle quantity input in real-time (prevent invalid input)
@@ -429,6 +470,7 @@
             const addBtn = document.querySelector('.add-to-cart-btn');
             const totalPrice = unitPrice * currentQty;
             addBtn.querySelector('.total-price').textContent = `₱${totalPrice.toFixed(2)}`;
+            updateAddToCartButtonState();
         }
     }
 
@@ -443,6 +485,24 @@
                 window.utils.showToast('Selected sauce is unavailable. Please choose another.', 'error', 2200);
             } else {
                 alert('Selected sauce is unavailable. Please choose another.');
+            }
+            return;
+        }
+
+        const avail = getAvailableQuantity();
+        if (avail <= 0) {
+            if (window.utils?.showToast) {
+                window.utils.showToast('This item is currently unavailable.', 'error', 2200);
+            } else {
+                alert('This item is currently unavailable.');
+            }
+            return;
+        }
+        if (avail < currentQty) {
+            if (window.utils?.showToast) {
+                window.utils.showToast(`Only ${avail} available. Please reduce quantity.`, 'error', 2200);
+            } else {
+                alert(`Only ${avail} available. Please reduce quantity.`);
             }
             return;
         }
@@ -493,7 +553,8 @@
                 quantity: currentQty,
                 variation: selectedVariation ? {
                     name: selectedVariation.name || selectedVariation.title,
-                    price: selectedVariation.price
+                    price: selectedVariation.price,
+                    id: selectedVariation.variationId || selectedVariation.id || null
                 } : null,
                 sauce: selectedSauce ? {
                     id: selectedSauce.id,
@@ -812,11 +873,11 @@
             if (btnPriceEl) btnPriceEl.textContent = priceDisplay;
             if (descEl) descEl.textContent = description;
 
-            // Kcal from Firebase kcalUnit; show "--" when not set
+            // Kcal from item (kcalUnit/calories/kcal); show "--" when not set
             const kcalValEl = document.querySelector('#food-kcal .food-kcal-value');
             if (kcalValEl) {
-                const v = item.kcalUnit;
-                kcalValEl.textContent = (v != null && v !== '') ? `${v} kcal` : '--';
+                const v = resolveKcal(item);
+                kcalValEl.textContent = (v != null && !isNaN(v)) ? `${Math.round(v)} kcal` : '--';
             }
 
             const loadingSpinner = document.querySelector('.food-image-loading');

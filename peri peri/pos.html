@@ -54,6 +54,9 @@
             <i class="fas fa-bars"></i>
         </button>
         
+        <!-- Sidebar Overlay (for mobile) -->
+        <div class="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+        
         <!-- Left Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="logo-section">
@@ -90,7 +93,7 @@
                         </a>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
-                        <button type="button" class="nav-link menu-toggle" onclick="toggleMenuTabDropdown()">
+                        <button type="button" class="nav-link menu-toggle" onclick="event.stopPropagation(); toggleMenuTabDropdown();">
                             <i class="fas fa-shopping-basket"></i>
                             <span>Menu</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -105,7 +108,7 @@
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
-                        <button type="button" class="nav-link menu-toggle" onclick="togglePromotionTabDropdown()">
+                        <button type="button" class="nav-link menu-toggle" onclick="event.stopPropagation(); togglePromotionTabDropdown();">
                             <i class="fas fa-bullhorn"></i>
                             <span>Promotion</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -116,7 +119,7 @@
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
-                        <button type="button" class="nav-link menu-toggle" onclick="toggleCustomerTabDropdown()">
+                        <button type="button" class="nav-link menu-toggle" onclick="event.stopPropagation(); toggleCustomerTabDropdown();">
                             <i class="fas fa-user-shield"></i>
                             <span>Customer</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -128,7 +131,7 @@
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
-                        <button type="button" class="nav-link menu-toggle" onclick="toggleAnalyticsTabDropdown()">
+                        <button type="button" class="nav-link menu-toggle" onclick="event.stopPropagation(); toggleAnalyticsTabDropdown();">
                             <i class="fas fa-chart-bar"></i>
                             <span>Analytics</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -225,38 +228,12 @@
                             <input type="text" id="posProductSearch" placeholder="Search products..." oninput="filterPOSProducts()">
                         </div>
                     </div>
-                    <!-- Category Filter Buttons -->
+                    <!-- Category Filter Buttons (dynamically generated from products) -->
                     <div class="pos-category-filters">
-                        <button class="pos-category-btn active" onclick="filterByCategory('all')" data-category="all">
-                            <i class="fas fa-th"></i> All
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Peri Chicken')" data-category="Peri Chicken">
-                            Peri Chicken
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Ribs')" data-category="Ribs">
-                            Ribs
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Rice Meals')" data-category="Rice Meals">
-                            Rice Meals
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Sides')" data-category="Sides">
-                            Sides
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Pasta')" data-category="Pasta">
-                            Pasta
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Peri Wraps')" data-category="Peri Wraps">
-                            Peri Wraps
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Sizzling')" data-category="Sizzling">
-                            Sizzling
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Beverage')" data-category="Beverage">
-                            Beverage
-                        </button>
-                        <button class="pos-category-btn" onclick="filterByCategory('Sauce')" data-category="Sauce">
-                            Sauce
-                        </button>
+                        <div class="pos-loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading categories...</p>
+                        </div>
                     </div>
                     <div class="pos-products-grid" id="posProductsGrid">
                         <div class="pos-loading">

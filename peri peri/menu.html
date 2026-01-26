@@ -7,299 +7,611 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        /* —— Menu page: spacing scale (8 base) —— */
+        :root {
+            --menu-space-xs: 6px;
+            --menu-space-sm: 12px;
+            --menu-space-md: 16px;
+            --menu-space-lg: 24px;
+            --menu-space-xl: 32px;
+            --menu-space-2xl: 40px;
+            --menu-radius: 10px;
+            --menu-radius-sm: 8px;
+        }
+
+        /* —— Main content: consistent padding and hierarchy —— */
+        .main-content {
+            padding: var(--menu-space-lg) var(--menu-space-xl);
+        }
+        .content-header {
+            margin: calc(-1 * var(--menu-space-lg)) calc(-1 * var(--menu-space-xl)) var(--menu-space-lg) calc(-1 * var(--menu-space-xl));
+            padding: var(--menu-space-md) var(--menu-space-xl);
+        }
+        .page-title h2 {
+            font-size: 1.375rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        /* —— Food variation cards —— */
         .food-variation-item {
             background-color: #3d2817;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 16px;
+            border-radius: var(--menu-radius-sm);
+            padding: var(--menu-space-md);
+            margin-bottom: var(--menu-space-md);
             border: 1px solid #2a1d12;
             color: white;
         }
-        .food-variation-item:last-child {
-            margin-bottom: 0;
-        }
-        .food-variation-item label {
-            color: white;
-        }
+        .food-variation-item:last-child { margin-bottom: 0; }
+        .food-variation-item label { color: white; }
         .food-variation-item .form-control {
             background-color: rgba(255, 255, 255, 0.1);
             color: white;
             border-color: rgba(255, 255, 255, 0.2);
         }
-        .food-variation-item .form-control::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
+        .food-variation-item .form-control::placeholder { color: rgba(255, 255, 255, 0.5); }
         .food-variation-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: var(--menu-space-sm);
         }
-        .food-variation-label {
-            color: white;
-            font-weight: 600;
-        }
+        .food-variation-label { color: white; font-weight: 600; }
         .variation-menu-btn {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 20px;
-            width: 32px;
-            height: 32px;
-            cursor: pointer;
-            padding: 4px 8px;
-            line-height: 1;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+            background: none; border: none; color: white;
+            font-size: 20px; width: 32px; height: 32px; cursor: pointer;
+            padding: 4px 8px; line-height: 1;
+            display: inline-flex; align-items: center; justify-content: center;
         }
-        .variation-menu-btn::before {
-            content: "⋮";
-        }
+        .variation-menu-btn::before { content: "⋮"; }
         .variation-menu-btn:hover {
             background-color: rgba(255, 255, 255, 0.1);
             border-radius: 4px;
         }
-        /* Product Detail - Red Edit Buttons */
-        #menuDetailEditBtn,
-        #menuVariationEditBtn {
-            background-color: #7E2021;
-            color: white;
-            border-color: #7E2021;
+        #variationSection .food-variation-item,
+        #variationSection .food-variation-item * { color: #fff; }
+        #variationSection .food-variation-item .variation-menu-btn:hover { color: #f6c056; }
+
+        /* Product detail & variation edit buttons */
+        #menuDetailEditBtn, #menuVariationEditBtn {
+            background-color: #7E2021; color: white; border-color: #7E2021;
         }
-        #menuDetailEditBtn:hover,
-        #menuVariationEditBtn:hover {
-            background-color: #c82333;
-            border-color: #c82333;
+        #menuDetailEditBtn:hover, #menuVariationEditBtn:hover {
+            background-color: #c82333; border-color: #c82333;
         }
-        /* Add Product - Brown Secondary Buttons */
+
+        /* Add Product – buttons */
         .add-food-dashboard .btn-secondary {
-            background-color: #3d2817;
-            color: #f6c056 !important;
-            border-color: #3d2817;
+            background-color: #3d2817; color: #f6c056 !important; border-color: #3d2817;
         }
         .add-food-dashboard .btn-secondary:hover {
-            background-color: #2a1d12;
-            border-color: #2a1d12;
-            color: #f6c056 !important;
+            background-color: #2a1d12; border-color: #2a1d12; color: #f6c056 !important;
         }
         .add-food-dashboard .btn-secondary:focus,
         .add-food-dashboard .btn-secondary:active {
-            background-color: #2a1d12;
-            border-color: #2a1d12;
-            color: #f6c056 !important;
+            background-color: #2a1d12; border-color: #2a1d12; color: #f6c056 !important;
         }
-        .add-food-dashboard .btn-secondary i {
-            color: #f6c056 !important;
-        }
-        /* Add Product - Red Add Food Button */
+        .add-food-dashboard .btn-secondary i { color: #f6c056 !important; }
         .add-food-dashboard .btn-primary {
-            background-color: #7E2021;
-            color: white;
-            border-color: #7E2021;
+            background-color: #7E2021; color: white; border-color: #7E2021;
         }
         .add-food-dashboard .btn-primary:hover {
-            background-color: #c82333;
-            border-color: #c82333;
+            background-color: #c82333; border-color: #c82333;
         }
-        .menu-detail-container > .tab-navigation {
-            gap: 0;
-            margin-bottom: 0;
-        }
-        .menu-detail-container > .tab-navigation .tab-btn {
-            border-radius: 0;
-            margin: 0;
-        }
-        .menu-detail-container > .tab-navigation .tab-btn:first-child {
-            border-top-left-radius: 6px;
-            border-bottom-left-radius: 6px;
-        }
-        .menu-detail-container > .tab-navigation .tab-btn:last-child {
-            border-top-right-radius: 6px;
-            border-bottom-right-radius: 6px;
-        }
-        .menu-detail-container > .tab-navigation .tab-btn:not(:last-child) {
-            border-right: 1px solid rgba(0, 0, 0, 0.1);
-        }
-        .menu-detail-container > .tab-navigation {
-            margin-bottom: 0;
-        }
-        .menu-detail-info {
-            border-top-left-radius: 0;
-            border-top-right-radius: 0;
-            margin-top: 0;
-        }
-        
-        /* Standalone Ingredients Section */
-        .ingredients-section-standalone {
-            display: flex;
-            flex-direction: column;
-        }
-        
+
+        /* Menu detail tab strip */
+        .menu-detail-container > .tab-navigation { gap: 0; margin-bottom: 0; }
+        .menu-detail-container > .tab-navigation .tab-btn { border-radius: 0; margin: 0; }
+        .menu-detail-container > .tab-navigation .tab-btn:first-child { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+        .menu-detail-container > .tab-navigation .tab-btn:last-child { border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+        .menu-detail-container > .tab-navigation .tab-btn:not(:last-child) { border-right: 1px solid rgba(0, 0, 0, 0.1); }
+        .menu-detail-info { border-top-left-radius: 0; border-top-right-radius: 0; margin-top: 0; }
+
+        /* Standalone ingredients */
+        .ingredients-section-standalone { display: flex; flex-direction: column; }
         .ingredients-section-standalone .ingredients-scroll-container {
-            max-height: 250px;
-            min-height: 150px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            padding: 12px;
-            background: #f8f9fa;
-            margin-bottom: 16px;
+            max-height: 250px; min-height: 150px;
+            overflow-y: auto; overflow-x: hidden;
+            border: 1px solid #e9ecef; border-radius: var(--menu-radius-sm);
+            padding: var(--menu-space-sm); background: #f8f9fa; margin-bottom: var(--menu-space-md);
         }
-        
-        .ingredients-section-standalone .btn-secondary {
-            align-self: flex-start;
-        }
-        
-        /* Remove white background from dashboard container */
+        .ingredients-section-standalone .btn-secondary { align-self: flex-start; }
+
+        /* Add-food dashboard container */
         .add-food-dashboard {
-            background: transparent;
-            border-radius: 0;
-            padding: 0;
-            box-shadow: none;
-            width: 100%;
+            background: transparent; border-radius: 0; padding: 0; box-shadow: none; width: 100%;
         }
-        
-        /* Make form full width to consume available space */
-        .add-food-dashboard .add-food-form {
-            max-width: 100%;
-            width: 100%;
+        .add-food-dashboard .add-food-form { max-width: 100%; width: 100%; }
+
+        /* —— Hierarchy: page headers —— */
+        .add-food-dashboard .add-product-header { margin-bottom: var(--menu-space-xl); }
+        .add-food-dashboard .add-product-title {
+            font-size: 1.5rem; font-weight: 700; color: #3d2817;
+            margin: 0 0 var(--menu-space-xs) 0; letter-spacing: 0.01em;
         }
-        
-        /* Category UI Boxes - Each section gets its own colored box */
+        .add-food-dashboard .add-product-subtitle {
+            font-size: 0.9375rem; color: #5a3f2a; margin: 0; line-height: 1.5;
+        }
+        .add-food-dashboard .add-food-header {
+            margin-bottom: var(--menu-space-lg);
+            padding-bottom: var(--menu-space-md);
+            border-bottom: 1px solid rgba(61,40,23,0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--menu-space-sm);
+        }
+        .add-food-dashboard .add-food-header h2 {
+            font-size: 1.35rem; font-weight: 700; color: #3d2817; margin: 0;
+        }
+
+        /* —— Form sections: cards with clear hierarchy —— */
         .add-food-dashboard .form-section {
             background-color: #ffebca;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 16px;
-            border: 1px solid #e9ecef;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-radius: var(--menu-radius);
+            padding: var(--menu-space-lg) var(--menu-space-xl);
+            margin-bottom: var(--menu-space-lg);
+            border: 1px solid rgba(61, 40, 23, 0.12);
+            box-shadow: 0 2px 6px rgba(61, 40, 23, 0.06);
         }
-        
-        /* Brown text color for all text in form sections */
         .add-food-dashboard .form-section,
-        .add-food-dashboard .form-section * {
-            color: #3d2817;
-        }
-        
+        .add-food-dashboard .form-section * { color: #3d2817; }
         .add-food-dashboard .form-section h3 {
-            color: #3d2817;
-            font-weight: 600;
-            margin-bottom: 12px;
-            font-size: 16px;
+            color: #3d2817; font-weight: 700; font-size: 1.0625rem;
+            margin: 0 0 var(--menu-space-md) 0;
+            padding-bottom: var(--menu-space-sm);
+            border-bottom: 1px solid rgba(61, 40, 23, 0.22);
+            letter-spacing: 0.02em;
+            display: flex; align-items: center; gap: 10px;
         }
-        
-        .add-food-dashboard .form-section label {
-            color: #3d2817;
-        }
-        
+        .add-food-dashboard .form-section h3 i { opacity: 0.85; width: 1.1em; }
+        .add-food-dashboard .form-section label { color: #3d2817; font-weight: 500; }
         .add-food-dashboard .form-section .form-hint {
-            color: #5a3f2a;
-            margin-top: 4px;
-            margin-bottom: 0;
+            color: #5a3f2a; margin-top: var(--menu-space-xs); margin-bottom: 0;
+            font-size: 0.875rem; line-height: 1.45;
         }
-        
         .add-food-dashboard .form-section small {
-            color: #5a3f2a;
-            margin-top: 4px;
+            color: #5a3f2a; margin-top: var(--menu-space-xs); font-size: 0.875rem;
         }
-        
-        /* Reduce spacing in form groups */
-        .add-food-dashboard .form-section .form-group {
-            margin-bottom: 12px;
+        .add-food-dashboard .form-section .checkbox-group {
+            border-radius: var(--menu-radius-sm);
+            border-color: rgba(61, 40, 23, 0.2);
+            padding: var(--menu-space-sm);
         }
-        
-        .add-food-dashboard .form-section .form-group:last-child {
-            margin-bottom: 0;
+
+        /* Form groups – spacing */
+        .add-food-dashboard .form-section .form-group { margin-bottom: var(--menu-space-md); }
+        .add-food-dashboard .form-section .form-group:last-child { margin-bottom: 0; }
+        .add-food-dashboard .form-section .form-grid .form-group { margin-bottom: var(--menu-space-sm); }
+        .add-food-dashboard .form-section .form-grid .form-group:last-child { margin-bottom: 0; }
+        .add-food-dashboard .form-section .form-control { color: #3d2817; padding: 10px 14px; border-radius: 6px; }
+        .add-food-dashboard .form-section .form-control::placeholder { color: #8b6f47; }
+        .add-food-dashboard .form-section textarea.form-control { color: #3d2817; min-height: 80px; }
+
+        /* Food details grid */
+        .add-food-dashboard .food-details-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--menu-space-lg);
+            margin-bottom: var(--menu-space-lg);
         }
-        
-        /* Ensure inputs and selects maintain readability */
-        .add-food-dashboard .form-section .form-control {
-            color: #3d2817;
+        .add-food-dashboard .form-section .form-grid { gap: var(--menu-space-lg); }
+        .add-food-dashboard .add-product-dates-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--menu-space-md);
+            margin-top: var(--menu-space-sm);
         }
-        
-        .add-food-dashboard .form-section .form-control::placeholder {
-            color: #8b6f47;
+        .add-food-dashboard .add-product-price-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: var(--menu-space-lg);
         }
-        
-        .add-food-dashboard .form-section textarea.form-control {
-            color: #3d2817;
-        }
-        
-        /* Food Image and Ingredient Side by Side Layout */
-        .form-sections-row {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-        
-        .form-section-compact {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .image-upload-section-compact {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-        
-        .form-section-compact .image-preview-container {
-            width: 100%;
-        }
-        
+
+        /* Food image section */
+        .form-section-compact { display: flex; flex-direction: column; min-width: 0; }
+        .image-upload-section-compact { display: flex; flex-direction: column; align-items: flex-start; }
+        .form-section-compact .image-preview-container { width: 100%; }
         .form-section-compact .image-preview {
-            width: 100%;
-            min-height: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 100%; min-height: 200px;
+            display: flex; align-items: center; justify-content: center; overflow: hidden;
+            border-radius: var(--menu-radius-sm);
+        }
+        .form-section-compact .image-preview img {
+            width: 100%; height: 100%; object-fit: contain; border-radius: var(--menu-radius-sm); display: block;
+        }
+        .form-section-compact .remove-image-btn { width: 100%; }
+
+        /* Variation section */
+        .add-food-dashboard #variationSection .food-variations-list { margin-bottom: var(--menu-space-md); min-height: 60px; }
+        .add-food-dashboard #variationSection #addVariationButton { margin-top: var(--menu-space-xs); margin-bottom: var(--menu-space-sm); }
+        .add-food-dashboard #variationSection .form-hint { display: block; margin-top: 0; }
+
+        /* Form actions – primary CTA */
+        .add-food-dashboard .form-actions {
+            margin-top: var(--menu-space-xl);
+            padding-top: var(--menu-space-lg);
+            border-top: 1px solid rgba(61, 40, 23, 0.18);
+        }
+        .add-food-dashboard .form-actions .btn {
+            padding: 12px 28px; font-size: 1rem; font-weight: 600; border-radius: 8px;
+        }
+
+        /* Promo image preview */
+        .promo-image-preview {
+            min-height: 200px; aspect-ratio: 3.2 / 1; background: #f8f9fa; border-radius: var(--menu-radius-sm);
+        }
+        .promo-image-preview img { object-fit: contain !important; width: 100%; height: 100%; }
+
+        /* —— Catalogue & list: spacing and hierarchy —— */
+        .food-section { padding: var(--menu-space-md) 0; }
+        .menu-catalogue-grid {
+            padding: var(--menu-space-lg); border-radius: var(--menu-radius);
+        }
+        .empty-catalogue {
+            padding: var(--menu-space-2xl) var(--menu-space-lg);
+            font-size: 1rem;
+            color: #5a3f2a;
+        }
+        .menu-list-tan-container {
+            padding: var(--menu-space-lg); border-radius: var(--menu-radius);
+        }
+        .menu-list-tan-container .search-filter-bar {
+            gap: var(--menu-space-sm);
+            margin-bottom: var(--menu-space-md);
+            flex-wrap: wrap;
+        }
+        .menu-list-tan-container .search-filter-bar .search-box { min-width: 180px; flex: 1 1 200px; }
+        .menu-list-tan-container .filter-dropdown {
+            display: flex; align-items: center; gap: var(--menu-space-sm); flex-wrap: wrap;
+        }
+        .menu-list-detail-panel { border-radius: var(--menu-radius); overflow: hidden; }
+        .menu-list-detail-header { padding: var(--menu-space-md) var(--menu-space-lg); }
+        .menu-list-detail-content { padding: var(--menu-space-lg); }
+
+        /* —— Menu List: controls, table, detail panel (hierarchy, spacing, responsiveness) —— */
+        .menu-list-wrapper {
+            gap: var(--menu-space-lg);
+            align-items: stretch;
+            transition: gap 0.25s ease;
+        }
+        .menu-list-wrapper > .menu-list-tan-container {
+            min-width: 0;
+        }
+        .menu-list-tan-container {
+            padding: var(--menu-space-lg);
+            border-radius: var(--menu-radius);
+            box-shadow: 0 2px 12px rgba(61, 40, 23, 0.08);
+            border: 1px solid rgba(61, 40, 23, 0.08);
             overflow: hidden;
         }
-        
-        .form-section-compact .image-preview img {
+        .menu-list-tan-container .search-filter-bar {
+            gap: var(--menu-space-md);
+            margin-bottom: var(--menu-space-md);
+            align-items: center;
+        }
+        .menu-list-tan-container .search-box {
+            flex: 1 1 220px;
+            min-width: 0;
+        }
+        .menu-list-tan-container .search-box input {
             width: 100%;
-            height: 100%;
-            object-fit: contain;
-            border-radius: 8px;
+            padding: 10px 14px 10px 40px;
+            font-size: 0.9375rem;
+            border-radius: var(--menu-radius-sm);
+            border: 1px solid rgba(61, 40, 23, 0.2);
+            background: #fff;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .menu-list-tan-container .search-box input::placeholder { color: #8b7355; }
+        .menu-list-tan-container .search-box input:focus {
+            border-color: #7E2021;
+            box-shadow: 0 0 0 3px rgba(126, 32, 33, 0.12);
+            outline: none;
+        }
+        .menu-list-tan-container .search-box i { color: #7E2021; opacity: 0.8; }
+        .menu-list-tan-container .filter-btn {
+            padding: 10px 16px;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            border-radius: var(--menu-radius-sm);
+            border: 1px solid rgba(61, 40, 23, 0.2);
+            background: #fff;
+            color: #3d2817;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+        .menu-list-tan-container .filter-btn:hover {
+            background: rgba(126, 32, 33, 0.06);
+            border-color: rgba(126, 32, 33, 0.35);
+            color: #7E2021;
+        }
+        .menu-list-tan-container .btn.btn-sm.btn-link {
+            padding: 10px 14px;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: #5a3f2a;
+            border-radius: var(--menu-radius-sm);
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .menu-list-tan-container .btn.btn-sm.btn-link:hover { color: #7E2021; background: rgba(126, 32, 33, 0.06); }
+        .menu-list-tan-container #menuListSort {
+            min-width: 180px;
+            padding: 10px 12px;
+            font-size: 0.9375rem;
+            border-radius: var(--menu-radius-sm);
+            border: 1px solid rgba(61, 40, 23, 0.2);
+        }
+        .menu-list-tan-container .table-container {
+            border-radius: var(--menu-radius-sm);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border: 1px solid rgba(61, 40, 23, 0.1);
+        }
+        .menu-list-table th {
+            padding: 14px 12px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.95);
+        }
+        .menu-list-table th small { font-size: 0.7rem; text-transform: none; font-weight: 500; opacity: 0.9; }
+        .menu-list-table td {
+            padding: 12px;
+            font-size: 0.9375rem;
+            vertical-align: middle;
+        }
+        .menu-list-table tbody tr { transition: background 0.2s ease, box-shadow 0.2s ease; }
+        .menu-list-table .menu-list-name { font-weight: 500; }
+        .menu-list-table .status.available { font-weight: 600; }
+        .menu-list-table .status.unavailable { color: #6c757d; }
+        .menu-list-detail-panel {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            transition: box-shadow 0.25s ease, transform 0.25s ease;
+        }
+        .menu-list-detail-header {
+            padding: var(--menu-space-lg) var(--menu-space-xl);
+            border-bottom: 1px solid #eee;
+            background: #fafafa;
+        }
+        .menu-list-detail-header h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #2d2d2d;
+            letter-spacing: 0.01em;
+            margin: 0;
+        }
+        .btn-close-detail {
+            width: 36px; height: 36px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: var(--menu-radius-sm);
+            font-size: 1.125rem;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .btn-close-detail:hover { background: #eee; color: #333; }
+        .menu-list-detail-content {
+            padding: var(--menu-space-lg) var(--menu-space-xl);
+            font-size: 0.9375rem;
+            line-height: 1.55;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .menu-list-detail-info { gap: 0; }
+        .menu-list-detail-row {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .menu-list-detail-row:last-child { border-bottom: none; }
+        .menu-list-detail-label { font-size: 0.9375rem; color: #555; }
+        .menu-list-detail-value { font-size: 0.9375rem; color: #222; font-weight: 500; }
+        .menu-list-detail-section {
+            margin-top: var(--menu-space-lg);
+            padding-top: var(--menu-space-lg);
+            border-top: 1px solid #eee;
+        }
+        .menu-list-detail-section h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #333;
+            margin: 0 0 var(--menu-space-sm) 0;
+        }
+        .menu-list-detail-section p { font-size: 0.9375rem; color: #555; }
+        .menu-list-detail-image { border-radius: var(--menu-radius-sm); margin-bottom: var(--menu-space-lg); }
+        .menu-list-detail-actions { margin-top: var(--menu-space-lg); padding-top: var(--menu-space-lg); }
+        .menu-list-detail-actions .btn { padding: 12px 16px; font-size: 0.9375rem; font-weight: 600; border-radius: var(--menu-radius-sm); }
+        .menu-list-table .empty-table { padding: var(--menu-space-xl) var(--menu-space-lg); font-size: 0.9375rem; color: #5a3f2a; }
+        .menu-list-tan-container .search-box input:focus-visible,
+        .menu-list-tan-container .filter-btn:focus-visible,
+        .menu-list-tan-container #menuListSort:focus-visible { outline: 2px solid #7E2021; outline-offset: 2px; }
+        .btn-close-detail:focus-visible { outline: 2px solid #7E2021; outline-offset: 2px; }
+
+        /* Variation cards in detail panel: hierarchy, compact layout, status colors */
+        .menu-list-detail-variations { display: flex; flex-direction: column; gap: var(--menu-space-md); }
+        .menu-list-detail-variation-card {
             display: block;
+            padding: var(--menu-space-md);
+            background: #fafafa;
+            border: 1px solid #e9ecef;
+            border-radius: var(--menu-radius-sm);
+            margin: 0;
         }
-        
-        .form-section-compact .remove-image-btn {
-            width: 100%;
+        .menu-list-detail-variation-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            margin-bottom: var(--menu-space-sm);
+            padding-bottom: var(--menu-space-sm);
+            border-bottom: 1px solid #eee;
         }
-        
-        .form-section-compact .ingredients-section-standalone {
-            width: 100%;
-            height: 100%;
+        .menu-list-detail-variation-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: #2d2d2d;
+        }
+        .menu-list-detail-variation-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8125rem;
+            color: #666;
+        }
+        .menu-list-detail-variation-price { font-weight: 600; color: #333; }
+        .menu-list-detail-variation-controls {
             display: flex;
             flex-direction: column;
+            gap: var(--menu-space-sm);
         }
-        
-        .form-section-compact .ingredients-scroll-container {
-            flex: 1;
-            min-height: 200px;
+        .menu-list-detail-variation-field label {
+            display: block;
+            font-size: 0.8125rem;
+            color: #555;
+            margin-bottom: 4px;
         }
-        
-        .form-section-compact #addIngredientRowBtn {
-            align-self: flex-start;
-            position: relative;
-            top: auto;
+        .menu-list-detail-variation-input-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
         }
-        
-        /* Promo Image Preview - Show full image */
-        .promo-image-preview {
-            min-height: 200px;
-            aspect-ratio: 3.2 / 1;
-            background: #f8f9fa;
+        .menu-list-detail-variation-input-row .form-control {
+            width: 100px;
+            max-width: 140px;
+            font-size: 0.875rem;
+            flex: 1 1 90px;
         }
-        
-        .promo-image-preview img {
-            object-fit: contain !important;
-            width: 100%;
-            height: 100%;
+        .menu-list-detail-variation-input-row .btn { font-size: 0.75rem; padding: 4px 8px; flex-shrink: 0; }
+        .menu-list-detail-variation-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 14px;
+            font-size: 0.8125rem;
+            color: #666;
+            margin-top: var(--menu-space-sm);
+            padding-top: var(--menu-space-sm);
+            border-top: 1px solid #eee;
+        }
+        .menu-list-detail-variation-available { font-weight: 600; }
+        .menu-list-detail-variation-available.variation-avail--out { color: #dc3545; }
+        .menu-list-detail-variation-available.variation-avail--ok { color: #28a745; }
+
+        /* Banner & table number grids (layout in CSS; JS toggles visibility) */
+        .banner-catalogue-container .banner-grid,
+        #bannerCatalogueGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--menu-space-lg);
+            margin-top: var(--menu-space-lg);
+        }
+        #bannerCatalogueGrid[style*="display: none"] { display: none !important; }
+        .table-number-grid,
+        #tableNumberGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: var(--menu-space-lg);
+            margin-top: var(--menu-space-lg);
+        }
+        #tableNumberGrid[style*="display: none"] { display: none !important; }
+
+        /* Loading & empty states */
+        .banner-catalogue-container .loading-state,
+        .banner-catalogue-container .empty-state,
+        .table-number-container .loading-state,
+        .table-number-container .empty-state {
+            padding: var(--menu-space-2xl);
+            text-align: center;
+            color: #5a3f2a;
+            border-radius: var(--menu-radius-sm);
+            background: rgba(255,255,255,0.5);
+        }
+        .ingredient-logs-summary .summary-card { border-radius: var(--menu-radius-sm); }
+        .ingredient-logs-table-wrapper { margin-bottom: var(--menu-space-lg); }
+        .ingredient-logs-table-wrapper .table-container { border-radius: var(--menu-radius-sm); overflow: hidden; }
+
+        /* Menu detail section – spacing */
+        .menu-detail-section { margin-top: var(--menu-space-lg); }
+        .menu-detail-container { padding: 0 var(--menu-space-md); }
+        .menu-detail-info { padding: var(--menu-space-lg) var(--menu-space-xl); }
+        .menu-detail-info-left h4 { margin-bottom: var(--menu-space-md); }
+        .detail-row { margin-bottom: var(--menu-space-sm); }
+        .detail-row:last-child { margin-bottom: 0; }
+
+        /* Modals – consistent padding and mobile-friendly */
+        .modal .modal-content { border-radius: var(--menu-radius); overflow: hidden; }
+        .modal .modal-header { padding: var(--menu-space-lg) var(--menu-space-xl); }
+        .modal .modal-body { padding: var(--menu-space-lg) var(--menu-space-xl); }
+        .modal .modal-footer { padding: var(--menu-space-md) var(--menu-space-xl); gap: var(--menu-space-sm); }
+
+        /* —— Responsive —— */
+        @media (max-width: 1024px) {
+            .main-content { padding: var(--menu-space-md) var(--menu-space-lg); }
+            .content-header { margin: calc(-1 * var(--menu-space-md)) calc(-1 * var(--menu-space-lg)) var(--menu-space-md) calc(-1 * var(--menu-space-lg)); padding: var(--menu-space-sm) var(--menu-space-lg); }
+            .add-food-dashboard .form-sections-row { flex-direction: column; gap: var(--menu-space-lg); }
+            .form-section-compact .image-preview { min-height: 220px; }
+            .form-section-compact .ingredients-scroll-container { min-height: 180px; }
+            .add-food-dashboard .food-details-layout { grid-template-columns: 1fr; gap: var(--menu-space-md); }
+            .add-food-dashboard .add-product-price-grid { grid-template-columns: 1fr 1fr; }
+            .add-food-dashboard .add-product-dates-grid { grid-template-columns: 1fr; }
+            .menu-list-wrapper { flex-direction: column; }
+            .menu-list-detail-panel { width: 100%; min-width: 100%; max-height: 420px; }
+            .menu-detail-image-wrapper { min-height: 380px; max-height: 480px; }
+            .menu-detail-image-caption { font-size: 1.5rem; }
+        }
+        @media (max-width: 768px) {
+            .main-content { padding: var(--menu-space-sm) var(--menu-space-md); }
+            .content-header { margin: calc(-1 * var(--menu-space-sm)) calc(-1 * var(--menu-space-md)) var(--menu-space-sm) calc(-1 * var(--menu-space-md)); padding: var(--menu-space-sm) var(--menu-space-md); flex-wrap: wrap; gap: var(--menu-space-sm); }
+            .page-title h2 { font-size: 1.125rem; }
+            .add-food-dashboard .form-section { padding: var(--menu-space-md) var(--menu-space-lg); }
+            .add-food-dashboard .add-product-header { margin-bottom: var(--menu-space-lg); }
+            .add-food-dashboard .add-product-title { font-size: 1.25rem; }
+            .add-food-dashboard .add-product-price-grid { grid-template-columns: 1fr; gap: var(--menu-space-md); }
+            .menu-list-tan-container .search-filter-bar { flex-direction: column; align-items: stretch; }
+            .menu-list-tan-container .search-filter-bar .filter-dropdown { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+            .menu-list-tan-container .search-filter-bar #menuListSort { min-width: 100%; }
+            .menu-list-tan-container .table-container { margin: 0 -2px; border-radius: 8px; }
+            .menu-list-table { min-width: 580px; }
+            .menu-list-table th { padding: 12px 10px; font-size: 0.75rem; }
+            .menu-list-table td { padding: 10px 8px; font-size: 0.875rem; }
+            .menu-list-detail-header { padding: var(--menu-space-md) var(--menu-space-lg); }
+            .menu-list-detail-header h3 { font-size: 1.1rem; }
+            .menu-list-detail-content { padding: var(--menu-space-md) var(--menu-space-lg); font-size: 0.9375rem; }
+            .menu-list-detail-section h4 { font-size: 0.9375rem; }
+            .menu-catalogue-grid { padding: var(--menu-space-md); }
+            .menu-cards-container { grid-template-columns: 1fr; gap: var(--menu-space-md); }
+            .banner-catalogue-container .banner-grid,
+            #bannerCatalogueGrid { grid-template-columns: 1fr; }
+            .table-number-grid, #tableNumberGrid { grid-template-columns: 1fr; }
+            .menu-detail-info { padding: var(--menu-space-md) var(--menu-space-lg); }
+            .menu-detail-image-wrapper { min-height: 260px; max-height: 340px; aspect-ratio: 4/3; }
+            .menu-detail-image-caption { font-size: 1.25rem; }
+            .menu-detail-image-overlay { padding: var(--menu-space-md) var(--menu-space-lg); }
+            .menu-detail-header-actions { top: var(--menu-space-sm); right: var(--menu-space-sm); gap: 8px; }
+            .menu-detail-header-actions .btn-action-overlay { min-width: 140px; padding: 10px 16px; font-size: 13px; }
+            .modal .modal-content { width: 95%; max-width: none; margin: 5% auto; max-height: 90vh; overflow-y: auto; }
+            .modal .modal-header, .modal .modal-body, .modal .modal-footer { padding: var(--menu-space-md) var(--menu-space-lg); }
+            .inventory-table-header { flex-direction: column; align-items: stretch; gap: var(--menu-space-sm); }
+            .inventory-table-actions { flex-wrap: wrap; }
+            .ingredient-log-filter-input, .ingredient-log-filter-select { min-width: 100% !important; }
+        }
+        @media (max-width: 480px) {
+            .main-content { padding: var(--menu-space-sm); }
+            .content-header { margin: calc(-1 * var(--menu-space-sm)); padding: var(--menu-space-sm); }
+            .add-food-dashboard .form-section { padding: var(--menu-space-sm) var(--menu-space-md); }
+            .add-food-dashboard .form-actions .btn { width: 100%; }
+            .menu-list-tan-container { padding: var(--menu-space-sm); }
+            .menu-list-tan-container .search-filter-bar { gap: var(--menu-space-sm); margin-bottom: var(--menu-space-sm); }
+            .menu-list-table th { padding: 10px 8px; font-size: 0.7rem; }
+            .menu-list-table td { padding: 8px 6px; font-size: 0.8125rem; }
+            .menu-list-detail-header { padding: var(--menu-space-sm) var(--menu-space-md); }
+            .menu-list-detail-header h3 { font-size: 1rem; }
+            .menu-list-detail-content { padding: var(--menu-space-sm) var(--menu-space-md); font-size: 0.875rem; }
+            .menu-list-detail-row { padding: 8px 0; }
+            .menu-list-detail-section { margin-top: var(--menu-space-md); padding-top: var(--menu-space-md); }
+            .menu-list-detail-section h4 { font-size: 0.9375rem; }
+            .menu-detail-info-left h4 { font-size: 1.125rem; }
         }
     </style>
     <script>
@@ -544,55 +856,40 @@
             <!-- Add Food Dashboard (Hidden by default / Add Product section) -->
             <div class="add-food-dashboard" id="addFoodDashboard" style="display: none;">
                 <form class="add-food-form" id="menuItemForm">
-                    <!-- Food Image and Ingredient Sections - Side by Side -->
-                    <div class="form-sections-row">
-                        <!-- Food Image Section -->
-                        <div class="form-section form-section-compact">
-                            <h3>Food Image</h3>
-                            <div class="image-upload-section-compact">
-                                <div class="image-preview-container">
-                                    <div class="image-preview" id="imagePreview" onclick="document.getElementById('imageFileInput').click()" style="cursor: pointer;" title="Click to select image">
-                                        <div class="upload-placeholder">
-                                            <i class="fas fa-image"></i>
-                                            <span>Click to Select Image</span>
-                                        </div>
+                    <header class="add-product-header">
+                        <h1 class="add-product-title">Add Product</h1>
+                        <p class="add-product-subtitle">Add a new menu item with image, details, and pricing.</p>
+                    </header>
+                    <!-- Food Image Section -->
+                    <div class="form-section form-section-compact">
+                        <h3><i class="fas fa-image"></i> Food Image</h3>
+                        <div class="image-upload-section-compact">
+                            <div class="image-preview-container">
+                                <div class="image-preview" id="imagePreview" onclick="document.getElementById('imageFileInput').click()" style="cursor: pointer;" title="Click to select image">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-image"></i>
+                                        <span>Click to Select Image</span>
                                     </div>
-                                    <button type="button" class="btn btn-secondary remove-image-btn" onclick="removeImage()">
-                                        <i class="fas fa-trash"></i>
-                                        Remove
-                                    </button>
                                 </div>
-                                <input type="file" id="imageFileInput" accept="image/*" style="display: none;" onchange="handleImageFileSelect(event)">
-                                <div id="imageUploadProgress" style="display: none; margin-top: 10px;">
-                                    <div style="background: #f0f0f0; border-radius: 4px; height: 20px; overflow: hidden;">
-                                        <div id="imageUploadProgressBar" style="background: #dc3545; height: 100%; width: 0%; transition: width 0.3s;"></div>
-                                    </div>
-                                    <small id="imageUploadStatus" style="display: block; margin-top: 5px; color: #666;">Uploading...</small>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Ingredient Section -->
-                        <div class="form-section form-section-compact">
-                            <h3>Ingredient</h3>
-                            <div class="ingredients-section-standalone">
-                                <div class="ingredients-scroll-container">
-                                    <div id="dishIngredientsList" class="dish-ingredients-list"></div>
-                                </div>
-                                <button type="button" class="btn btn-secondary" id="addIngredientRowBtn">
-                                    <i class="fas fa-plus"></i>
-                                    Add Ingredient
+                                <button type="button" class="btn btn-secondary remove-image-btn" onclick="removeImage()">
+                                    <i class="fas fa-trash"></i>
+                                    Remove
                                 </button>
-                                <p class="form-hint">Enter ingredients and their amounts for this recipe. Ingredients are informational only.</p>
-                                <datalist id="menuIngredientsOptions"></datalist>
+                            </div>
+                            <input type="file" id="imageFileInput" accept="image/*" style="display: none;" onchange="handleImageFileSelect(event)">
+                            <div id="imageUploadProgress" style="display: none; margin-top: 10px;">
+                                <div style="background: #f0f0f0; border-radius: 4px; height: 20px; overflow: hidden;">
+                                    <div id="imageUploadProgressBar" style="background: #dc3545; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                                <small id="imageUploadStatus" style="display: block; margin-top: 5px; color: #666;">Uploading...</small>
                             </div>
                         </div>
                     </div>
 
                     <!-- Food Details Section -->
                     <div class="form-section">
-                        <h3>Food Details</h3>
-                        <div class="food-details-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <h3><i class="fas fa-info-circle"></i> Food Details</h3>
+                        <div class="food-details-layout">
                             <!-- Left Column: Category and Food name -->
                             <div class="food-details-left">
                                 <div class="form-group">
@@ -612,9 +909,13 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label for="foodName">Food name <span style="color: #ff8c00; font-weight: bold;">*</span></label>
-                                    <input type="text" id="foodName" class="form-control" placeholder="Enter food name and size (e.g., Chicken Peri Medium)">
-                                    <small class="form-hint">This name (including size if any) will be used for the product and its variations.</small>
+                                    <label for="foodName">Product name <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                                    <input type="text" id="foodName" class="form-control" placeholder="Enter product name (e.g., Chicken Peri)">
+                                    <small class="form-hint">One main name for the product. Size is set per variation when the product has variations.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label><input type="checkbox" id="hasVariation" onchange="toggleHasVariation()"> This product has variations</label>
+                                    <small class="form-hint">If checked, Price, Size, Default Daily Serving Limit, and Kcal are set per variation below. If unchecked, they are set in Price and Stock.</small>
                                 </div>
                             </div>
                             
@@ -627,27 +928,15 @@
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Variation Size selector -->
-                        <div class="form-group" style="margin-top: 12px;">
-                            <label for="variationSize">Variation size</label>
-                            <select id="variationSize" class="form-control">
-                                <option value="default" selected>Default</option>
-                                <option value="Small">Small</option>
-                                <option value="Medium">Medium</option>
-                                <option value="Large">Large</option>
-                            </select>
-                            <small class="form-hint">Choose a size to automatically suffix the food name for this variation (e.g., Chicken Peri Medium).</small>
-                        </div>
                         
                         <!-- Description - Full Width -->
-                        <div class="form-group" style="margin-top: 12px;">
+                        <div class="form-group">
                             <label for="description">Description <span style="color: #ff8c00; font-weight: bold;">*</span></label>
                             <textarea id="description" class="form-control" rows="3" placeholder="Write ingredients. Separate by comma (,)"></textarea>
                         </div>
                         
                         <!-- Allergens - Full Width -->
-                        <div class="form-group" style="margin-top: 12px;">
+                        <div class="form-group">
                             <label for="allergens">Allergens (Optional)</label>
                             <input type="text" id="allergens" class="form-control" placeholder="e.g., Contains nuts, dairy, gluten. Leave empty if no allergens.">
                             <small class="form-hint">List any allergens present in this food item. Separate multiple allergens by comma.</small>
@@ -664,9 +953,9 @@
                         </div>
                         
                         <!-- Availability Dates -->
-                        <div class="form-group" style="margin-top: 12px;">
+                        <div class="form-group">
                             <label>Availability Period (Optional)</label>
-                            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px;">
+                            <div class="form-grid add-product-dates-grid">
                                 <div class="form-group">
                                     <label for="availabilityStartDate">Start Date</label>
                                     <input type="datetime-local" id="availabilityStartDate" class="form-control">
@@ -695,10 +984,10 @@
                         </div>
                     </div>
 
-                    <!-- Price and Stock Section -->
-                    <div class="form-section">
-                        <h3>Price and Stock</h3>
-                        <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                    <!-- Price and Stock Section (shown when "Has variation" is unchecked) -->
+                    <div class="form-section" id="priceAndStockSection">
+                        <h3><i class="fas fa-tag"></i> Price and Stock</h3>
+                        <div class="form-grid add-product-price-grid">
                             <div class="form-group">
                                 <label for="price">Price <span style="color: #ff8c00; font-weight: bold;">*</span></label>
                                 <input type="text" id="price" class="form-control" placeholder="PHP 0.00">
@@ -716,9 +1005,9 @@
                         </div>
                     </div>
 
-                    <!-- Variation Section -->
-                    <div class="form-section">
-                        <h3>Variation</h3>
+                    <!-- Variation Section (shown only when "Has variation" is checked) -->
+                    <div class="form-section" id="variationSection" style="display: none;">
+                        <h3><i class="fas fa-layer-group"></i> Variation</h3>
                         <div id="foodVariationsList" class="food-variations-list">
                             <div class="empty-state">No variations added yet. Click "Add Variation" to create one.</div>
                         </div>
@@ -726,7 +1015,7 @@
                             <i class="fas fa-layer-group"></i>
                             Add Variation
                         </button>
-                        <small class="form-hint">Each variation shares the same image as this product. Click the menu beside a variation to see and edit its full details.</small>
+                        <small class="form-hint">Each variation has its own Size, Price, Default Daily Serving Limit, and Kcal. Each variation shares the same image. Click the menu (⋮) beside a variation to edit.</small>
                     </div>
 
                     <!-- Form Actions -->
@@ -744,7 +1033,7 @@
                 <form class="add-food-form" id="promotionForm">
                     <!-- Promo Image Section -->
                     <div class="form-section">
-                        <h3>Promo Image</h3>
+                        <h3><i class="fas fa-image"></i> Promo Image</h3>
                         <p style="color: #5a3f2a; margin-bottom: 12px; font-size: 13px;"><strong>Required dimensions:</strong> 1920 x 1080 pixels</p>
                         <div class="image-upload-section-compact">
                             <div class="image-preview-container">
@@ -772,7 +1061,7 @@
 
                     <!-- Promotion Details Section -->
                     <div class="form-section">
-                        <h3>Promotion Details</h3>
+                        <h3><i class="fas fa-bullhorn"></i> Promotion Details</h3>
                         <div class="form-group">
                             <label for="promoTitle">Title <span style="color: #ff8c00; font-weight: bold;">*</span></label>
                             <input type="text" id="promoTitle" class="form-control" placeholder="Enter promotion title">
@@ -785,7 +1074,7 @@
 
                     <!-- Schedule Section -->
                     <div class="form-section">
-                        <h3>Schedule</h3>
+                        <h3><i class="fas fa-calendar-alt"></i> Schedule</h3>
                         <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
                             <div class="form-group">
                                 <label for="promoStartDate">Start Date <span style="color: #ff8c00; font-weight: bold;">*</span></label>
@@ -800,7 +1089,7 @@
 
                     <!-- Placement Section -->
                     <div class="form-section">
-                        <h3>Placement</h3>
+                        <h3><i class="fas fa-map-marker-alt"></i> Placement</h3>
                         <div class="form-group">
                             <label for="promoPlacement">Placement <span style="color: #ff8c00; font-weight: bold;">*</span></label>
                             <select id="promoPlacement" class="form-control">
@@ -835,7 +1124,7 @@
                         <i class="fas fa-image" style="font-size: 2em; margin-bottom: 16px;"></i>
                         <p>No banners have been created yet.</p>
                     </div>
-                    <div class="banner-grid" id="bannerCatalogueGrid" style="display: none; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+                    <div class="banner-grid" id="bannerCatalogueGrid" style="display: none;">
                         <!-- Banners will be rendered here -->
                     </div>
                 </div>
@@ -862,7 +1151,7 @@
                             <i class="fas fa-plus"></i> Create Your First Table Number
                         </button>
                     </div>
-                    <div class="table-number-grid" id="tableNumberGrid" style="display: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
+                    <div class="table-number-grid" id="tableNumberGrid" style="display: none;">
                         <!-- Table numbers will be rendered here -->
                     </div>
                 </div>
@@ -993,8 +1282,8 @@
                                             <th class="menu-list-image-header">Image</th>
                                             <th>Menu ID</th>
                                             <th>Name</th>
-                                            <th>Remaining Servings <small id="resetTimeHeader" style="font-weight: normal; color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-top: 2px;"></small></th>
-                                            <th>Daily Servings</th>
+                                            <th title="Actual stock count">Quantity</th>
+                                            <th>Daily Limit <small id="resetTimeHeader" style="font-weight: normal; color: rgba(255,255,255,0.8); font-size: 0.75rem; display: block; margin-top: 2px;"></small></th>
                                             <th>Status</th>
                                             <th>Price</th>
                                         </tr>
@@ -1032,33 +1321,32 @@
                     </div>
                     <div class="modal-body">
                         <div class="form-group">
-                            <label for="variationModalName">Variation Name</label>
-                            <input type="text" id="variationModalName" class="form-control">
+                            <label for="variationModalSize">Variation Size</label>
+                            <select id="variationModalSize" class="form-control">
+                                <option value="default">Default</option>
+                                <option value="Small">Small</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Large">Large</option>
+                                <option value="Whole">Whole</option>
+                                <option value="Half">Half</option>
+                            </select>
                         </div>
                         <div class="form-group">
-                            <label for="variationModalPrice">Price (PHP)</label>
-                            <input type="number" id="variationModalPrice" class="form-control" min="0" step="0.01">
+                            <label for="variationModalPrice">Price (PHP) <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                            <input type="number" id="variationModalPrice" class="form-control" min="0" step="0.01" placeholder="0.00">
                         </div>
                         <div class="form-group">
-                            <label for="variationModalDescription">Description</label>
-                            <textarea id="variationModalDescription" class="form-control" rows="3"></textarea>
+                            <label for="variationModalQuantity">Default Daily Serving Limit <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                            <input type="number" id="variationModalQuantity" class="form-control" min="0" step="1" placeholder="0">
                         </div>
                         <div class="form-group">
-                            <label for="variationModalQuantity">Quantity Available</label>
-                            <input type="number" id="variationModalQuantity" class="form-control" min="0" step="1">
-                        </div>
-                        <div class="form-group">
-                            <label for="variationModalAllergens">Allergens (Optional)</label>
-                            <input type="text" id="variationModalAllergens" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label>Size</label>
-                            <p id="variationModalSizeDisplay" class="form-hint">Default</p>
+                            <label for="variationModalKcal">Calories (kcal)</label>
+                            <input type="number" id="variationModalKcal" class="form-control" min="0" step="1" placeholder="0">
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" onclick="closeFormVariationModal()">Cancel</button>
-                        <button type="button" class="btn btn-primary" onclick="saveFormVariationModal()">Save Changes</button>
+                        <button type="button" class="btn btn-primary" id="variationModalSubmitBtn" onclick="saveFormVariationModal()">Save Changes</button>
                     </div>
                 </div>
             </div>
@@ -1162,6 +1450,7 @@
                                     <li class="empty-state">No ingredients linked yet.</li>
                                 </ul>
                                 <div id="menuDetailIngredientsEditable">
+                                    <datalist id="menuIngredientsOptions"></datalist>
                                     <div id="menuDetailIngredientsTable" style="display: none;">
                                         <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
                                             <thead>
