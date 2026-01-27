@@ -1457,6 +1457,7 @@
             // Only menu.quantity and menu.variations[i].quantity are deducted. No dailyServings/maxServingsPerDay.
             const menuUpdates = {};
             const sauceTotals = {}; // sauceId -> total quantity from all cart lines
+            const freeSauceUpdates = {}; // sauceId -> { menuRef, menuData, quantity }
             const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
             for (const cartItem of cartItems) {
@@ -1474,15 +1475,66 @@
 
                 const sauce = cartItem.sauce || null;
                 const variation = cartItem.variation || null;
-                const variationId = variation?.id || variation?.variationId || null;
                 const note = typeof cartItem.note === 'string' ? cartItem.note : '';
+                const isFreeSauce = cartItem.freeWithPeriRibs === true;
 
-                const menuId = cartItem.itemId;
+                // For items with variations: menuId is the parent menu item ID, itemId is the variation ID
+                // For items without variations: menuId equals itemId
+                // Always use menuId (or parentId) to fetch the parent menu item from Firebase
+                const menuId = cartItem.menuId || cartItem.parentId || cartItem.itemId;
                 if (!menuId) {
                     unavailableItems.push({ itemId: null, name: cartItem.name || 'Item', reason: 'Missing menu item ID' });
                     continue;
                 }
+                
+                // Determine variationId from multiple sources
+                let variationId = variation?.id || variation?.variationId || null;
+                if (!variationId && cartItem.isVariation === true) {
+                    // For customer-cart.js structure: itemId is the variation ID
+                    variationId = cartItem.itemId || null;
+                }
 
+                // Handle free sauces separately
+                if (isFreeSauce) {
+                    const sauceMenuRef = window.doc(db, MENU_COLLECTION, menuId);
+                    const sauceMenuSnap = await transaction.get(sauceMenuRef);
+                    if (!sauceMenuSnap.exists()) {
+                        unavailableItems.push({ itemId: menuId, name: cartItem.name || 'Sauce', reason: 'Free sauce no longer exists on menu' });
+                        continue;
+                    }
+
+                    const sauceMenuData = sauceMenuSnap.data() || {};
+                    if (!freeSauceUpdates[menuId]) {
+                        freeSauceUpdates[menuId] = { menuRef: sauceMenuRef, menuData: sauceMenuData, quantity: 0 };
+                    }
+                    const freeSauceRec = freeSauceUpdates[menuId];
+                    
+                    // Check availability for free sauce
+                    const currentQty = freeSauceRec.quantity + qty;
+                    const availableQty = (sauceMenuData.quantity ?? 0) || 0;
+                    if (availableQty < currentQty) {
+                        unavailableItems.push({ itemId: menuId, name: cartItem.name || 'Free Sauce', reason: `Only ${availableQty} available, ${currentQty} requested` });
+                        continue;
+                    }
+                    freeSauceRec.quantity = currentQty;
+
+                    // Add free sauce to order items
+                    orderItems.push({
+                        itemId: menuId,
+                        name: cartItem.name || 'Free Sauce',
+                        quantity: qty,
+                        unitPrice: 0,
+                        lineTotal: 0,
+                        note: note || null,
+                        variationId: null,
+                        variation: null,
+                        sauce: null,
+                        freeWithPeriRibs: true
+                    });
+                    continue;
+                }
+
+                // Handle main items (non-free sauces)
                 const menuRef = window.doc(db, MENU_COLLECTION, menuId);
                 const menuSnap = await transaction.get(menuRef);
                 if (!menuSnap.exists()) {
@@ -1506,11 +1558,18 @@
                         unavailableItems.push({ itemId: menuId, name: cartItem.name || menuData.name || 'Item', reason: 'Variation required for this item' });
                         continue;
                     }
-                    const v = variations.find((x) => (x.variationId || x.id) === variationId);
+                    
+                    // Find the variation in the menu's variations array
+                    const v = variations.find((x) => {
+                        const vid = x.variationId || x.id;
+                        return vid === variationId;
+                    });
+                    
                     if (!v) {
-                        unavailableItems.push({ itemId: menuId, name: cartItem.name || menuData.name || 'Item', reason: 'Variation not found' });
+                        unavailableItems.push({ itemId: menuId, name: cartItem.name || menuData.name || 'Item', reason: `Variation not found in menu (variationId: ${variationId})` });
                         continue;
                     }
+                    
                     const cur = (rec.byVariation[variationId] || 0) + qty;
                     const avail = (v.quantity ?? 0) || 0;
                     if (avail < cur) {
@@ -1529,20 +1588,41 @@
                     rec.baseQty = cur;
                 }
 
+                // Build variation object - use existing variation or fetch from menu if we have variationId
+                let finalVariation = variation;
+                if (!finalVariation && variationId && hasVariations) {
+                    const v = variations.find((x) => {
+                        const vid = x.variationId || x.id;
+                        return vid === variationId;
+                    });
+                    if (v) {
+                        finalVariation = {
+                            name: v.name || null,
+                            price: typeof v.price === 'number' ? v.price : (typeof v.price === 'string' ? parseFloat(v.price) : 0),
+                            id: variationId
+                        };
+                    }
+                }
+                
+                // IMPORTANT:
+                // Store the parent menu item's document ID in `itemId` so downstream
+                // pages (order details, food item page reviews, reorder) can reference
+                // `menu/{itemId}` consistently. Keep `variationId` separately.
                 orderItems.push({
-                    itemId: cartItem.itemId || cartItem.id,
+                    itemId: menuId,
                     name: cartItem.name || 'Item',
                     quantity: qty,
                     unitPrice: unitPrice,
                     lineTotal: linePrice || unitPrice * qty,
                     note: note || null,
                     variationId: variationId || null,
-                    variation: variation ? {
-                        name: variation.name || null,
-                        price: typeof variation.price === 'number' ? variation.price : (typeof variation.price === 'string' ? parseFloat(variation.price) : 0),
+                    variation: finalVariation ? {
+                        name: finalVariation.name || null,
+                        price: typeof finalVariation.price === 'number' ? finalVariation.price : (typeof finalVariation.price === 'string' ? parseFloat(finalVariation.price) : 0),
                         id: variationId
                     } : null,
-                    sauce: sauce ? { id: sauce.id || null, name: sauce.name || null, price: 0 } : null
+                    sauce: sauce ? { id: sauce.id || null, name: sauce.name || null, price: 0 } : null,
+                    freeWithPeriRibs: false
                 });
 
                 if (sauce && sauce.id) {
@@ -1663,6 +1743,15 @@
                 if (Object.keys(updateDoc).length > 0) {
                     transaction.update(menuRef, updateDoc);
                 }
+            }
+
+            // Deduct quantities for free sauces (linked sauces)
+            for (const [sauceId, rec] of Object.entries(freeSauceUpdates)) {
+                const { menuRef, menuData, quantity } = rec;
+                const updateDoc = {
+                    quantity: Math.max(0, ((menuData.quantity ?? 0) || 0) - quantity)
+                };
+                transaction.update(menuRef, updateDoc);
             }
 
             // Update dailyServings for sauces (peri chicken/ribs). Menu items use quantity only, not dailyServings.

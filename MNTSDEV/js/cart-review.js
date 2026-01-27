@@ -7,7 +7,6 @@
     'use strict';
 
     const GUEST_CART_KEY = 'ppp_guest_cart';
-    let availableSauces = []; // Cache for sauces
     const MAX_QTY = 99;
 
     function setCartReviewLoading(isLoading) {
@@ -20,44 +19,6 @@
         } else {
             container.classList.remove('is-loading');
             container.setAttribute('aria-busy', 'false');
-        }
-    }
-
-    // Load available sauces
-    async function loadSauces() {
-        if (availableSauces.length > 0) return availableSauces;
-        
-        try {
-            await window.utils.waitForFirebaseReady();
-            if (window.firestore && window.firestore.fetchMenuItems) {
-                availableSauces = await window.firestore.fetchMenuItems('sauce');
-            }
-        } catch (error) {
-            console.error('Error loading sauces:', error);
-        }
-        return availableSauces;
-    }
-
-    // Check if item is ribs or Peri chicken
-    async function isRibsOrPeriChicken(itemId) {
-        if (!itemId) return false;
-        
-        try {
-            await window.utils.waitForFirebaseReady();
-            if (!window.firestore || !window.firestore.fetchMenuItemById) return false;
-            
-            const item = await window.firestore.fetchMenuItemById(itemId);
-            if (!item) return false;
-            
-            const category = (item.category || item.type || '').toLowerCase();
-            return category.includes('ribs') || 
-                   category.includes('peri chicken') ||
-                   category.includes('perichicken') ||
-                   category === 'ribs' ||
-                   category === 'peri chicken';
-        } catch (error) {
-            console.error('Error checking item category:', error);
-            return false;
         }
     }
 
@@ -82,18 +43,66 @@
     }
 
     // Render variation dropdown
-    async function renderVariationDropdown(itemId, currentVariation, cartItemEl, source) {
-        if (!itemId) return;
+    async function renderVariationDropdown(menuId, currentVariation, cartItemEl, source) {
+        if (!menuId) return;
         
-        const variations = await getItemVariations(itemId);
+        // Don't show variation dropdown for free sauces
+        const isFree = cartItemEl.dataset.freeWithPeriRibs === 'true';
+        if (isFree) return;
+        
+        const variations = await getItemVariations(menuId);
         if (!variations || variations.length < 2) return;
         
         const itemOptions = cartItemEl.querySelector('.item-options');
         if (!itemOptions) return;
         
-        const currentVariationName = currentVariation?.name || currentVariation?.title || 'Select Variation';
-        const currentVariationIndex = currentVariation?.index !== undefined ? currentVariation.index : 
-            (currentVariation?.name ? variations.findIndex(v => (v.name || v.title) === currentVariation.name) : -1);
+        // Determine current variation index
+        let currentVariationIndex = -1;
+        if (currentVariation) {
+            if (currentVariation.index !== undefined) {
+                currentVariationIndex = currentVariation.index;
+            } else if (currentVariation.name) {
+                currentVariationIndex = variations.findIndex(v => 
+                    (v.name || v.title) === currentVariation.name
+                );
+            } else if (currentVariation.id) {
+                // Match by variation ID
+                currentVariationIndex = variations.findIndex(v => 
+                    (v.variationId || v.id) === currentVariation.id
+                );
+            }
+        }
+        
+        // If still not found, try to get from data attributes (customer-cart.js structure)
+        if (currentVariationIndex === -1) {
+            const storedIndex = cartItemEl.dataset.variationIndex;
+            if (storedIndex !== undefined && storedIndex !== '-1' && storedIndex !== '') {
+                currentVariationIndex = parseInt(storedIndex, 10);
+            } else {
+                // Try to match by itemId (variation ID)
+                const itemId = cartItemEl.dataset.itemId;
+                if (itemId) {
+                    currentVariationIndex = variations.findIndex(v => 
+                        (v.variationId || v.id) === itemId
+                    );
+                }
+                
+                // If still not found, try to extract from item name (e.g., "Classic Ribs - Medium")
+                if (currentVariationIndex === -1) {
+                    const titleEl = cartItemEl.querySelector('.cart-item-title');
+                    if (titleEl) {
+                        const itemName = titleEl.textContent.trim();
+                        const parts = itemName.split(' - ');
+                        if (parts.length > 1) {
+                            const variationNameFromTitle = parts[parts.length - 1];
+                            currentVariationIndex = variations.findIndex(v => 
+                                (v.name || v.title) === variationNameFromTitle
+                            );
+                        }
+                    }
+                }
+            }
+        }
         
         const variationOptions = variations.map((variation, index) => {
             const variationName = variation.name || variation.title || `Variation ${index + 1}`;
@@ -107,14 +116,14 @@
             return `<option value="${index}" ${selected}${disabled}>${variationName} (₱${variationPrice.toFixed(2)})${unavLabel}</option>`;
         }).join('');
         
-        const selectId = `variation-select-${itemId}-${Date.now()}`;
+        const selectId = `variation-select-${menuId}-${Date.now()}`;
         const variationHtml = `
             <div class="variation-select-container">
                 <label for="${selectId}" class="variation-select-label">Variation:</label>
                 <select 
                     id="${selectId}" 
                     class="variation-select"
-                    data-item-id="${itemId}"
+                    data-item-id="${menuId}"
                     data-source="${source}"
                     onchange="cartReview.changeVariation(this)"
                 >
@@ -123,122 +132,78 @@
             </div>
         `;
         
-        // Append variation dropdown to item-options (don't replace, add alongside sauce)
-        const existingContent = itemOptions.innerHTML;
-        itemOptions.innerHTML = existingContent + variationHtml;
-    }
-
-    // Enrich sauces with availability (maxServingsPerDay, remaining, isUnavailable)
-    async function enrichSaucesWithAvailability(sauces) {
-        if (!sauces || sauces.length === 0) return sauces;
-        for (const sauce of sauces) {
-            const max = typeof sauce.maxServingsPerDay === 'number'
-                ? sauce.maxServingsPerDay
-                : (typeof sauce.maxServingsPerDay === 'string' ? parseFloat(sauce.maxServingsPerDay) : null);
-            if (max == null || max === undefined || isNaN(max) || max <= 0) {
-                sauce._isUnavailable = true;
-                sauce._remaining = 0;
-            } else {
-                const served = await window.firestore.fetchDailyServedCount(sauce.id);
-                sauce._remaining = Math.max(0, max - served);
-                sauce._isUnavailable = sauce._remaining <= 0;
-            }
-        }
-        return sauces;
-    }
-
-    // Render sauce dropdown
-    async function renderSauceDropdown(itemId, currentSauce, cartItemEl, source) {
-        const itemOptions = cartItemEl.querySelector('.item-options');
-        if (!itemOptions || !itemId) {
-            // Clear options if no itemId
-            if (itemOptions) itemOptions.innerHTML = '';
-            return;
-        }
-        
-        const isRibsOrChicken = await isRibsOrPeriChicken(itemId);
-        if (!isRibsOrChicken) {
-            // Don't clear if variations might be present - just don't render sauce
-            return;
-        }
-        
-        let sauces = await loadSauces();
-        if (!sauces || sauces.length === 0) {
-            // Don't clear if variations might be present - just don't render sauce
-            return;
-        }
-
-        sauces = await enrichSaucesWithAvailability(sauces);
-        
-        const currentSauceId = currentSauce?.id || null;
-        
-        const sauceOptions = sauces.map(sauce => {
-            const sauceName = sauce.displayName || sauce.name || sauce.title;
-            const selected = sauce.id === currentSauceId ? 'selected' : '';
-            const statusText = sauce._isUnavailable ? ' (Unavailable)' : ` (${sauce._remaining} left)`;
-            const disabled = sauce._isUnavailable ? ' disabled' : '';
-            return `<option value="${sauce.id}" ${selected}${disabled}>${sauceName}${statusText}</option>`;
-        }).join('');
-        
-        const selectId = `sauce-select-${itemId}-${Date.now()}`;
-        const sauceHtml = `
-            <div class="sauce-select-container">
-                <label for="${selectId}" class="sauce-select-label">Sauce:</label>
-                <select 
-                    id="${selectId}" 
-                    class="sauce-select"
-                    data-item-id="${itemId}"
-                    data-source="${source}"
-                    onchange="cartReview.changeSauce(this)"
-                >
-                    ${sauceOptions}
-                </select>
-            </div>
-        `;
-        
-        // Append sauce dropdown to item-options (don't replace, add alongside variation)
-        const existingContent = itemOptions.innerHTML;
-        itemOptions.innerHTML = existingContent + sauceHtml;
+        // Set variation dropdown in item-options
+        itemOptions.innerHTML = variationHtml;
     }
 
     // Change variation for cart item
     async function changeVariation(selectEl) {
-        const itemId = selectEl.dataset.itemId;
+        const menuId = selectEl.dataset.itemId; // This is actually menuId (parent menu item)
         const source = selectEl.dataset.source;
         const variationIndex = selectEl.value !== '' ? parseInt(selectEl.value, 10) : null;
         const cartItem = selectEl.closest('.cart-item');
         
         if (!cartItem) return;
         
-        // If no variation selected, set to null
+        // Prevent changing variation for free sauces
+        const isFree = cartItem.dataset.freeWithPeriRibs === 'true';
+        if (isFree) {
+            if (window.utils?.showToast) {
+                window.utils.showToast('Cannot change variation for free items.', 'info', 2000);
+            }
+            // Reset dropdown to current value
+            const currentVariationIndex = parseInt(cartItem.dataset.variationIndex || '-1', 10);
+            if (currentVariationIndex >= 0) {
+                selectEl.value = currentVariationIndex;
+            }
+            return;
+        }
+        
         let variationData = null;
+        let selectedVariation = null;
+        let newVariationId = null;
+        let newVariationName = null;
+        let newUnitPrice = 0;
+        
         if (variationIndex !== null && !isNaN(variationIndex)) {
-            const variations = await getItemVariations(itemId);
-            const selectedVariation = variations[variationIndex];
+            const variations = await getItemVariations(menuId);
+            selectedVariation = variations[variationIndex];
             if (selectedVariation) {
                 const variationPrice = typeof selectedVariation.price === 'number' ? selectedVariation.price :
                     (typeof selectedVariation.price === 'string' ? parseFloat(selectedVariation.price) : 0);
                 
+                newVariationId = selectedVariation.variationId || selectedVariation.id || null;
+                newVariationName = selectedVariation.name || selectedVariation.title || null;
+                newUnitPrice = variationPrice;
+                
                 variationData = {
                     index: variationIndex,
-                    name: selectedVariation.name || selectedVariation.title || null,
+                    name: newVariationName,
                     price: variationPrice,
-                    id: selectedVariation.variationId || selectedVariation.id || null
+                    id: newVariationId
                 };
                 
                 // Update cart item price based on variation
-                const unitPrice = variationPrice;
                 const qtyDisplay = cartItem.querySelector('.qty-display');
                 const quantity = qtyDisplay ? clampQty(qtyDisplay.value) : 1;
-                const newLineTotal = unitPrice * quantity;
+                const newLineTotal = variationPrice * quantity;
                 
                 // Update price display
                 const priceEl = cartItem.querySelector('.cart-item-price');
                 const pricePerUnitEl = cartItem.querySelector('.price-per-unit');
-                if (priceEl) priceEl.textContent = `₱${unitPrice.toFixed(2)}`;
-                if (pricePerUnitEl) pricePerUnitEl.textContent = `₱${unitPrice.toFixed(2)} each`;
+                if (priceEl) priceEl.textContent = `₱${variationPrice.toFixed(2)}`;
+                if (pricePerUnitEl) pricePerUnitEl.textContent = `₱${variationPrice.toFixed(2)} each`;
                 
-                cartItem.dataset.unitPrice = String(unitPrice);
+                cartItem.dataset.unitPrice = String(variationPrice);
+                
+                // Update item name to include variation
+                const titleEl = cartItem.querySelector('.cart-item-title');
+                if (titleEl && newVariationName) {
+                    // Get base name (remove old variation name if present)
+                    const currentName = titleEl.textContent.trim();
+                    const baseName = currentName.split(' - ')[0]; // Remove existing variation suffix
+                    titleEl.textContent = `${baseName} - ${newVariationName}`;
+                }
             }
         }
         
@@ -256,7 +221,8 @@
             }
         } else {
             const docId = cartItem.dataset.cartDocId;
-            if (!docId) return;
+            const lineId = cartItem.dataset.lineId;
+            if (!docId && !lineId) return;
             
             try {
                 await window.utils.waitForFirebaseReady();
@@ -268,27 +234,83 @@
                 const user = auth.currentUser;
                 if (!user) return;
                 
+                // Direct Firestore update (preferred method to preserve cart structure)
                 const customerRef = window.doc(db, 'customers', user.uid);
                 const cartItemRef = window.doc(customerRef, 'cartItems', docId);
                 
+                const qtyDisplay = cartItem.querySelector('.qty-display');
+                const quantity = qtyDisplay ? clampQty(qtyDisplay.value) : 1;
+                
                 const updateData = {
-                    variation: variationData,
                     updatedAt: new Date()
                 };
                 
-                // Update price if variation changed
-                if (variationData && variationData.price) {
-                    const qtyDisplay = cartItem.querySelector('.qty-display');
-                    const quantity = qtyDisplay ? clampQty(qtyDisplay.value) : 1;
-                    updateData.price = variationData.price * quantity;
+                // Update customer-cart.js structure fields
+                if (newVariationId && variationData) {
+                    updateData.itemId = newVariationId; // Update to new variation ID
+                    updateData.isVariation = true;
+                    updateData.variationIndex = variationIndex;
+                    
+                    // Update name to include variation name
+                    if (newVariationName) {
+                        const titleEl = cartItem.querySelector('.cart-item-title');
+                        if (titleEl) {
+                            const currentName = titleEl.textContent.trim();
+                            // Remove old variation suffix if present
+                            const baseName = currentName.split(' - ')[0];
+                            updateData.name = `${baseName} - ${newVariationName}`;
+                        }
+                    }
+                    
+                    // Update price
+                    if (variationData.price) {
+                        updateData.price = variationData.price * quantity;
+                    }
+                } else {
+                    // Fallback: use old variation object structure
+                    updateData.variation = variationData;
+                    if (variationData && variationData.price) {
+                        updateData.price = variationData.price * quantity;
+                    }
                 }
                 
                 await window.updateDoc(cartItemRef, updateData);
+                
+                // Update local data attributes
+                if (newVariationId) {
+                    cartItem.dataset.itemId = newVariationId;
+                    cartItem.dataset.isVariation = 'true';
+                    cartItem.dataset.variationIndex = String(variationIndex);
+                    cartItem.dataset.unitPrice = String(newUnitPrice);
+                }
+                
+                // Update UI immediately
+                const priceEl = cartItem.querySelector('.cart-item-price');
+                const pricePerUnitEl = cartItem.querySelector('.price-per-unit');
+                if (priceEl && newUnitPrice > 0) {
+                    priceEl.textContent = `₱${newUnitPrice.toFixed(2)}`;
+                }
+                if (pricePerUnitEl && newUnitPrice > 0) {
+                    pricePerUnitEl.textContent = `₱${newUnitPrice.toFixed(2)} each`;
+                }
+                
+                // Update item name if changed
+                if (newVariationName) {
+                    const titleEl = cartItem.querySelector('.cart-item-title');
+                    if (titleEl) {
+                        const currentName = titleEl.textContent.trim();
+                        const baseName = currentName.split(' - ')[0];
+                        titleEl.textContent = `${baseName} - ${newVariationName}`;
+                    }
+                }
                 
                 // Update cart summary after variation change
                 updateCartSummary();
             } catch (error) {
                 console.error('Error updating variation:', error);
+                if (window.utils?.showToast) {
+                    window.utils.showToast('Failed to update variation. Please try again.', 'error', 2000);
+                }
             }
         }
         
@@ -296,63 +318,7 @@
         updateCartSummary();
     }
 
-    // Change sauce for cart item
-    async function changeSauce(selectEl) {
-        const itemId = selectEl.dataset.itemId;
-        const source = selectEl.dataset.source;
-        const newSauceId = selectEl.value;
-        const cartItem = selectEl.closest('.cart-item');
-        
-        if (!cartItem) return;
-        
-        // If no sauce selected, set to null
-        let sauceData = null;
-        if (newSauceId) {
-            const sauces = await loadSauces();
-            const selectedSauce = sauces.find(s => s.id === newSauceId);
-            if (selectedSauce) {
-                sauceData = {
-                    id: selectedSauce.id,
-                    name: selectedSauce.displayName || selectedSauce.name || selectedSauce.title,
-                    price: 0
-                };
-            }
-        }
-        
-        if (source === 'guest') {
-            const guestId = cartItem.dataset.guestId;
-            const cart = getGuestCart();
-            const item = cart.find(i => i.id === guestId);
-            if (item) {
-                item.sauce = sauceData;
-                setGuestCart(cart);
-            }
-        } else {
-            const docId = cartItem.dataset.cartDocId;
-            if (!docId) return;
-            
-            try {
-                await window.utils.waitForFirebaseReady();
-                const db = window.firebaseDb;
-                const auth = window.firebaseAuth;
-                
-                if (!db || !auth || !window.doc || !window.updateDoc) return;
-                
-                const user = auth.currentUser;
-                if (!user) return;
-                
-                const customerRef = window.doc(db, 'customers', user.uid);
-                const cartItemRef = window.doc(customerRef, 'cartItems', docId);
-                
-                await window.updateDoc(cartItemRef, {
-                    sauce: sauceData,
-                    updatedAt: new Date()
-                });
-            } catch (error) {
-                console.error('Error updating sauce:', error);
-            }
-        }
-    }
+    // Sauce functionality removed - sauces are now handled via linked items modal when adding to cart
 
     function getGuestCart() {
         try {
@@ -404,9 +370,38 @@
     async function commitQuantityForCartItem(cartItem, newQty) {
         if (!cartItem) return;
 
+        // Check if this is a free sauce - prevent independent quantity changes
+        const isFreeSauce = cartItem.dataset.freeWithPeriRibs === 'true';
+        if (isFreeSauce) {
+            // Free sauces should not be changed independently
+            // Find the main item and sync quantities
+            const allCartItems = document.querySelectorAll('.cart-item');
+            const sauceMenuId = cartItem.dataset.menuId || cartItem.dataset.itemId;
+            const sauceParentId = cartItem.dataset.parentId;
+            
+            for (const item of allCartItems) {
+                if (item === cartItem) continue;
+                const itemMenuId = item.dataset.menuId || item.dataset.itemId;
+                const itemParentId = item.dataset.parentId;
+                const itemIsFree = item.dataset.freeWithPeriRibs === 'true';
+                
+                // Main item should have same menuId/parentId but not be free
+                if (!itemIsFree && ((itemMenuId === sauceMenuId) || (itemParentId && itemParentId === sauceParentId))) {
+                    const mainQtyInput = item.querySelector('.qty-display');
+                    const mainQty = mainQtyInput ? clampQty(mainQtyInput.value) : 1;
+                    // Reset free sauce to match main item
+                    const qtyInput = cartItem.querySelector('.qty-display');
+                    if (qtyInput) qtyInput.value = String(mainQty);
+                    return;
+                }
+            }
+            return;
+        }
+
         const safeQty = clampQty(newQty);
         const qtyInput = cartItem.querySelector('.qty-display');
         if (qtyInput) qtyInput.value = String(safeQty);
+
 
         updateCartSummary();
 
@@ -418,6 +413,24 @@
         // Guest cart: update localStorage only
         if (source === 'guest') {
             updateGuestCartItemQuantity(guestId, safeQty, unitPrice);
+            
+            // Sync free sauces in guest cart
+            const cart = getGuestCart();
+            const mainItem = cart.find(i => i.id === guestId);
+            if (mainItem) {
+                const mainItemId = mainItem.menuId || mainItem.itemId || mainItem.id;
+                
+                // Update all linked free sauces to match main item quantity
+                cart.forEach(item => {
+                    if (item.freeWithPeriRibs === true) {
+                        const linkedToMainItem = item.linkedToMainItem || item.parentId || item.menuId || item.itemId;
+                        if (linkedToMainItem === mainItemId) {
+                            item.quantity = safeQty;
+                        }
+                    }
+                });
+                setGuestCart(cart);
+            }
             return;
         }
 
@@ -429,7 +442,7 @@
             const db = window.firebaseDb;
             const auth = window.firebaseAuth;
 
-            if (!db || !auth || !window.doc || !window.updateDoc) {
+            if (!db || !auth || !window.updateDoc || !window.collection || !window.getDocs) {
                 console.warn('Firebase not fully initialized for cart update');
                 return;
             }
@@ -449,15 +462,78 @@
                 price: newTotalPrice,
                 updatedAt: new Date()
             });
+            
+            // Sync free sauces in Firestore
+            const cartItemsCol = window.collection(customerRef, 'cartItems');
+            const snap = await window.getDocs(cartItemsCol);
+            const mainItemId = cartItem.dataset.menuId || cartItem.dataset.itemId;
+            
+            // Update all linked free sauces to match main item quantity
+            const updatePromises = [];
+            snap.forEach((docSnap) => {
+                const data = docSnap.data();
+                if (data.freeWithPeriRibs === true) {
+                    const linkedToMainItem = data.linkedToMainItem || data.parentId || data.menuId || data.itemId;
+                    if (linkedToMainItem === mainItemId) {
+                        updatePromises.push(
+                            window.updateDoc(docSnap.ref, {
+                                quantity: safeQty,
+                                updatedAt: new Date()
+                            })
+                        );
+                    }
+                }
+            });
+            
+            // Wait for all free sauce updates to complete
+            if (updatePromises.length > 0) {
+                await Promise.all(updatePromises);
+            }
+            
+            // Reload cart to reflect free sauce quantity changes in UI
+            await loadCartFromFirestore(user);
         } catch (error) {
             console.error('Error updating cart item quantity:', error);
         }
     }
 
-    function removeGuestCartItem(guestId) {
+    function removeGuestCartItem(guestId, cartItemData) {
         if (!guestId) return;
-        const cart = getGuestCart().filter((item) => item.id !== guestId);
-        setGuestCart(cart);
+        const cart = getGuestCart();
+        
+        // Check if this is a main item (not a free sauce)
+        const isMainItem = cartItemData && !cartItemData.freeWithPeriRibs;
+        
+        // If it's a main item, find and remove all linked free sauces
+        if (isMainItem && cartItemData) {
+            const mainItemMenuId = cartItemData.menuId || cartItemData.itemId;
+            
+            // Find the main item in cart to get its menuId/itemId
+            const mainItem = cart.find(item => item.id === guestId);
+            const mainItemId = mainItem ? (mainItem.menuId || mainItem.itemId || mainItem.id) : mainItemMenuId;
+            
+            // Remove all free sauces linked to this main item
+            const filteredCart = cart.filter((item) => {
+                // Remove the main item being deleted
+                if (item.id === guestId) return false;
+                
+                // Remove free sauces linked to this main item
+                if (item.freeWithPeriRibs === true) {
+                    const linkedToMainItem = item.linkedToMainItem || item.parentId || item.menuId || item.itemId;
+                    if (linkedToMainItem === mainItemId) {
+                        return false; // Remove this free sauce
+                    }
+                }
+                
+                return true; // Keep other items
+            });
+            
+            setGuestCart(filteredCart);
+        } else {
+            // Just remove the single item (either a free sauce or if we don't have cart item data)
+            const filteredCart = cart.filter((item) => item.id !== guestId);
+            setGuestCart(filteredCart);
+        }
     }
 
     async function loadCartFromFirestore(authUser) {
@@ -506,9 +582,22 @@
                     quantity > 0 ? totalPrice / quantity : totalPrice;
 
                 const imageUrl = data.imageUrl || 'food_img.png';
-                const sauce = data.sauce || null;
-                const variation = data.variation || null;
+                // Support both old variation object and new isVariation/variationIndex structure
+                // For customer-cart.js items: if isVariation is true, create variation object from variationIndex
+                let variation = null;
+                if (data.variation) {
+                    variation = data.variation;
+                } else if (data.isVariation === true && data.variationIndex !== undefined && data.variationIndex >= 0) {
+                    // Create variation object from customer-cart.js structure
+                    variation = {
+                        index: data.variationIndex,
+                        id: data.itemId || null
+                    };
+                }
                 const itemId = data.itemId || null;
+                // For variations, menuId is the parent menu item ID (used to fetch all variations)
+                // For non-variations, menuId equals itemId
+                const menuId = data.menuId || (data.isVariation ? data.parentId : itemId) || itemId;
 
                 const itemEl = document.createElement('div');
                 itemEl.className = 'cart-item';
@@ -516,6 +605,16 @@
                 itemEl.dataset.unitPrice = String(unitPrice);
                 itemEl.dataset.source = 'user';
                 itemEl.dataset.itemId = itemId || '';
+                itemEl.dataset.menuId = menuId || '';
+                itemEl.dataset.parentId = data.parentId || menuId || '';
+                itemEl.dataset.lineId = data.lineId || '';
+                itemEl.dataset.freeWithPeriRibs = String(data.freeWithPeriRibs || false);
+                itemEl.dataset.isVariation = String(data.isVariation || false);
+                itemEl.dataset.variationIndex = String(data.variationIndex !== undefined ? data.variationIndex : -1);
+
+                const isFree = data.freeWithPeriRibs || false;
+                const priceDisplay = isFree ? 'Free' : `₱${unitPrice.toFixed(2)}`;
+                const pricePerUnitDisplay = isFree ? 'Free' : `₱${unitPrice.toFixed(2)} each`;
 
                 itemEl.innerHTML = `
                     <div class="item-image-container">
@@ -524,29 +623,30 @@
                     <div class="cart-item-details">
                         <div class="item-info">
                             <h3 class="cart-item-title">${name}</h3>
+                            ${isFree ? '<span class="free-badge" style="display:inline-block;padding:4px 8px;background:#4caf50;color:#fff;border-radius:4px;font-size:0.75em;font-weight:600;margin-left:8px;">Free</span>' : ''}
                         </div>
                         <div class="item-options"></div>
                         <div class="item-price-section">
-                            <div class="cart-item-price">₱${unitPrice.toFixed(2)}</div>
-                            <div class="price-per-unit">₱${unitPrice.toFixed(2)} each</div>
+                            <div class="cart-item-price">${priceDisplay}</div>
+                            <div class="price-per-unit">${pricePerUnitDisplay}</div>
                         </div>
                     </div>
                     <div class="cart-item-controls">
-                        <button class="qty-btn minus-btn" onclick="cartReview.updateQuantity(this, -1)">
+                        <button class="qty-btn minus-btn ${isFree ? 'disabled-input' : ''}" onclick="cartReview.updateQuantity(this, -1)" ${isFree ? 'disabled' : ''}>
                             <i class="fas fa-minus"></i>
                         </button>
                         <input
-                            class="qty-display qty-input"
+                            class="qty-display qty-input ${isFree ? 'disabled-input' : ''}"
                             type="text"
                             inputmode="numeric"
                             pattern="\\d{1,2}"
                             maxlength="2"
                             aria-label="Quantity"
                             value="${quantity}"
-                            oninput="cartReview.onQtyInput(this)"
-                            onblur="cartReview.onQtyBlur(this)"
+                            ${isFree ? 'readonly disabled' : 'oninput="cartReview.onQtyInput(this)" onblur="cartReview.onQtyBlur(this)"'}
+                            style="${isFree ? 'background:#f5f5f5;color:#999;cursor:not-allowed;' : ''}"
                         />
-                        <button class="qty-btn plus-btn" onclick="cartReview.updateQuantity(this, 1)">
+                        <button class="qty-btn plus-btn ${isFree ? 'disabled-input' : ''}" onclick="cartReview.updateQuantity(this, 1)" ${isFree ? 'disabled' : ''}>
                             <i class="fas fa-plus"></i>
                         </button>
                     </div>
@@ -558,11 +658,10 @@
                 cartItemsList.appendChild(itemEl);
                 
                 // Render variation dropdown if applicable (2+ variations)
-                // Render sauce dropdown if applicable (ribs or peri chicken)
-                // Both can appear together
-                if (itemId) {
-                    await renderVariationDropdown(itemId, variation, itemEl, 'user');
-                    await renderSauceDropdown(itemId, sauce, itemEl, 'user');
+                // Use menuId (parent menu item) to get all variations, not the variation ID
+                // Only show variation dropdown for main items (not free sauces)
+                if (menuId && !isFree) {
+                    await renderVariationDropdown(menuId, variation, itemEl, 'user');
                 }
             }
         } catch (error) {
@@ -597,9 +696,10 @@
             const unitPrice = quantity > 0 ? lineTotal / quantity : lineTotal;
             const imageUrl = data.imageUrl || 'food_img.png';
             const guestId = data.id || data.itemId || `guest-${name}`;
-            const sauce = data.sauce || null;
             const variation = data.variation || null;
             const itemId = data.itemId || null;
+            const menuId = data.menuId || itemId || null;
+            const isFree = data.freeWithPeriRibs || false;
 
             const itemEl = document.createElement('div');
             itemEl.className = 'cart-item';
@@ -607,6 +707,9 @@
             itemEl.dataset.unitPrice = String(unitPrice);
             itemEl.dataset.source = 'guest';
             itemEl.dataset.itemId = itemId || '';
+            itemEl.dataset.menuId = menuId || '';
+            itemEl.dataset.parentId = data.parentId || menuId || '';
+            itemEl.dataset.freeWithPeriRibs = String(isFree);
 
             itemEl.innerHTML = `
                 <div class="item-image-container">
@@ -649,11 +752,8 @@
             cartItemsList.appendChild(itemEl);
             
             // Render variation dropdown if applicable (2+ variations)
-            // Render sauce dropdown if applicable (ribs or peri chicken)
-            // Both can appear together
             if (itemId) {
                 await renderVariationDropdown(itemId, variation, itemEl, 'guest');
-                await renderSauceDropdown(itemId, sauce, itemEl, 'guest');
             }
         }
 
@@ -819,7 +919,27 @@
         const cartItem = btn.closest('.cart-item');
         if (!cartItem) return;
 
+        // Check if this is a free sauce - prevent increase, allow decrease
+        const isFreeSauce = cartItem.dataset.freeWithPeriRibs === 'true';
+        if (isFreeSauce && change > 0) {
+            // Cannot increase free sauce quantity
+            if (window.utils?.showToast) {
+                window.utils.showToast('Free items cannot be increased. Remove the main item to change quantity.', 'info', 2000);
+            }
+            return;
+        }
+
         const qtyInput = cartItem.querySelector('.qty-display');
+        if (qtyInput && qtyInput.disabled) {
+            // Input is disabled (free sauce) - only allow decrease
+            if (change < 0) {
+                const currentQty = clampQty(qtyInput?.value ?? 1);
+                const newQty = clampQty(currentQty + change);
+                await commitQuantityForCartItem(cartItem, newQty);
+            }
+            return;
+        }
+
         const currentQty = clampQty(qtyInput?.value ?? 1);
         const newQty = clampQty(currentQty + change);
         await commitQuantityForCartItem(cartItem, newQty);
@@ -865,6 +985,15 @@
         const docId = cartItem.dataset.cartDocId;
         const guestId = cartItem.dataset.guestId;
         const source = cartItem.dataset.source || (guestId ? 'guest' : 'user');
+        const lineId = cartItem.dataset.lineId;
+        
+        // Store cart item data before removing from DOM (for guest cart free sauce deletion)
+        const cartItemData = {
+            guestId: guestId,
+            menuId: cartItem.dataset.menuId || '',
+            itemId: cartItem.dataset.itemId || '',
+            freeWithPeriRibs: cartItem.dataset.freeWithPeriRibs === 'true'
+        };
 
         cartItem.style.animation = 'slideOut 0.3s ease forwards';
         
@@ -873,10 +1002,26 @@
             updateCartSummary();
 
             if (source === 'guest') {
-                removeGuestCartItem(guestId);
+                removeGuestCartItem(guestId, cartItemData);
                 return;
             }
 
+            // Use customer-cart.js removeFromCart which handles linked free sauces
+            if (lineId && window.customerCart && window.customerCart.removeFromCart) {
+                try {
+                    await window.customerCart.removeFromCart(lineId);
+                    // Reload cart to reflect changes
+                    const user = window.firebaseAuth?.currentUser;
+                    if (user) {
+                        await loadCartFromFirestore(user);
+                    }
+                } catch (error) {
+                    console.error('Error removing item via customer-cart:', error);
+                }
+                return;
+            }
+
+            // Fallback to direct Firestore delete if customer-cart not available
             if (!docId) return;
 
             try {
@@ -885,7 +1030,7 @@
                 const db = window.firebaseDb;
                 const auth = window.firebaseAuth;
 
-                if (!db || !auth || !window.doc || !window.deleteDoc) {
+                if (!db || !auth || !window.doc || !window.deleteDoc || !window.collection || !window.getDocs) {
                     console.warn('Firebase not fully initialized for cart delete');
                     return;
                 }
@@ -899,7 +1044,44 @@
                 const customerRef = window.doc(db, 'customers', user.uid);
                 const cartItemRef = window.doc(customerRef, 'cartItems', docId);
 
+                // Check if this is a main item (not a free sauce)
+                const isMainItem = cartItem.dataset.freeWithPeriRibs !== 'true';
+                
+                // If it's a main item, find and delete all linked free sauces
+                if (isMainItem) {
+                    const mainItemMenuId = cartItem.dataset.menuId || cartItem.dataset.itemId;
+                    
+                    // Get all cart items to find linked free sauces
+                    const cartItemsCol = window.collection(customerRef, 'cartItems');
+                    const cartItemsSnapshot = await window.getDocs(cartItemsCol);
+                    
+                    // Find all free sauces linked to this main item
+                    const linkedFreeSauceDocs = [];
+                    cartItemsSnapshot.forEach((docSnap) => {
+                        const data = docSnap.data();
+                        if (data.freeWithPeriRibs === true) {
+                            const linkedToMainItem = data.linkedToMainItem || data.parentId || data.menuId;
+                            if (linkedToMainItem === mainItemMenuId) {
+                                linkedFreeSauceDocs.push(docSnap.ref);
+                            }
+                        }
+                    });
+                    
+                    // Delete all linked free sauces
+                    for (const freeSauceRef of linkedFreeSauceDocs) {
+                        try {
+                            await window.deleteDoc(freeSauceRef);
+                        } catch (error) {
+                            console.error('Error deleting linked free sauce:', error);
+                        }
+                    }
+                }
+
+                // Delete the main item
                 await window.deleteDoc(cartItemRef);
+                
+                // Reload cart to reflect changes
+                await loadCartFromFirestore(user);
             } catch (error) {
                 console.error('Error deleting cart item from Firestore:', error);
             }
@@ -907,7 +1089,6 @@
     }
 
     function updateCartSummary() {
-        const items = document.querySelectorAll('.cart-item');
         const summaryItemsEl = document.getElementById('summaryItems');
         const cartItemsList = document.querySelector('.cart-items-list');
         const cartSummary = document.querySelector('.cart-summary');
@@ -915,8 +1096,35 @@
         const proceedBtn = document.querySelector('.proceed-btn');
         if (!summaryItemsEl || !cartItemsList || !cartSummary) return;
 
+        // Read from DOM
+        let cartItems = [];
+        const items = document.querySelectorAll('.cart-item');
+        items.forEach((item) => {
+            const titleEl = item.querySelector('.cart-item-title');
+            const priceEl = item.querySelector('.cart-item-price');
+            const qtyEl = item.querySelector('.qty-display');
+            const docId = item.dataset.cartDocId;
+            const guestId = item.dataset.guestId;
+            
+            if (!docId && !guestId) return;
+            
+            const title = titleEl ? titleEl.textContent.trim() : 'Item';
+            const priceText = priceEl ? priceEl.textContent : '₱0';
+            const overrideRaw = item.dataset._tempQtyOverride;
+            const qtyRaw = overrideRaw !== undefined ? overrideRaw : (qtyEl ? qtyEl.value : '1');
+            const qty = Number(qtyRaw) > 0 ? clampQty(qtyRaw) : 0;
+            const numericPrice = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
+            
+            cartItems.push({
+                name: title,
+                price: numericPrice,
+                quantity: qty,
+                freeWithPeriRibs: item.dataset.freeWithPeriRibs === 'true'
+            });
+        });
+
         // If empty, reset badges and show empty state
-        if (items.length === 0) {
+        if (cartItems.length === 0) {
             summaryItemsEl.innerHTML = '';
             cartSummary.style.display = 'none';
             cartItemsList.classList.add('empty-state');
@@ -965,29 +1173,24 @@
         let rowsHtml = '';
         let totalCount = 0;
 
-        items.forEach((item) => {
-            const titleEl = item.querySelector('.cart-item-title');
-            const priceEl = item.querySelector('.cart-item-price');
-            const qtyEl = item.querySelector('.qty-display');
-
-            const title = titleEl ? titleEl.textContent.trim() : 'Item';
-            const priceText = priceEl ? priceEl.textContent : '₱0';
-            const overrideRaw = item.dataset._tempQtyOverride;
-            const qtyRaw =
-                overrideRaw !== undefined
-                    ? overrideRaw
-                    : (qtyEl ? qtyEl.value : '1');
-            const qty = Number(qtyRaw) > 0 ? clampQty(qtyRaw) : 0;
-
-            const numericPrice = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
-            const lineTotal = numericPrice * qty;
-            subtotal += lineTotal;
+        cartItems.forEach((item) => {
+            const title = item.name || 'Item';
+            const qty = item.quantity || 1;
+            const price = item.freeWithPeriRibs ? 0 : (item.price || 0);
+            const lineTotal = price * qty;
+            
+            // Only add to subtotal if not free
+            if (!item.freeWithPeriRibs) {
+                subtotal += lineTotal;
+            }
             totalCount += qty;
 
+            const priceDisplay = item.freeWithPeriRibs ? '₱0.00' : `₱${lineTotal.toFixed(2)}`;
+            
             rowsHtml += `
                 <div class="summary-row">
                     <span class="summary-label">${title} x ${qty}</span>
-                    <span class="summary-value">₱${lineTotal.toFixed(2)}</span>
+                    <span class="summary-value">${priceDisplay}</span>
                 </div>
             `;
         });
@@ -1054,7 +1257,6 @@
         removeItem,
         addMoreItems,
         proceedToCheckout,
-        changeSauce,
         changeVariation,
         onQtyInput,
         onQtyBlur
@@ -1078,7 +1280,7 @@
     `;
     document.head.appendChild(style);
 
-    // Initialize on DOM ready
+
     document.addEventListener('DOMContentLoaded', () => {
         setCartReviewLoading(true);
         const clearGuestCartIfReload = () => {
@@ -1106,34 +1308,43 @@
             }
         };
 
-        // Wait for auth state so we get the correct current user before reading cart
-        if (window.firebaseAuth && window.onAuthStateChanged) {
-            window.onAuthStateChanged(window.firebaseAuth, async (user) => {
-                try {
-                    if (user) {
-                        await loadCartFromFirestore(user);
-                        await loadAndRenderAddOns();
-                    } else {
-                        clearGuestCartIfReload();
-                        await loadCartFromGuestCart();
-                        await loadAndRenderAddOns();
-                    }
-                } finally {
-                    setCartReviewLoading(false);
-                }
-            });
-        } else {
-            // Fallback if auth isn't available – treat as guest
-            (async () => {
-                try {
+        // Wait for customer cart system to initialize, then load cart
+        const initializeCart = async () => {
+            // Wait for Firebase and customer cart to be available
+            try {
+                await window.utils?.waitForFirebaseReady?.();
+            } catch (e) {
+                console.warn('Firebase not ready:', e);
+            }
+
+
+            try {
+                if (window.firebaseAuth && window.onAuthStateChanged) {
+                    window.onAuthStateChanged(window.firebaseAuth, async (user) => {
+                        try {
+                            if (user) {
+                                await loadCartFromFirestore(user);
+                            } else {
+                                clearGuestCartIfReload();
+                                await loadCartFromGuestCart();
+                            }
+                        } finally {
+                            setCartReviewLoading(false);
+                        }
+                    });
+                } else {
                     clearGuestCartIfReload();
                     await loadCartFromGuestCart();
-                    await loadAndRenderAddOns();
-                } finally {
                     setCartReviewLoading(false);
                 }
-            })();
-        }
+                await loadAndRenderAddOns();
+            } catch (error) {
+                console.error('Error loading cart:', error);
+                setCartReviewLoading(false);
+            }
+        };
+
+        initializeCart();
     });
 })();
 

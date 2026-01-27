@@ -507,7 +507,7 @@
                                     data-item-price="${basePrice}"
                                     data-item-img="${attrSafeImg}"
                                     ${displayVariation ? `data-variation-id="${String(displayVariation.variationId || displayVariation.id || '').replace(/"/g, '&quot;')}" data-variation-name="${String(displayVariation.name || displayVariation.title || '').replace(/"/g, '&quot;')}" data-variation-price="${typeof displayVariation.price === 'number' ? displayVariation.price : (parseFloat(displayVariation.price) || 0)}"` : ''}
-                                    onclick="window.cart.addToCart(event)"
+                                    onclick="event.stopPropagation(); window.addToCart(event)"
                                 >
                                     <i class="fas fa-plus"></i>
                                 </button>

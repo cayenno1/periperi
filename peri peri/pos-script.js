@@ -8,9 +8,6 @@ let posSelectedCategory = 'all'; // Currently selected category filter
 let posPaymentMethod = 'cash'; // Current payment method: 'cash' or 'gcash'
 let posServiceType = 'dine-in'; // Current service type: 'dine-in' or 'take-out'
 
-// Categories that trigger the sauce selection popup (free sauce)
-const PERI_CHICKEN_AND_RIBS_CATEGORIES = ['Peri Chicken', 'Ribs'];
-let posPendingPeriRibs = null; // { product, quantity } when sauce modal is open
 let posPendingLinkedItems = null; // { product, quantity } when linked items modal is open
 
 function generateCartLineId() {
@@ -424,16 +421,6 @@ function addToCart(productId, quantity = 1) {
         return;
     }
     
-    // Peri Chicken & Ribs: show sauce selection popup (sauce is free)
-    if (PERI_CHICKEN_AND_RIBS_CATEGORIES.includes(product.category || '')) {
-        if (!isProductAvailable(product, quantity)) {
-            alert((product.quantity != null && product.quantity > 0) ? `Only ${product.quantity} in stock.` : 'This product is out of stock.');
-            return;
-        }
-        openSauceSelectionModal(product, quantity);
-        return;
-    }
-    
     if (!isProductAvailable(product, quantity)) {
         alert((product.quantity != null && product.quantity > 0) ? `Only ${product.quantity} in stock.` : 'This product is out of stock.');
         return;
@@ -472,91 +459,6 @@ function addToCart(productId, quantity = 1) {
     updatePaymentButton();
 }
 
-// --- Sauce selection for Peri Chicken & Ribs ---
-
-function openSauceSelectionModal(product, quantity) {
-    posPendingPeriRibs = { product, quantity };
-    const titleEl = document.getElementById('posSauceModalTitle');
-    if (titleEl) titleEl.textContent = `Choose sauce for ${product.name}`;
-    
-    const sauces = getSaucesForModal();
-    const listEl = document.getElementById('posSauceList');
-    if (!listEl) return;
-    
-    const inCartQty = (sauceId) => 
-        posCart.filter(i => i.freeWithPeriRibs && i.id === sauceId).reduce((s, c) => s + c.quantity, 0);
-    
-    if (sauces.length === 0) {
-        listEl.innerHTML = '<p class="pos-sauce-none">No sauces in the database. You can still add without sauce.</p>';
-    } else {
-        listEl.innerHTML = sauces.map(sauce => {
-            const base = getSauceAvailable(sauce);
-            const inCart = inCartQty(sauce.id);
-            const avail = (base != null ? base : 0) - inCart;
-            const isUnavailable = avail <= 0;
-            const qtyLabel = avail != null ? `Qty: ${avail}` : '—';
-            return `
-                <div class="pos-sauce-item ${isUnavailable ? 'unavailable' : ''}" data-sauce-id="${sauce.id}">
-                    <div class="pos-sauce-info">
-                        <span class="pos-sauce-name">${escapeHtml(sauce.name)}</span>
-                        <span class="pos-sauce-qty">${qtyLabel}</span>
-                    </div>
-                    <button type="button" class="btn btn-primary btn-sm pos-sauce-select" 
-                            ${isUnavailable ? 'disabled' : ''} 
-                            onclick="confirmPeriRibsWithSauce('${sauce.id}')">
-                        Select
-                    </button>
-                </div>
-            `;
-        }).join('');
-    }
-    
-    document.getElementById('posSauceModal').style.display = 'block';
-}
-
-function closeSauceSelectionModal() {
-    posPendingPeriRibs = null;
-    const m = document.getElementById('posSauceModal');
-    if (m) m.style.display = 'none';
-}
-
-function confirmPeriRibsWithSauce(sauceIdOrNull) {
-    if (!posPendingPeriRibs) return;
-    const { product, quantity } = posPendingPeriRibs;
-    posPendingPeriRibs = null;
-    closeSauceSelectionModal();
-    
-    // Add main item (reuse existing add logic but skip the Peri/Ribs check to avoid recursion)
-    addToCartInternal(product, quantity);
-    
-    if (sauceIdOrNull) {
-        const sauce = posProducts.find(p => p.id === sauceIdOrNull);
-        if (sauce) {
-            const avail = getSauceAvailable(sauce);
-            const inCart = posCart.filter(i => i.freeWithPeriRibs && i.id === sauce.id).reduce((s, c) => s + c.quantity, 0);
-            const effective = (avail != null ? avail : 0) - inCart;
-            if (effective >= quantity) {
-                posCart.push({
-                    lineId: generateCartLineId(),
-                    id: sauce.id,
-                    menuId: sauce.menuId,
-                    name: sauce.name,
-                    price: 0,
-                    quantity: quantity,
-                    image: sauce.image,
-                    freeWithPeriRibs: true,
-                    maxServingsPerDay: sauce.maxServingsPerDay,
-                    isVariation: sauce.isVariation,
-                    variationIndex: sauce.variationIndex,
-                    parentId: sauce.parentId
-                });
-            }
-        }
-    }
-    
-    updateCart();
-    updatePaymentButton();
-}
 
 // Open linked items modal (for products with includedSauces)
 function openLinkedItemsModal(product, quantity) {
@@ -598,15 +500,19 @@ function openLinkedItemsModal(product, quantity) {
                         <span class="pos-sauce-name">${escapeHtml(sauceName)}</span>
                         <span class="pos-sauce-qty">${qtyLabel}</span>
                     </div>
-                    <button type="button" class="btn btn-primary btn-sm pos-sauce-select" 
+                    <button type="button" class="btn btn-outline-primary btn-sm pos-sauce-select" 
                             ${isUnavailable ? 'disabled' : ''} 
                             onclick="selectLinkedItem('${sauce.id}')">
-                        Select
+                        <i class="fas fa-circle" style="font-size: 6px; margin-right: 6px; opacity: 0;"></i>Select
                     </button>
                 </div>
             `;
         }).join('');
     }
+    
+    // Reset selected items and update button state
+    selectedLinkedItems = [];
+    updateAddButtonState();
     
     document.getElementById('posLinkedItemsModal').style.display = 'block';
 }
@@ -621,14 +527,31 @@ function selectLinkedItem(sauceId) {
     if (item.classList.contains('unavailable')) return;
     
     // Toggle selection
+    const selectBtn = item.querySelector('.pos-sauce-select');
+    const icon = selectBtn.querySelector('i');
+    
     if (selectedLinkedItems.includes(sauceId)) {
         selectedLinkedItems = selectedLinkedItems.filter(id => id !== sauceId);
         item.classList.remove('selected');
-        item.querySelector('.pos-sauce-select').textContent = 'Select';
+        selectBtn.innerHTML = '<i class="fas fa-circle" style="font-size: 6px; margin-right: 6px; opacity: 0;"></i>Select';
+        selectBtn.classList.remove('btn-primary');
+        selectBtn.classList.add('btn-outline-primary');
     } else {
         selectedLinkedItems.push(sauceId);
         item.classList.add('selected');
-        item.querySelector('.pos-sauce-select').textContent = 'Selected';
+        selectBtn.innerHTML = '<i class="fas fa-check" style="margin-right: 6px;"></i>Selected';
+        selectBtn.classList.remove('btn-outline-primary');
+        selectBtn.classList.add('btn-primary');
+    }
+    
+    // Update Add button state
+    updateAddButtonState();
+}
+
+function updateAddButtonState() {
+    const addBtn = document.getElementById('posAddSelectedBtn');
+    if (addBtn) {
+        addBtn.disabled = selectedLinkedItems.length === 0;
     }
 }
 
@@ -637,6 +560,7 @@ function closeLinkedItemsModal() {
     selectedLinkedItems = [];
     const m = document.getElementById('posLinkedItemsModal');
     if (m) m.style.display = 'none';
+    updateAddButtonState();
 }
 
 function confirmLinkedItems(selectedIds) {
@@ -650,7 +574,15 @@ function confirmLinkedItems(selectedIds) {
     
     // Add selected linked items (or all if selectedIds is null)
     const linkedSauceIds = (product.includedSauces || []).map(s => s.sauceId || s.menuId || s.id).filter(Boolean);
-    const itemsToAdd = selectedIds === null ? linkedSauceIds : (Array.isArray(selectedIds) ? selectedIds : selectedLinkedItems);
+    // If selectedIds is null, add all. If it's an empty array, add nothing. Otherwise use the provided array or selectedLinkedItems
+    let itemsToAdd = [];
+    if (selectedIds === null) {
+        itemsToAdd = linkedSauceIds; // Add all
+    } else if (Array.isArray(selectedIds)) {
+        itemsToAdd = selectedIds; // Use provided array (could be empty for skip, or selected items for Add)
+    } else {
+        itemsToAdd = selectedLinkedItems; // Fallback to selectedLinkedItems
+    }
     
     itemsToAdd.forEach(sauceId => {
         const sauce = posProducts.find(p => p.id === sauceId || p.menuId === sauceId);
@@ -682,7 +614,7 @@ function confirmLinkedItems(selectedIds) {
     updatePaymentButton();
 }
 
-// Internal add (no sauce popup) — used by confirmPeriRibsWithSauce
+// Internal add (no sauce popup) — used by confirmLinkedItems
 function addToCartInternal(product, quantity) {
     const existingItem = posCart.find(item => item.id === product.id && !item.freeWithPeriRibs);
     const newQty = existingItem ? existingItem.quantity + quantity : quantity;
@@ -724,7 +656,11 @@ function removeFromCart(lineId) {
 function updateCartItemQuantity(lineId, change) {
     const item = posCart.find(i => i.lineId === lineId);
     if (!item) return;
-    if (item.freeWithPeriRibs) return; // Free sauce qty is fixed, no +/-
+    
+    // Free sauces cannot be increased, only decreased
+    if (item.freeWithPeriRibs && change > 0) {
+        return; // Prevent increasing free sauce quantity
+    }
     
     const newQty = item.quantity + change;
     if (newQty <= 0) {
@@ -757,7 +693,13 @@ function updateCartItemQuantity(lineId, change) {
 function updateCartItemQuantityDirect(lineId, newQtyStr) {
     const item = posCart.find(i => i.lineId === lineId);
     if (!item) return;
-    if (item.freeWithPeriRibs) return; // Free sauce qty is fixed, not editable
+    
+    // Free sauces cannot have quantity changed by typing - only decrease button works
+    if (item.freeWithPeriRibs) {
+        // Reset to current quantity
+        updateCart();
+        return;
+    }
     
     let newQty = parseInt(newQtyStr, 10);
     
@@ -822,19 +764,17 @@ function updateCart() {
                     </div>
                     <div class="pos-cart-item-controls">
                         <div class="pos-cart-item-qty">
-                            ${isFree
-                                ? `<span class="pos-cart-item-qty-static" title="Quantity is fixed for free sauce">${item.quantity}</span>`
-                                : `<button onclick="updateCartItemQuantity('${lineId}', -1)">-</button>
-                                   <input type="number" 
-                                          class="pos-cart-qty-input" 
-                                          value="${item.quantity}" 
-                                          min="1" 
-                                          max="99" 
-                                          onchange="updateCartItemQuantityDirect('${lineId}', this.value)"
-                                          onkeydown="return event.key !== 'Enter' || (event.preventDefault(), updateCartItemQuantityDirect('${lineId}', this.value), false)"
-                                          onclick="this.select()">
-                                   <button onclick="updateCartItemQuantity('${lineId}', 1)">+</button>`
-                            }
+                            <button onclick="updateCartItemQuantity('${lineId}', -1)" ${isFree ? '' : ''}>-</button>
+                            <input type="number" 
+                                   class="pos-cart-qty-input ${isFree ? 'disabled-input' : ''}" 
+                                   value="${item.quantity}" 
+                                   min="1" 
+                                   max="99" 
+                                   ${isFree ? 'readonly disabled' : ''}
+                                   onchange="${isFree ? '' : `updateCartItemQuantityDirect('${lineId}', this.value)`}"
+                                   onkeydown="${isFree ? 'return false;' : `return event.key !== 'Enter' || (event.preventDefault(), updateCartItemQuantityDirect('${lineId}', this.value), false)`}"
+                                   onclick="${isFree ? '' : 'this.select()'}">
+                            <button onclick="updateCartItemQuantity('${lineId}', 1)" ${isFree ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>+</button>
                         </div>
                         <div class="pos-cart-item-total">${isFree ? 'Free' : '₱' + itemTotal.toFixed(2)}</div>
                         <button class="pos-cart-item-remove" onclick="removeFromCart('${lineId}')" title="Remove">
@@ -1299,7 +1239,7 @@ function showReceipt(orderId, orderData, paymentAmount, change, customerName = '
             <div class="pos-receipt-items">
                 ${orderData.items.map(item => `
                     <div class="pos-receipt-item">
-                        <div class="pos-receipt-item-name">${item.name}${item.freeWithPeriRibs ? ' (Free with Peri Chicken & Ribs)' : ''}</div>
+                        <div class="pos-receipt-item-name">${item.name}${item.freeWithPeriRibs ? ' (Free)' : ''}</div>
                         <div class="pos-receipt-item-qty">${item.quantity}x</div>
                         <div class="pos-receipt-item-price">₱${(item.price * item.quantity).toFixed(2)}</div>
                     </div>
@@ -1548,7 +1488,7 @@ function isFirestoreReady() {
 window.onclick = function(event) {
     const receiptModal = document.getElementById('posReceiptModal');
     const ordersLogModal = document.getElementById('posOrdersLogModal');
-    const sauceModal = document.getElementById('posSauceModal');
+    const linkedItemsModal = document.getElementById('posLinkedItemsModal');
     
     if (event.target === receiptModal) {
         closeReceiptModal();
@@ -1558,11 +1498,6 @@ window.onclick = function(event) {
         closeWalkInOrdersLog();
     }
     
-    if (event.target === sauceModal) {
-        closeSauceSelectionModal();
-    }
-    
-    const linkedItemsModal = document.getElementById('posLinkedItemsModal');
     if (event.target === linkedItemsModal) {
         closeLinkedItemsModal();
     }

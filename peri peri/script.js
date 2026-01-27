@@ -92,9 +92,15 @@ const DailyServingsStore = (() => {
         return window.firestoreFunctions;
     }
     
-    // Get today's date string (YYYY-MM-DD)
+    // Get today's date string (YYYY-MM-DD) in Asia/Manila timezone
     function getTodayDateString() {
-        return new Date().toISOString().split('T')[0];
+        // Use Asia/Manila timezone for date calculation
+        const now = new Date();
+        const manilaDate = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+        const year = manilaDate.getFullYear();
+        const month = String(manilaDate.getMonth() + 1).padStart(2, '0');
+        const day = String(manilaDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
     
     // Get today's serving count for a menu item
@@ -3808,9 +3814,16 @@ function getCurrentStaffName() {
         try {
             const staffSession = JSON.parse(session);
             if (staffSession.firstName && staffSession.lastName) {
-                return `${staffSession.firstName} ${staffSession.lastName}`;
+                let displayName = `${staffSession.firstName} ${staffSession.lastName}`;
+                if (staffSession.suffix) {
+                    displayName += ` ${staffSession.suffix}`;
+                }
+                return displayName;
             } else if (staffSession.email) {
-                return staffSession.email;
+                // Prefer user part over full email for receipts
+                const email = String(staffSession.email);
+                const namePart = email.split('@')[0];
+                return namePart ? namePart : email;
             } else if (staffSession.staffId) {
                 return staffSession.staffId;
             }
@@ -4537,56 +4550,12 @@ function viewKitchenReceipt(orderId) {
 function printKitchenReceipt(order, autoPrint) {
     if (!order) return;
     if (autoPrint === undefined) autoPrint = true;
-    const orderId = escapeHtml(String(order.trackingId || order.id));
-    const serviceType = (order.serviceType || '').toLowerCase().trim();
-    const isDineIn = serviceType === 'dine-in' || serviceType === 'dinein';
-    const isPickUp = serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up';
-    const isDelivery = !isDineIn && !isPickUp;
-
-    let serviceLabel = (order.serviceType || '—').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    let locationText = '';
-    if (isDineIn) {
-        const tbl = order.tableNumber != null ? String(order.tableNumber) : '—';
-        locationText = `Table: ${escapeHtml(tbl)}`;
-    } else if (isDelivery) {
-        const addr = order.address || order.deliveryInfo?.address || '—';
-        locationText = `Address: ${escapeHtml(addr)}`;
-    } else if (isPickUp) {
-        locationText = 'Pick-up';
-    }
-
-    const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
-    const orderNotes = (order.notes || order.specialInstructions || '').trim();
-
-    const items = Array.isArray(order.items) ? order.items : [];
-    const itemsHtml = items.length
-        ? items.map(item => {
-            const name = escapeHtml(String(item.name || item.itemName || item.itemId || 'Item'));
-            const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
-            const notes = [item.notes, item.instructions, item.specialInstructions].filter(Boolean).map(s => String(s).trim()).join('; ');
-            const notePart = notes ? ` <span class="item-note">(${escapeHtml(notes)})</span>` : '';
-            return `<div class="kitchen-receipt-item"><span class="qty">${qty}x</span> <span class="name">${name}${notePart}</span></div>`;
-        }).join('')
-        : '<div class="kitchen-receipt-item">—</div>';
-
-    const now = new Date().toLocaleString();
     const receiptHTML = `
-        <div class="kitchen-receipt">
-            <div class="kitchen-receipt-items">
-                <h2 class="kitchen-receipt-items-title">ITEMS TO PREPARE</h2>
-                ${itemsHtml}
-            </div>
-            <div class="kitchen-receipt-header">
-                <p class="kitchen-receipt-meta"><strong>KITCHEN COPY</strong> · #${orderId}</p>
-                <p><strong>Service:</strong> ${escapeHtml(serviceLabel)} · ${escapeHtml(locationText)}</p>
-                <p><strong>Customer:</strong> ${escapeHtml(customerName)} · <strong>Time:</strong> ${escapeHtml(now)}</p>
-                ${orderNotes ? `<p><strong>Order notes:</strong> ${escapeHtml(orderNotes)}</p>` : ''}
-            </div>
-            <div class="kitchen-receipt-footer">
-                <p>— PABLO'S PERI PERI —</p>
-            </div>
+        <div class="pos-receipts-container">
+            ${generateKitchenReceiptHTML(order)}
         </div>
-        ${!autoPrint ? '<div class="kitchen-receipt-actions"><button type="button" onclick="window.print()">Print</button></div>' : ''}`;
+        ${!autoPrint ? '<div class="kitchen-receipt-actions"><button type="button" onclick="window.print()">Print</button></div>' : ''}
+    `;
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -4597,24 +4566,119 @@ function printKitchenReceipt(order, autoPrint) {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Kitchen Receipt - ${orderId}</title>
+            <title>Kitchen Receipt</title>
             <meta charset="UTF-8">
             <style>
-                @page { size: 80mm auto; margin: 0; }
-                @media print { body { margin: 0; padding: 5mm; width: 80mm; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .kitchen-receipt-actions { display: none !important; } }
-                body { font-family: 'Courier New', monospace; padding: 5mm; margin: 0; background: #fff; max-width: 80mm; font-size: 10px; line-height: 1.3; }
-                .kitchen-receipt { width: 100%; }
-                .kitchen-receipt-items { margin: 0 0 10px 0; padding-bottom: 10px; border-bottom: 2px solid #000; }
-                .kitchen-receipt-items-title { margin: 0 0 8px 0; font-size: 11px; font-weight: bold; text-align: center; letter-spacing: 0.5px; }
-                .kitchen-receipt-item { margin-bottom: 8px; font-size: 15px; line-height: 1.35; display: flex; align-items: flex-start; gap: 6px; }
-                .kitchen-receipt-item .qty { flex-shrink: 0; font-weight: bold; font-size: 16px; min-width: 28px; }
-                .kitchen-receipt-item .name { flex: 1; word-wrap: break-word; font-size: 15px; font-weight: 500; }
-                .kitchen-receipt-item .item-note { font-size: 11px; color: #333; font-weight: normal; }
-                .kitchen-receipt-header { padding: 6px 0; border-bottom: 1px dashed #000; }
-                .kitchen-receipt-header p { margin: 3px 0; font-size: 8px; text-align: left; line-height: 1.4; }
-                .kitchen-receipt-meta { font-size: 9px; text-align: center; margin-bottom: 4px !important; }
-                .kitchen-receipt-footer { text-align: center; margin-top: 8px; padding-top: 6px; font-size: 8px; }
-                .kitchen-receipt-actions { text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #ccc; }
+                @page {
+                    size: 80mm auto;
+                    margin: 0;
+                    padding: 0;
+                }
+                @media print {
+                    body { 
+                        margin: 0; 
+                        padding: 5mm 5mm; 
+                        width: 80mm;
+                        font-size: 10px;
+                    }
+                    * {
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .kitchen-receipt-actions { display: none !important; }
+                }
+                body { 
+                    font-family: 'Courier New', monospace; 
+                    padding: 5mm; 
+                    margin: 0;
+                    background: white;
+                    width: 80mm;
+                    max-width: 80mm;
+                    font-size: 10px;
+                    line-height: 1.2;
+                }
+                .pos-receipts-container {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 20px;
+                }
+                .pos-receipt-content { 
+                    background: white; 
+                    width: 100%;
+                    max-width: 80mm;
+                    margin: 0;
+                    padding: 0;
+                }
+                .pos-receipt-header { 
+                    text-align: center; 
+                    margin-bottom: 8px; 
+                    border-bottom: 1px dashed #000; 
+                    padding-bottom: 8px; 
+                }
+                .pos-receipt-header h3 { 
+                    margin: 0 0 4px 0; 
+                    font-size: 14px; 
+                    font-weight: bold; 
+                    line-height: 1.2;
+                }
+                .pos-receipt-header p { 
+                    margin: 2px 0; 
+                    font-size: 9px; 
+                    line-height: 1.2;
+                }
+                .pos-receipt-items { margin: 8px 0; }
+                .pos-receipt-item { 
+                    display: flex; 
+                    justify-content: space-between; 
+                    margin-bottom: 4px; 
+                    padding-bottom: 4px; 
+                    border-bottom: 1px dotted #ccc; 
+                    font-size: 9px;
+                    line-height: 1.3;
+                }
+                .pos-receipt-item-name { 
+                    flex: 1; 
+                    text-align: left;
+                    word-wrap: break-word;
+                    padding-right: 4px;
+                }
+                .pos-receipt-item-qty { 
+                    margin: 0 4px; 
+                    text-align: center; 
+                    min-width: 20px; 
+                    flex-shrink: 0;
+                }
+                .pos-receipt-item-price { 
+                    text-align: right; 
+                    min-width: 50px; 
+                    flex-shrink: 0;
+                }
+                .pos-receipt-total { 
+                    border-top: 1px solid #000; 
+                    padding-top: 6px; 
+                    margin-top: 8px; 
+                }
+                .pos-receipt-total-row { 
+                    display: flex; 
+                    justify-content: space-between; 
+                    margin-bottom: 3px; 
+                    font-size: 10px;
+                    line-height: 1.3;
+                }
+                .pos-receipt-footer { 
+                    text-align: center; 
+                    margin-top: 10px; 
+                    padding-top: 8px; 
+                    border-top: 1px dashed #000; 
+                    font-size: 9px; 
+                    line-height: 1.3;
+                }
+                .kitchen-receipt-actions { 
+                    text-align: center; 
+                    margin-top: 12px; 
+                    padding-top: 8px; 
+                    border-top: 1px dashed #ccc; 
+                }
                 .kitchen-receipt-actions button { padding: 6px 16px; font-size: 12px; cursor: pointer; }
             </style>
         </head>
@@ -4654,6 +4718,7 @@ function printCustomerReceipt(order, autoPrint) {
     const discount = order.discount;
     const paymentMode = escapeHtml(String(order.paymentMode || 'Cash'));
     const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
+    const cashierName = escapeHtml(String(order.processedByName || order.cashierName || getCurrentStaffName() || 'Staff'));
     const serviceType = (order.serviceType || '').toLowerCase().trim();
     let serviceLabel = 'DINE IN';
     if (serviceType === 'delivery') serviceLabel = 'DELIVERY';
@@ -4696,6 +4761,7 @@ function printCustomerReceipt(order, autoPrint) {
                 <p>Order ID: ${orderId}</p>
                 <p>Customer: ${escapeHtml(customerName)}</p>
                 ${extraLine}
+                <p>Cashier: ${cashierName}</p>
                 <p>Date: ${escapeHtml(now)}</p>
             </div>
             <div class="pos-receipt-items">${itemsHtml}</div>
@@ -4835,54 +4901,89 @@ function showReceiptPreview(order, type) {
 function generateKitchenReceiptHTML(order) {
     if (!order) return '';
     
+    // POS-style kitchen receipt markup (match POS kitchen copy layout/classes)
     const orderId = escapeHtml(String(order.trackingId || order.id));
-    const serviceType = (order.serviceType || '').toLowerCase().trim();
-    const isDineIn = serviceType === 'dine-in' || serviceType === 'dinein';
-    const isPickUp = serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up';
-    const isDelivery = !isDineIn && !isPickUp;
 
-    let serviceLabel = (order.serviceType || '—').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    let locationText = '';
-    if (isDineIn) {
-        const tbl = order.tableNumber != null ? String(order.tableNumber) : '—';
-        locationText = `Table: ${escapeHtml(tbl)}`;
-    } else if (isDelivery) {
-        const addr = order.address || order.deliveryInfo?.address || '—';
-        locationText = `Address: ${escapeHtml(addr)}`;
-    } else if (isPickUp) {
-        locationText = 'Pick-up';
-    }
+    const serviceTypeRaw = String(order.serviceType || order.deliveryInfo?.serviceType || '').toLowerCase().trim();
+    const isDineIn = serviceTypeRaw === 'dine-in' || serviceTypeRaw === 'dinein';
+    const isTakeOut = serviceTypeRaw === 'take-out' || serviceTypeRaw === 'takeout';
+    const isPickUp = serviceTypeRaw === 'pick-up' || serviceTypeRaw === 'pickup' || serviceTypeRaw === 'pick_up';
+    const isDelivery = serviceTypeRaw === 'delivery' || (!isDineIn && !isTakeOut && !isPickUp && !!serviceTypeRaw);
 
-    const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
-    const orderNotes = (order.notes || order.specialInstructions || '').trim();
+    let serviceLabel = '—';
+    if (isTakeOut) serviceLabel = 'TAKE OUT';
+    else if (isDineIn) serviceLabel = 'DINE IN';
+    else if (isPickUp) serviceLabel = 'PICK UP';
+    else if (isDelivery) serviceLabel = 'DELIVERY';
+    else if (serviceTypeRaw) serviceLabel = serviceTypeRaw.replace(/-/g, ' ').toUpperCase();
+
+    const customerName = typeof formatOrderCustomer === 'function'
+        ? formatOrderCustomer(order)
+        : (order.customerName || order.deliveryInfo?.customerName || '—');
+
+    const cashierName = escapeHtml(String(order.processedByName || order.cashierName || getCurrentStaffName() || 'Staff'));
+
+    const tableNumber = order.tableNumber ?? order.deliveryInfo?.tableNumber ?? '';
+    const tableLine = (isDineIn && tableNumber !== '' && tableNumber != null)
+        ? `<p>Table: ${escapeHtml(String(tableNumber))}</p>`
+        : '';
+
+    const address = order.address || order.deliveryInfo?.address || '';
+    const addressLine = (isDelivery && address)
+        ? `<p>Address: ${escapeHtml(String(address))}</p>`
+        : '';
+
+    const orderNotes = String(order.notes || order.specialInstructions || '').trim();
+    const notesLine = orderNotes ? `<p>Notes: ${escapeHtml(orderNotes)}</p>` : '';
+
+    const createdAt = order.createdAt?.toDate?.() || (order.createdAt ? new Date(order.createdAt) : null);
+    const dateStr = escapeHtml((createdAt instanceof Date && !isNaN(createdAt.getTime())) ? createdAt.toLocaleString() : new Date().toLocaleString());
 
     const items = Array.isArray(order.items) ? order.items : [];
-    const itemsHtml = items.length
-        ? items.map(item => {
-            const name = escapeHtml(String(item.name || item.itemName || item.itemId || 'Item'));
-            const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
-            const notes = [item.notes, item.instructions, item.specialInstructions].filter(Boolean).map(s => String(s).trim()).join('; ');
-            const notePart = notes ? ` <span class="item-note">(${escapeHtml(notes)})</span>` : '';
-            return `<div class="kitchen-receipt-item"><span class="qty">${qty}x</span> <span class="name">${name}${notePart}</span></div>`;
-        }).join('')
-        : '<div class="kitchen-receipt-item">—</div>';
+    const itemsHtml = items.map(item => {
+        const name = escapeHtml(String(item.name || item.itemName || item.itemId || 'Item'));
+        const qtyNum = Number(item.quantity);
+        const qty = (Number.isFinite(qtyNum) && qtyNum > 0) ? qtyNum : 1;
+        const freeNote = item.freeWithPeriRibs ? ' (Free)' : '';
+        return `
+            <div class="pos-receipt-item">
+                <div class="pos-receipt-item-name">${name}${freeNote}</div>
+                <div class="pos-receipt-item-qty">${qty}x</div>
+                <div class="pos-receipt-item-price">—</div>
+            </div>
+        `;
+    }).join('');
 
-    const now = new Date().toLocaleString();
-    
+    const totalItems = items.reduce((sum, item) => {
+        const q = Number(item.quantity);
+        return sum + ((Number.isFinite(q) && q > 0) ? q : 1);
+    }, 0);
+
     return `
-        <div class="kitchen-receipt">
-            <div class="kitchen-receipt-items">
-                <h2 class="kitchen-receipt-items-title">ITEMS TO PREPARE</h2>
-                ${itemsHtml}
+        <div class="pos-receipt-content pos-receipt-kitchen">
+            <div class="pos-receipt-header">
+                <h3>PABLO'S PERI PERI</h3>
+                <p><strong>KITCHEN COPY</strong></p>
+                <p><strong>${serviceLabel}</strong></p>
+                <p>Order ID: ${orderId}</p>
+                <p>Customer: ${escapeHtml(String(customerName))}</p>
+                ${tableLine}
+                ${addressLine}
+                <p>Cashier: ${cashierName}</p>
+                <p>Date: ${dateStr}</p>
+                ${notesLine}
             </div>
-            <div class="kitchen-receipt-header">
-                <p class="kitchen-receipt-meta"><strong>KITCHEN COPY</strong> · #${orderId}</p>
-                <p><strong>Service:</strong> ${escapeHtml(serviceLabel)} · ${escapeHtml(locationText)}</p>
-                <p><strong>Customer:</strong> ${escapeHtml(customerName)} · <strong>Time:</strong> ${escapeHtml(now)}</p>
-                ${orderNotes ? `<p><strong>Order notes:</strong> ${escapeHtml(orderNotes)}</p>` : ''}
+            <div class="pos-receipt-items">
+                ${itemsHtml || '<div class="pos-receipt-item"><div class="pos-receipt-item-name">—</div><div class="pos-receipt-item-qty">—</div><div class="pos-receipt-item-price">—</div></div>'}
             </div>
-            <div class="kitchen-receipt-footer">
-                <p>— PABLO'S PERI PERI —</p>
+            <div class="pos-receipt-total">
+                <div class="pos-receipt-total-row">
+                    <span>Total Items:</span>
+                    <span>${totalItems}</span>
+                </div>
+            </div>
+            <div class="pos-receipt-footer">
+                <p>Please prepare order</p>
             </div>
         </div>
     `;
@@ -4900,6 +5001,7 @@ function generateCustomerReceiptHTML(order) {
     const discount = order.discount;
     const paymentMode = escapeHtml(String(order.paymentMode || 'Cash'));
     const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
+    const cashierName = escapeHtml(String(order.processedByName || order.cashierName || getCurrentStaffName() || 'Staff'));
     const serviceType = (order.serviceType || '').toLowerCase().trim();
     let serviceLabel = 'DINE IN';
     if (serviceType === 'delivery') serviceLabel = 'DELIVERY';
@@ -4943,6 +5045,7 @@ function generateCustomerReceiptHTML(order) {
                 <p>Order ID: ${orderId}</p>
                 <p>Customer: ${escapeHtml(customerName)}</p>
                 ${extraLine}
+                <p>Cashier: ${cashierName}</p>
                 <p>Date: ${escapeHtml(now)}</p>
             </div>
             <div class="pos-receipt-items">${itemsHtml}</div>
@@ -8326,16 +8429,47 @@ function sortMenuListItems(items) {
     return sorted;
 }
 
+// Update reset time countdown in menu list header
+let resetTimeCountdownInterval = null;
+
+function updateResetTimeHeader() {
+    const resetTimeHeader = document.getElementById('resetTimeHeader');
+    if (resetTimeHeader) {
+        const resetInfo = getNextResetTime();
+        const timeUntilReset = `${resetInfo.hoursUntilReset}h ${resetInfo.minutesUntilReset}m`;
+        resetTimeHeader.innerHTML = `(Resets: ${resetInfo.resetTime} - <span style="color: #f6c056;">${timeUntilReset}</span>)`;
+    }
+}
+
+function startResetTimeCountdown() {
+    // Clear existing interval if any
+    if (resetTimeCountdownInterval) {
+        clearInterval(resetTimeCountdownInterval);
+    }
+    
+    // Update immediately
+    updateResetTimeHeader();
+    
+    // Update every minute
+    resetTimeCountdownInterval = setInterval(() => {
+        updateResetTimeHeader();
+    }, 60000); // Update every minute
+}
+
+function stopResetTimeCountdown() {
+    if (resetTimeCountdownInterval) {
+        clearInterval(resetTimeCountdownInterval);
+        resetTimeCountdownInterval = null;
+    }
+}
+
 async function renderMenuListTable() {
     const tableBody = document.getElementById('menuListTableBody');
     if (!tableBody) return;
     
-    // Update reset time in header
-    const resetTimeHeader = document.getElementById('resetTimeHeader');
-    if (resetTimeHeader) {
-        const resetInfo = getNextResetTime();
-        resetTimeHeader.textContent = `(Resets: ${resetInfo.resetTime})`;
-    }
+    // Update reset time in header and start countdown
+    updateResetTimeHeader();
+    startResetTimeCountdown();
     
     // Refresh serving cache: for items with variations use each variation's id; otherwise use item id
     if (menuState && menuState.length > 0) {
@@ -8606,20 +8740,56 @@ function editMenuServingLimitInline(itemId, itemName, currentLimit) {
 
 // Get next reset time information
 function getNextResetTime() {
+    // Use Asia/Manila timezone (GMT+8)
+    const timezone = 'Asia/Manila';
     const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
     
-    const timeUntilReset = tomorrow - now;
+    // Get current date/time in Manila using Intl API
+    const formatter = new Intl.DateTimeFormat('en-CA', { // en-CA gives YYYY-MM-DD format
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const getPart = (type) => parseInt(parts.find(p => p.type === type).value);
+    
+    const year = getPart('year');
+    const month = getPart('month') - 1; // JavaScript months are 0-indexed
+    const day = getPart('day');
+    const hour = getPart('hour');
+    const minute = getPart('minute');
+    const second = getPart('second');
+    
+    // Create a date representing current time in Manila (as if it were local time)
+    // This is just for calculation purposes
+    const nowManila = new Date(year, month, day, hour, minute, second);
+    
+    // Calculate next midnight in Manila (tomorrow at 00:00:00)
+    const resetDateManila = new Date(year, month, day + 1, 0, 0, 0);
+    
+    // Calculate time difference
+    const timeUntilReset = resetDateManila - nowManila;
     const hours = Math.floor(timeUntilReset / (1000 * 60 * 60));
     const minutes = Math.floor((timeUntilReset % (1000 * 60 * 60)) / (1000 * 60));
     
-    // Format reset time in local timezone (short format for display)
-    const resetTimeStr = tomorrow.toLocaleString('en-US', {
+    // Format reset time in Asia/Manila timezone for display
+    // We need to create a proper Date object that represents midnight in Manila
+    // Manila is UTC+8, so midnight Manila = 16:00 previous day UTC
+    const resetUTC = new Date(Date.UTC(year, month, day + 1, 0, 0, 0));
+    resetUTC.setUTCHours(resetUTC.getUTCHours() - 8); // Convert to UTC (Manila is +8)
+    
+    const resetTimeStr = resetUTC.toLocaleString('en-US', {
+        timeZone: timezone,
         weekday: 'short',
         month: 'short',
         day: 'numeric',
+        year: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
         hour12: true
@@ -8627,19 +8797,21 @@ function getNextResetTime() {
     
     return {
         resetTime: resetTimeStr,
-        hoursUntilReset: hours,
-        minutesUntilReset: minutes,
-        resetDate: tomorrow
+        hoursUntilReset: Math.max(0, hours),
+        minutesUntilReset: Math.max(0, minutes),
+        resetDate: resetUTC,
+        timezone: timezone
     };
 }
 
 // Show reset time information
 function showResetTimeInfo() {
     const resetInfo = getNextResetTime();
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timezone = resetInfo.timezone || 'Asia/Manila';
     
-    // Format reset time in long format for dialog
+    // Format reset time in long format for dialog (Asia/Manila timezone)
     const resetTimeStrLong = resetInfo.resetDate.toLocaleString('en-US', {
+        timeZone: timezone,
         weekday: 'long',
         year: 'numeric',
         month: 'long',
@@ -8679,36 +8851,59 @@ function showResetTimeInfo() {
         });
     }
     
-    // Update modal content
+    // Update modal content with live countdown
     const modalBody = document.getElementById('resetTimeModalBody');
     if (modalBody) {
-        modalBody.innerHTML = `
-            <div style="line-height: 1.8;">
-                <p style="margin-bottom: 15px;">
-                    <strong>⏰ Reset Time:</strong><br>
-                    ${escapeHtml(resetTimeStrLong)}
-                </p>
-                <p style="margin-bottom: 15px;">
-                    <strong>📍 Timezone:</strong><br>
-                    ${escapeHtml(timezone)}
-                </p>
-                <p style="margin-bottom: 15px;">
-                    <strong>⏳ Time Until Reset:</strong><br>
-                    ${resetInfo.hoursUntilReset} hour${resetInfo.hoursUntilReset !== 1 ? 's' : ''} and ${resetInfo.minutesUntilReset} minute${resetInfo.minutesUntilReset !== 1 ? 's' : ''}
-                </p>
-                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 20px;">
-                    <p style="margin-bottom: 10px;"><strong>How it works:</strong></p>
-                    <ul style="margin: 0; padding-left: 20px;">
-                        <li>Today's serving count will reset to 0</li>
-                        <li>The remaining servings will be restored to the daily limit</li>
-                        <li>All menu items will be available again (if they have remaining servings)</li>
-                    </ul>
+        const updateModalContent = () => {
+            const currentResetInfo = getNextResetTime();
+            modalBody.innerHTML = `
+                <div style="line-height: 1.8;">
+                    <p style="margin-bottom: 15px;">
+                        <strong>⏰ Reset Time:</strong><br>
+                        ${escapeHtml(resetTimeStrLong)}
+                    </p>
+                    <p style="margin-bottom: 15px;">
+                        <strong>📍 Timezone:</strong><br>
+                        ${escapeHtml(timezone)}
+                    </p>
+                    <p style="margin-bottom: 15px;">
+                        <strong>⏳ Time Until Reset:</strong><br>
+                        <span id="resetTimeCountdown" style="font-weight: 600; color: #7E2021;">
+                            ${currentResetInfo.hoursUntilReset} hour${currentResetInfo.hoursUntilReset !== 1 ? 's' : ''} and ${currentResetInfo.minutesUntilReset} minute${currentResetInfo.minutesUntilReset !== 1 ? 's' : ''}
+                        </span>
+                    </p>
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                        <p style="margin-bottom: 10px;"><strong>How it works:</strong></p>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            <li>Today's serving count will reset to 0</li>
+                            <li>The remaining servings will be restored to the daily limit</li>
+                            <li>All menu items will be available again (if they have remaining servings)</li>
+                        </ul>
+                    </div>
+                    <p style="margin-top: 15px; color: #6c757d; font-size: 0.9rem;">
+                        <em>Note: The reset happens automatically based on your local timezone.</em>
+                    </p>
                 </div>
-                <p style="margin-top: 15px; color: #6c757d; font-size: 0.9rem;">
-                    <em>Note: The reset happens automatically based on your local timezone.</em>
-                </p>
-            </div>
-        `;
+            `;
+        };
+        
+        updateModalContent();
+        
+        // Update countdown every minute
+        const countdownInterval = setInterval(() => {
+            if (modal.style.display === 'none') {
+                clearInterval(countdownInterval);
+                return;
+            }
+            const countdownEl = document.getElementById('resetTimeCountdown');
+            if (countdownEl) {
+                const currentResetInfo = getNextResetTime();
+                countdownEl.textContent = `${currentResetInfo.hoursUntilReset} hour${currentResetInfo.hoursUntilReset !== 1 ? 's' : ''} and ${currentResetInfo.minutesUntilReset} minute${currentResetInfo.minutesUntilReset !== 1 ? 's' : ''}`;
+            }
+        }, 60000); // Update every minute
+        
+        // Store interval ID on modal for cleanup
+        modal._countdownInterval = countdownInterval;
     }
     
     // Show modal
@@ -8720,6 +8915,11 @@ function showResetTimeInfo() {
 function closeResetTimeModal() {
     const modal = document.getElementById('resetTimeModal');
     if (modal) {
+        // Clear countdown interval if it exists
+        if (modal._countdownInterval) {
+            clearInterval(modal._countdownInterval);
+            modal._countdownInterval = null;
+        }
         modal.style.display = 'none';
         document.body.style.overflow = '';
     }
@@ -9319,6 +9519,96 @@ function updateMenuListCategoryFilter() {
             return false;
         };
         categorySection.appendChild(link);
+    });
+}
+
+function updateMenuDetailIncludedSaucesCheckboxes(menuItem) {
+    const container = document.getElementById('menuDetailIncludedSaucesContainer');
+    if (!container) return;
+    
+    // Filter menu items to only show active, non-deleted sauces
+    let sauceItems = [];
+    if (menuState && menuState.length) {
+        sauceItems = menuState.filter(item => {
+            if (!item || !item.name) return false;
+            // Don't include the current item itself
+            if (menuItem && item.id === menuItem.id) return false;
+            // Exclude inactive or deleted items
+            if (item.isDeleted === true || item.isActive === false) {
+                return false;
+            }
+            // Check if item is a sauce (by category or name)
+            const category = (item.category || '').toLowerCase();
+            const name = (item.name || item.displayName || '').toLowerCase();
+            return category.includes('sauce') || 
+                   category === 'sauces' ||
+                   name.includes('sauce');
+        });
+    }
+    
+    // Get current selections from menuItem - handle multiple ID formats
+    const currentSelections = new Set();
+    if (menuItem && menuItem.includedSauces && Array.isArray(menuItem.includedSauces)) {
+        menuItem.includedSauces.forEach(sauce => {
+            // Try multiple ID fields and convert to string for consistent comparison
+            const sauceId = String(sauce.sauceId || sauce.menuId || sauce.id || '');
+            if (sauceId && sauceId !== 'undefined' && sauceId !== 'null') {
+                currentSelections.add(sauceId);
+            }
+        });
+    }
+    
+    console.log('Product Detail - Current linked sauces:', {
+        menuItemId: menuItem?.id,
+        includedSauces: menuItem?.includedSauces,
+        currentSelections: Array.from(currentSelections)
+    });
+    
+    // Clear existing content
+    container.innerHTML = '';
+    
+    if (sauceItems.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="text-align: center; color: #999; padding: 20px;">No sauces available. Add sauce items to the menu first.</div>';
+        return;
+    }
+    
+    // Add checkbox for each sauce
+    sauceItems.forEach(item => {
+        const checkboxWrapper = document.createElement('label');
+        checkboxWrapper.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; border-radius: 6px; margin-bottom: 6px; transition: background-color 0.2s ease;';
+        checkboxWrapper.onmouseover = function() {
+            this.style.backgroundColor = '#f0f0f0';
+        };
+        checkboxWrapper.onmouseout = function() {
+            this.style.backgroundColor = 'transparent';
+        };
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = item.id;
+        checkbox.style.cssText = 'width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: #7E2021; flex-shrink: 0;';
+        
+        // Check if this sauce is already selected - compare both id and menuId as strings
+        const itemIdStr = String(item.id || '');
+        const itemMenuIdStr = String(item.menuId || item.id || '');
+        const isChecked = currentSelections.has(itemIdStr) || currentSelections.has(itemMenuIdStr);
+        
+        if (isChecked) {
+            checkbox.checked = true;
+            console.log('Product Detail - Pre-checking sauce:', {
+                sauceName: item.displayName || item.name,
+                sauceId: item.id,
+                menuId: item.menuId
+            });
+        }
+        
+        const label = document.createElement('span');
+        label.textContent = item.displayName || item.name;
+        label.style.cssText = 'flex: 1; cursor: pointer; font-size: 0.9375rem; color: #333; line-height: 1.5;';
+        
+        checkboxWrapper.appendChild(checkbox);
+        checkboxWrapper.appendChild(label);
+        container.appendChild(checkboxWrapper);
     });
 }
 
@@ -9933,6 +10223,17 @@ function renderMenuDetailsCarousel() {
     // Update image caption and category badge (if not already set in image container)
     const categoryBadge = document.getElementById('menuDetailCategoryBadge');
     
+    // Update name and displayName fields
+    const nameEl = document.getElementById('menuDetailName');
+    const nameInput = document.getElementById('menuDetailNameInput');
+    const displayNameEl = document.getElementById('menuDetailDisplayName');
+    const displayNameInput = document.getElementById('menuDetailDisplayNameInput');
+    
+    if (nameEl) nameEl.textContent = item.name || '—';
+    if (nameInput) nameInput.value = item.name || '';
+    if (displayNameEl) displayNameEl.textContent = item.displayName || '—';
+    if (displayNameInput) displayNameInput.value = item.displayName || '';
+    
     if (captionEl) {
         captionEl.textContent = item.displayName || item.name || 'Menu item';
     }
@@ -9979,76 +10280,10 @@ function renderMenuDetailsCarousel() {
     if (descriptionInput) descriptionInput.value = item.description || '';
     if (allergensInput) allergensInput.value = item.allergens || '';
 
-    // Render ingredients - show editable version in edit mode, read-only in view mode
-    const ingredientsListEl = document.getElementById('menuDetailIngredients');
-    const ingredientsEditableEl = document.getElementById('menuDetailIngredientsEditable');
-    const ingredientsTable = document.getElementById('menuDetailIngredientsTable');
-    const ingredientsListContainer = document.getElementById('menuDetailIngredientsList');
-    const ingredientsListFallback = document.getElementById('menuDetailIngredientsListFallback');
-    
-    if (ingredientsListEl && ingredientsEditableEl && ingredientsListContainer) {
-        if (menuDetailEditing) {
-            // Edit mode - show editable ingredients in table format
-            ingredientsListEl.style.display = 'none';
-            ingredientsEditableEl.style.display = 'block';
-            if (ingredientsTable) ingredientsTable.style.display = 'table';
-            if (ingredientsListFallback) ingredientsListFallback.style.display = 'none';
-            
-            // Clear existing rows
-            ingredientsListContainer.innerHTML = '';
-            
-            if (!item.ingredients || !item.ingredients.length) {
-                // No ingredients - add one empty row
-                addMenuDetailIngredientRow();
-            } else {
-                // Render existing ingredients
-                item.ingredients.forEach((ing, index) => {
-                    // Parse displayAmount to extract amount and unit
-                    let amountValue = '';
-                    let unitValue = 'kg'; // Default to kg
-                    
-                    if (ing.displayAmount) {
-                        const match = ing.displayAmount.match(/^([\d.]+)\s+(.+)$/);
-                        if (match) {
-                            amountValue = match[1];
-                            const unitStr = match[2].toLowerCase();
-                            // Normalize unit values
-                            if (unitStr === 'pieces' || unitStr === 'piece' || unitStr === 'pcs') {
-                                unitValue = 'pcs';
-                            } else if (unitStr === 'grams' || unitStr === 'gram' || unitStr === 'g') {
-                                unitValue = 'g';
-                            } else if (unitStr === 'kilograms' || unitStr === 'kilogram' || unitStr === 'kg') {
-                                unitValue = 'kg';
-                            }
-                        }
-                    }
-                    
-                    const ingredientName = ing.ingredientName || ing.ingredientId || '';
-                    addMenuDetailIngredientRow({
-                        name: ingredientName,
-                        amount: amountValue,
-                        unit: unitValue
-                    });
-                });
-            }
-        } else {
-            // View mode - show read-only list
-            ingredientsListEl.style.display = 'block';
-            ingredientsEditableEl.style.display = 'none';
-            if (ingredientsTable) ingredientsTable.style.display = 'none';
-            if (ingredientsListFallback) ingredientsListFallback.style.display = 'none';
-            
-            if (!item.ingredients || !item.ingredients.length) {
-                ingredientsListEl.innerHTML = '<li class="empty-state">No ingredients linked yet.</li>';
-            } else {
-                ingredientsListEl.innerHTML = item.ingredients.map(ing => `
-                    <li>
-                        <span>${ing.ingredientName || ing.ingredientId}</span>
-                        <small>${ing.displayAmount || ''}</small>
-                    </li>
-                `).join('');
-            }
-        }
+    // Update Link Sauces checkboxes
+    const includedSaucesContainer = document.getElementById('menuDetailIncludedSaucesContainer');
+    if (includedSaucesContainer) {
+        updateMenuDetailIncludedSaucesCheckboxes(item);
     }
 
     // Ensure the Product Info tab is selected by default whenever we render
@@ -10067,65 +10302,48 @@ function renderMenuDetailsCarousel() {
                 variationsListEl.innerHTML = item.variations.map((variation, index) => {
                     const variationId = `menuDetailVariation_${index}`;
                     
-                    // Get already used ingredients from previous variations
-                    const usedIngredientIds = new Set();
-                    item.variations.forEach((v, idx) => {
-                        if (idx < index && v.ingredientId) {
-                            usedIngredientIds.add(v.ingredientId);
-                        }
-                    });
+                    // Get variation size - use size field or name, default to 'default'
+                    const variationSize = variation.size || (variation.name && variation.name !== 'Default' ? variation.name : 'default');
+                    const sizeValue = (variationSize && variationSize !== 'Default') ? variationSize : 'default';
                     
-                    // Recipe-based: ingredients are free-form
-                    // Parse displayAmount to extract amount and unit
-                    let amountValue = '';
-                    let unitValue = '';
-                    if (variation.displayAmount) {
-                        const match = variation.displayAmount.match(/^([\d.]+)\s+(.+)$/);
-                        if (match) {
-                            amountValue = match[1];
-                            unitValue = match[2].toLowerCase();
-                            // Normalize unit values
-                            if (unitValue === 'pieces' || unitValue === 'piece') unitValue = 'pcs';
-                            if (unitValue === 'grams' || unitValue === 'gram') unitValue = 'g';
-                            if (unitValue === 'kilograms' || unitValue === 'kilogram') unitValue = 'kg';
-                        }
-                    }
+                    // Get quantity (Default Daily Serving Limit)
+                    const quantityValue = (variation.quantity !== undefined && variation.quantity !== null) ? Number(variation.quantity) : 0;
                     
-                    // Default to weight, allow user to select
-                    const defaultUnit = unitValue || 'g';
-                    const unitOptions = `<option value="g" ${defaultUnit === 'g' ? 'selected' : ''}>Grams (g)</option>
-                           <option value="kg" ${defaultUnit === 'kg' ? 'selected' : ''}>Kilograms (kg)</option>
-                           <option value="pcs" ${defaultUnit === 'pcs' ? 'selected' : ''}>Pieces (pcs)</option>`;
+                    // Get calories
+                    const kcalValue = (variation.kcal != null && variation.kcal !== '' && !isNaN(Number(variation.kcal))) ? Number(variation.kcal) : '';
                     
-                    // Ingredient input is free-form (text input, not select)
-                    const ingredientValue = variation.ingredientName || variation.ingredientId || '';
+                    // Get variation ID for preserving existing variations
+                    const existingVariationId = variation.variationId || variation.id || generateVariationId();
                     
                     return `
-                    <div class="menu-detail-variation-item menu-detail-variation-item-editable" id="${variationId}">
+                    <div class="menu-detail-variation-item menu-detail-variation-item-editable" id="${variationId}" data-variation-id="${existingVariationId}">
                         <div class="variation-item-content">
                             <div class="form-group">
-                                <input type="text" class="form-control menu-detail-variation-name-input" placeholder="Variation name" value="${variation.name || ''}" required>
-                            </div>
-                            <div class="form-group">
-                                <input type="number" class="form-control menu-detail-variation-price-input" placeholder="Price (PHP)" value="${variation.price || 0}" min="0" step="0.01" required>
-                            </div>
-                            <div class="form-group">
-                                <input type="text" class="form-control menu-detail-variation-ingredient-input" placeholder="Ingredient name" value="${ingredientValue}" required>
-                            </div>
-                            <div class="form-group">
-                                <input type="number" class="form-control menu-detail-variation-amount-input" placeholder="Amount" min="0" step="0.01" value="${amountValue}">
-                            </div>
-                            <div class="form-group">
-                                <select class="form-control menu-detail-variation-unit-input">
-                                    ${unitOptions}
+                                <label>Variation Size</label>
+                                <select class="form-control menu-detail-variation-size-input">
+                                    <option value="default" ${sizeValue === 'default' || !sizeValue ? 'selected' : ''}>Default</option>
+                                    <option value="Small" ${sizeValue === 'Small' ? 'selected' : ''}>Small</option>
+                                    <option value="Medium" ${sizeValue === 'Medium' ? 'selected' : ''}>Medium</option>
+                                    <option value="Large" ${sizeValue === 'Large' ? 'selected' : ''}>Large</option>
+                                    <option value="Whole" ${sizeValue === 'Whole' ? 'selected' : ''}>Whole</option>
+                                    <option value="Half" ${sizeValue === 'Half' ? 'selected' : ''}>Half</option>
                                 </select>
                             </div>
-                            <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailVariation('${variationId}')" style="flex: 0 0 auto;">
+                            <div class="form-group">
+                                <label>Price (PHP) <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                                <input type="number" class="form-control menu-detail-variation-price-input" placeholder="0.00" value="${variation.price || 0}" min="0" step="0.01" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Default Daily Serving Limit <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                                <input type="number" class="form-control menu-detail-variation-quantity-input" placeholder="0" value="${quantityValue}" min="0" step="1" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Calories (kcal)</label>
+                                <input type="number" class="form-control menu-detail-variation-kcal-input" placeholder="0" value="${kcalValue}" min="0" step="1">
+                            </div>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailVariation('${variationId}')" style="flex: 0 0 auto; align-self: flex-end;">
                                 <i class="fas fa-trash"></i>
                             </button>
-                        </div>
-                        <div class="form-group variation-description-group">
-                            <textarea class="form-control menu-detail-variation-description-input" placeholder="Short description (optional)" rows="2">${variation.description || ''}</textarea>
                         </div>
                     </div>
                 `;
@@ -10150,19 +10368,21 @@ function renderMenuDetailsCarousel() {
                 variationsListEl.innerHTML = '<div class="empty-state">No variations added yet.</div>';
             } else {
                 variationsListEl.innerHTML = item.variations.map(variation => {
-                    const ingredientName = variation.ingredientName || (variation.ingredientId ? 'Unknown Ingredient' : '');
-                    const amountDisplay = variation.displayAmount ? `Amount: ${variation.displayAmount}` : '';
                     const variationId = variation.variationId || variation.id || '—';
+                    const variationSize = variation.size || variation.name || 'Default';
+                    const quantity = (variation.quantity !== undefined && variation.quantity !== null) ? Number(variation.quantity) : 0;
+                    const kcal = (variation.kcal != null && variation.kcal !== '' && !isNaN(Number(variation.kcal))) ? Number(variation.kcal) : null;
                     return `
                     <div class="menu-detail-variation-item">
                         <div class="menu-detail-variation-header">
-                            <span class="menu-detail-variation-name">${variation.name || 'Unnamed Variation'}</span>
+                            <span class="menu-detail-variation-name">${variationSize}</span>
                             <span class="menu-detail-variation-price">PHP ${Number(variation.price || 0).toFixed(2)}</span>
                         </div>
                         <div class="menu-detail-variation-id" style="font-size: 0.875rem; color: #6c757d; margin-top: 4px;">ID: ${escapeHtml(variationId)}</div>
-                        ${ingredientName ? `<div class="menu-detail-variation-ingredient">Ingredient: ${ingredientName}</div>` : ''}
-                        ${amountDisplay ? `<div class="menu-detail-variation-amount">${amountDisplay}</div>` : ''}
-                        ${variation.description ? `<div class="menu-detail-variation-description">${variation.description}</div>` : ''}
+                        <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 0.875rem; color: #555;">
+                            <div><strong>Daily Serving Limit:</strong> ${quantity > 0 ? quantity : 'Unlimited'}</div>
+                            ${kcal !== null ? `<div><strong>Calories:</strong> ${kcal} kcal</div>` : ''}
+                        </div>
                     </div>
                 `;
                 }).join('');
@@ -10321,6 +10541,8 @@ async function saveMenuDetailChanges() {
     const currentItem = menuState[currentMenuDetailIndex];
     if (!currentItem) return false;
 
+    const nameInput = document.getElementById('menuDetailNameInput');
+    const displayNameInput = document.getElementById('menuDetailDisplayNameInput');
     const priceInput = document.getElementById('menuDetailPriceInput');
     const availabilityInput = document.getElementById('menuDetailAvailabilityInput');
     const categoryInput = document.getElementById('menuDetailCategoryInput');
@@ -10329,6 +10551,8 @@ async function saveMenuDetailChanges() {
     const caloriesInput = document.getElementById('menuDetailCaloriesInput');
     const caloriesEl = document.getElementById('menuDetailCalories');
 
+    const nameValue = (nameInput?.value || '').trim();
+    const displayNameValue = (displayNameInput?.value || '').trim() || null;
     const priceValue = parseFloat(priceInput?.value || '0');
     const availabilityValue = availabilityInput?.value === 'true';
     // Get category from select
@@ -10337,6 +10561,11 @@ async function saveMenuDetailChanges() {
     const allergensValue = (allergensInput?.value || '').trim() || null;
     const caloriesRaw = caloriesInput?.value || '';
     const caloriesValue = caloriesRaw === '' ? null : parseInt(caloriesRaw, 10);
+
+    if (!nameValue) {
+        showNotification('Dish name is required.', 'error');
+        return false;
+    }
 
     if (!priceValue || priceValue <= 0) {
         showNotification('Enter a price greater than zero.', 'error');
@@ -10401,8 +10630,27 @@ async function saveMenuDetailChanges() {
         // Gather variations from edit form
         const variations = gatherMenuDetailVariations();
         
-        // Gather ingredients from edit form
-        const ingredients = gatherMenuDetailIngredients();
+        // Ingredients section removed from Product Detail - keep existing ingredients
+        const ingredients = currentItem.ingredients || [];
+        
+        // Gather included sauces from checkboxes - same logic as Add Product form
+        const includedSaucesContainer = document.getElementById('menuDetailIncludedSaucesContainer');
+        const includedSauces = [];
+        if (includedSaucesContainer) {
+            const checkedBoxes = includedSaucesContainer.querySelectorAll('input[type="checkbox"]:checked');
+            checkedBoxes.forEach(checkbox => {
+                if (checkbox.value && checkbox.value.trim()) {
+                    const sauceItem = menuState.find(item => item.id === checkbox.value);
+                    if (sauceItem) {
+                        includedSauces.push({
+                            sauceId: sauceItem.id,
+                            sauceName: sauceItem.displayName || sauceItem.name,
+                            menuId: sauceItem.menuId || sauceItem.id
+                        });
+                    }
+                }
+            });
+        }
         
         // If variations exist, set base price to the smallest variation price
         let finalBasePrice = +Number(priceValue).toFixed(2);
@@ -10416,6 +10664,8 @@ async function saveMenuDetailChanges() {
         }
         
         const payload = {
+            name: nameValue,
+            displayName: displayNameValue,
             price: finalBasePrice, // Set to smallest variation price if variations exist
             isActive: availabilityValue,
             category: categoryValue,
@@ -10425,8 +10675,17 @@ async function saveMenuDetailChanges() {
             kcalUnit: caloriesValue,
             variations: variations,
             ingredients: ingredients,
+            includedSauces: includedSauces.length > 0 ? includedSauces : null,
             imageDataUrl: newImageUrl
         };
+        
+        console.log('Product Detail - Saving changes with payload:', {
+            name: payload.name,
+            displayName: payload.displayName,
+            includedSauces: payload.includedSauces,
+            includedSaucesCount: includedSauces.length
+        });
+        
         menuState = await MenuStore.updateItem(currentItem.id, payload);
         renderMenuState();
         showNotification('Menu item updated successfully.', 'success');
@@ -10553,6 +10812,8 @@ function showMenuCatalogue() {
     if (menuListTable) {
         menuListTable.style.display = 'none';
         menuListTable.style.visibility = 'hidden';
+        // Stop reset time countdown when menu list is hidden
+        stopResetTimeCountdown();
         // Also hide the detail panel if it's open
         const detailPanel = document.getElementById('menuListDetailPanel');
         if (detailPanel) {
@@ -10607,6 +10868,8 @@ async function showMenuList() {
     if (menuListTable) {
         menuListTable.style.display = 'flex';
         menuListTable.style.visibility = 'visible';
+        // Start reset time countdown when menu list is shown
+        // (renderMenuListTable will also start it, but this ensures it's started)
     }
     if (addFoodSection) addFoodSection.style.display = 'none';
     if (productDetailSection) productDetailSection.style.display = 'none';
@@ -10736,6 +10999,8 @@ function showMenuDetailForItem(menuItemId) {
 function setMenuDetailEditMode(isEditing) {
     menuDetailEditing = isEditing;
     const pairs = [
+        ['menuDetailName', 'menuDetailNameInput'],
+        ['menuDetailDisplayName', 'menuDetailDisplayNameInput'],
         ['menuDetailPrice', 'menuDetailPriceInput'],
         ['menuDetailAvailability', 'menuDetailAvailabilityInput'],
         ['menuDetailCategory', 'menuDetailCategoryInputWrapper'],
@@ -10782,6 +11047,21 @@ function setMenuDetailEditMode(isEditing) {
     if (changeImageRow) {
         changeImageRow.style.display = isEditing ? 'block' : 'none';
     }
+    // Show/hide Link Sauces section (only in edit mode)
+    const linkSaucesRow = document.getElementById('menuDetailLinkSaucesRow');
+    if (linkSaucesRow) {
+        linkSaucesRow.style.display = isEditing ? 'block' : 'none';
+        // If entering edit mode, update the Link Sauces checkboxes with current selections
+        if (isEditing && menuState && menuState.length && currentMenuDetailIndex >= 0) {
+            const currentItem = menuState[currentMenuDetailIndex];
+            if (currentItem && typeof updateMenuDetailIncludedSaucesCheckboxes === 'function') {
+                // Small delay to ensure the container is visible before updating
+                setTimeout(() => {
+                    updateMenuDetailIncludedSaucesCheckboxes(currentItem);
+                }, 50);
+            }
+        }
+    }
     // Re-render variations to show edit mode
     if (menuState && menuState.length && currentMenuDetailIndex >= 0) {
         renderMenuDetailsCarousel();
@@ -10796,6 +11076,10 @@ async function toggleMenuDetailEdit() {
     // Enter edit mode
     if (!menuDetailEditing) {
         setMenuDetailEditMode(true);
+        // Update Link Sauces checkboxes when entering edit mode
+        if (typeof updateMenuDetailIncludedSaucesCheckboxes === 'function') {
+            updateMenuDetailIncludedSaucesCheckboxes(currentItem);
+        }
         return;
     }
 
@@ -11401,7 +11685,19 @@ async function handleMenuFormSubmit(event) {
         addFormVariations = [];
         updateFoodVariationsListUI();
         resetMenuForm();
-        hideAddFood();
+        // Redirect to menu list after successful product addition
+        await showMenuList();
+        // Ensure the menu dropdown is expanded
+        const menuSubmenu = document.getElementById('menuTabDropdown');
+        if (menuSubmenu && !menuSubmenu.classList.contains('show')) {
+            if (typeof toggleMenuTabDropdown === 'function') {
+                toggleMenuTabDropdown();
+            }
+        }
+        // Ensure the sidebar menu highlights Menu List as active
+        if (typeof highlightActiveMenuItem === 'function') {
+            highlightActiveMenuItem();
+        }
     } catch (error) {
         console.error('Add menu item failed:', error);
         showNotification(error.message || 'Unable to add menu item.', 'error');
@@ -11665,68 +11961,40 @@ function gatherMenuDetailVariations() {
     const variations = [];
     
     variationItems.forEach(item => {
-        const nameInput = item.querySelector('.menu-detail-variation-name-input');
+        const sizeSelect = item.querySelector('.menu-detail-variation-size-input');
         const priceInput = item.querySelector('.menu-detail-variation-price-input');
-        const descriptionInput = item.querySelector('.menu-detail-variation-description-input');
-        const ingredientInput = item.querySelector('.menu-detail-variation-ingredient-input');
-        const amountInput = item.querySelector('.menu-detail-variation-amount-input');
-        const unitSelect = item.querySelector('.menu-detail-variation-unit-input');
+        const quantityInput = item.querySelector('.menu-detail-variation-quantity-input');
+        const kcalInput = item.querySelector('.menu-detail-variation-kcal-input');
         
-        const name = (nameInput?.value || '').trim();
+        const rawSize = (sizeSelect?.value || 'default').trim();
+        const sizeLabel = (!rawSize || rawSize.toLowerCase() === 'default') ? null : rawSize;
+        const variationName = sizeLabel || 'Default';
         const price = parseFloat(priceInput?.value || '0');
-        const description = (descriptionInput?.value || '').trim();
-        const ingredientName = (ingredientInput?.value || '').trim();
-        const amountValue = parseFloat(amountInput?.value || '0');
-        const unit = (unitSelect?.value || 'g').trim();
+        const quantity = parseInt(quantityInput?.value || '0', 10);
+        const kcalRaw = kcalInput?.value;
+        const kcal = (kcalRaw !== '' && kcalRaw != null && !isNaN(Number(kcalRaw))) ? parseInt(kcalRaw, 10) : null;
         
-        // Only process variations that have at least a name and price
-        if (name && !isNaN(price) && price >= 0) {
-            // Recipe-based: ingredients are free-form
-            if (ingredientName) {
-                // Create a simple ingredient object for compatibility
-                const slug = ingredientName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                const unitType = (unit === 'pcs') ? 'count' : 'weight';
-                
-                // If amount is provided and greater than zero, use it
-                if (amountInput && amountInput.value && !isNaN(amountValue) && amountValue > 0) {
-                    const finalUnit = unit || 'g';
-                    const baseAmount = convertToBaseUnits(amountValue, unitType, finalUnit);
-                    
-                    variations.push({
-                        name: name,
-                        price: Number(price.toFixed(2)),
-                        description: description || '',
-                        ingredientId: slug,
-                        ingredientName: ingredientName,
-                        amount: baseAmount,
-                        displayAmount: unitType === 'count'
-                            ? `${formatQuantityValue(amountValue, 0)} pcs`
-                            : `${formatQuantityValue(amountValue, finalUnit === 'kg' ? 2 : 0)} ${finalUnit}`
-                    });
-                } else {
-                    // Ingredient specified but no amount or amount is 0 - allow variation without amount tracking
-                    variations.push({
-                        name: name,
-                        price: Number(price.toFixed(2)),
-                        description: description || '',
-                        ingredientId: slug,
-                        ingredientName: ingredientName,
-                        amount: null,
-                        displayAmount: ''
-                    });
-                }
-            } else {
-                // No ingredient specified - allow variation without ingredient tracking
-                variations.push({
-                    name: name,
-                    price: Number(price.toFixed(2)),
-                    description: description || '',
-                    ingredientId: null,
-                    ingredientName: null,
-                    amount: null,
-                    displayAmount: ''
-                });
-            }
+        // Only process variations that have at least a price
+        if (!isNaN(price) && price >= 0) {
+            // Get variation ID if it exists (for existing variations)
+            const variationId = item.dataset.variationId || generateVariationId();
+            
+            variations.push({
+                variationId: variationId,
+                id: variationId,
+                name: variationName,
+                size: sizeLabel,
+                price: Number(price.toFixed(2)),
+                quantity: isNaN(quantity) ? 0 : quantity,
+                maxServingsPerDay: isNaN(quantity) ? null : (quantity > 0 ? quantity : null),
+                kcal: kcal,
+                description: '',
+                allergens: '',
+                ingredientId: null,
+                ingredientName: null,
+                amount: null,
+                displayAmount: ''
+            });
         }
     });
     
@@ -11764,30 +12032,31 @@ function addMenuDetailVariation() {
     variationItem.innerHTML = `
         <div class="variation-item-content">
             <div class="form-group">
-                <input type="text" class="form-control menu-detail-variation-name-input" placeholder="Variation name" required>
-            </div>
-            <div class="form-group">
-                <input type="number" class="form-control menu-detail-variation-price-input" placeholder="Price (PHP)" value="0" min="0" step="0.01" required>
-            </div>
-            <div class="form-group">
-                <input type="text" class="form-control menu-detail-variation-ingredient-input" placeholder="Ingredient name" required>
-            </div>
-            <div class="form-group">
-                <input type="number" class="form-control menu-detail-variation-amount-input" placeholder="Amount" min="0" step="0.01">
-            </div>
-            <div class="form-group">
-                <select class="form-control menu-detail-variation-unit-input">
-                    <option value="g">Grams (g)</option>
-                    <option value="kg">Kilograms (kg)</option>
-                    <option value="pcs">Pieces (pcs)</option>
+                <label>Variation Size</label>
+                <select class="form-control menu-detail-variation-size-input">
+                    <option value="default" selected>Default</option>
+                    <option value="Small">Small</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Large">Large</option>
+                    <option value="Whole">Whole</option>
+                    <option value="Half">Half</option>
                 </select>
             </div>
-            <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailVariation('${variationId}')" style="flex: 0 0 auto;">
+            <div class="form-group">
+                <label>Price (PHP) <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                <input type="number" class="form-control menu-detail-variation-price-input" placeholder="0.00" value="0" min="0" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label>Default Daily Serving Limit <span style="color: #ff8c00; font-weight: bold;">*</span></label>
+                <input type="number" class="form-control menu-detail-variation-quantity-input" placeholder="0" value="0" min="0" step="1" required>
+            </div>
+            <div class="form-group">
+                <label>Calories (kcal)</label>
+                <input type="number" class="form-control menu-detail-variation-kcal-input" placeholder="0" value="" min="0" step="1">
+            </div>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeMenuDetailVariation('${variationId}')" style="flex: 0 0 auto; align-self: flex-end;">
                 <i class="fas fa-trash"></i>
             </button>
-        </div>
-        <div class="form-group variation-description-group">
-            <textarea class="form-control menu-detail-variation-description-input" placeholder="Short description (optional)" rows="2"></textarea>
         </div>
     `;
     

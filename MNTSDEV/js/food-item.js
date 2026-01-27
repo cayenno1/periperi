@@ -480,15 +480,6 @@
         const btn = document.querySelector('.add-to-cart-btn');
         if (!btn || btn.disabled) return;
 
-        if (selectedSauce && selectedSauce._isUnavailable === true) {
-            if (window.utils?.showToast) {
-                window.utils.showToast('Selected sauce is unavailable. Please choose another.', 'error', 2200);
-            } else {
-                alert('Selected sauce is unavailable. Please choose another.');
-            }
-            return;
-        }
-
         const avail = getAvailableQuantity();
         if (avail <= 0) {
             if (window.utils?.showToast) {
@@ -507,6 +498,46 @@
             return;
         }
 
+        // Build product object for customer-cart.js
+        let productId = currentItemId;
+        let productName = currentItemName;
+        
+        // If variation is selected, use variation ID
+        if (selectedVariation) {
+            const variationId = selectedVariation.variationId || selectedVariation.id;
+            if (variationId) {
+                productId = variationId;
+            }
+            const variationName = selectedVariation.name || selectedVariation.title;
+            if (variationName) {
+                productName = `${currentItemName} - ${variationName}`;
+            }
+        }
+
+        // Check if product has includedSauces (linked sauces)
+        // We need to fetch the product to check for includedSauces
+        try {
+            await window.utils?.waitForFirebaseReady();
+            const product = await window.firestore?.fetchMenuItemById?.(currentItemId);
+            
+            if (product && Array.isArray(product.includedSauces) && product.includedSauces.length > 0) {
+                // Product has linked sauces - use customer-cart.js addToCart which will open modal
+                if (window.customerCart && window.customerCart.addToCart) {
+                    // Build product object for customer-cart
+                    const products = window.customerCart.getProducts();
+                    const cartProduct = products.find(p => p.id === productId);
+                    
+                    if (cartProduct) {
+                        window.customerCart.addToCart(productId, currentQty);
+                        return;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Error checking for linked sauces:', e);
+        }
+
+        // No linked sauces or customer-cart not available - use old system
         const originalContent = btn.innerHTML;
         const originalBg = btn.style.background;
 
@@ -538,11 +569,7 @@
         }
 
         try {
-            let displayName = currentItemName;
-            if (selectedVariation && (selectedVariation.name || selectedVariation.title)) {
-                const variationName = selectedVariation.name || selectedVariation.title;
-                displayName = `${currentItemName} - ${variationName}`;
-            }
+            let displayName = productName;
             
             // Sauce is linked to the food item (not separate)
             const payload = {
@@ -857,7 +884,7 @@
 
         loadAllergenInfo(item);
         loadVariations(item);
-        await loadSauces(item);
+        // Sauce selection removed - sauces are now handled via linked items modal
 
         const variations = Array.isArray(item.variations) ? item.variations : [];
         if (variations.length === 0) {

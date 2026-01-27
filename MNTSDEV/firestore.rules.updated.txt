@@ -5,7 +5,7 @@ service cloud.firestore {
 
     // ----- Shared validation helpers -----
     function isValidRole(role) {
-      return role in ['Staff', 'Admin', 'Manager', 'Owner', 'System_Admin'];
+      return role in ['Staff', 'Admin', 'Manager', 'System_Admin'];
     }
     
     function isValidStatus(status) {
@@ -116,9 +116,36 @@ service cloud.firestore {
       }
 
       // ----- Notifications (subcollection under customers) -----
+      // Customers can read their own notifications and mark them as read
+      // Cloud Functions can create notifications (bypass rules with admin SDK)
       match /notifs/{notifId} {
-        // Only the signed-in user can read/write their own notifs
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        // Only the signed-in user can read their own notifications
+        allow read: if request.auth != null && request.auth.uid == userId;
+        // Allow creating notifications (client-side and Cloud Functions)
+        // Cloud Functions use admin SDK and bypass rules, but client needs this
+        allow create: if request.auth != null && 
+                         request.auth.uid == userId &&
+                         request.resource.data.keys().hasAll(['type', 'title', 'message', 'read', 'createdAt']) &&
+                         request.resource.data.type is string &&
+                         request.resource.data.title is string &&
+                         request.resource.data.message is string &&
+                         request.resource.data.read is bool &&
+                         request.resource.data.createdAt is timestamp &&
+                         // Optional fields validation
+                         (!('orderId' in request.resource.data) || request.resource.data.orderId is string || request.resource.data.orderId == null) &&
+                         (!('orderNumber' in request.resource.data) || request.resource.data.orderNumber is string || request.resource.data.orderNumber == null) &&
+                         (!('declineReason' in request.resource.data) || request.resource.data.declineReason is string || request.resource.data.declineReason == null) &&
+                         (!('oldStatus' in request.resource.data) || request.resource.data.oldStatus is string || request.resource.data.oldStatus == null) &&
+                         (!('newStatus' in request.resource.data) || request.resource.data.newStatus is string || request.resource.data.newStatus == null) &&
+                         (!('actionRequired' in request.resource.data) || request.resource.data.actionRequired is bool);
+        // Allow updating notifications (to mark as read)
+        allow update: if request.auth != null && 
+                         request.auth.uid == userId &&
+                         // Only allow updating the 'read' field
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+                         request.resource.data.read is bool;
+        // Allow users to delete their own notifications
+        allow delete: if request.auth != null && request.auth.uid == userId;
       }
     }
 
@@ -160,8 +187,10 @@ service cloud.firestore {
 
     // ----- Menu (Dishes) -----
     function isValidMenuItem(data) {
-      return data.keys().hasAll(['name', 'category', 'price']) &&
-             data.name is string && data.name.size() > 0 &&
+      return data.keys().hasAll(['category', 'price']) &&
+             ((data.name is string && data.name.size() > 0) ||
+              (data.foodName is string && data.foodName.size() > 0) ||
+              (data.displayName is string && data.displayName.size() > 0)) &&
              data.category is string && data.category.size() > 0 &&
              isNonNegativeNumber(data.price) &&
              (!('description' in data) || data.description is string) &&
@@ -182,6 +211,25 @@ service cloud.firestore {
       allow create: if isValidMenuItem(request.resource.data);
       allow update: if isValidMenuItemUpdate(request.resource.data, resource.data);
       allow delete: if true; // Allow deletes to move items to menuArchives
+
+      // ----- Reviews Subcollection (under menu items) -----
+      // Used by: menu/{itemId}/reviews/{reviewId}
+      match /reviews/{reviewId} {
+        // Public read (dish pages need to show reviews)
+        allow read: if true;
+        // Only signed-in users can create reviews for themselves
+        allow create: if request.auth != null &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.itemId == menuId;
+        // Only the review owner can edit their own review
+        allow update: if request.auth != null &&
+                      resource.data.userId == request.auth.uid &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.itemId == menuId;
+        // Optional: allow users to delete their own review
+        allow delete: if request.auth != null &&
+                      resource.data.userId == request.auth.uid;
+      }
     }
 
     // ----- Menu Archives -----
@@ -190,6 +238,20 @@ service cloud.firestore {
       allow create: if true; // Allow archiving when menu status becomes inactive or deleted
       allow update: if true; // Allow updates to archived items (for restoring, etc.)
       allow delete: if true; // Allow deletion for cleanup of expired items (30+ days old) - only documents, not collection
+    }
+
+    // ----- Categories -----
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['name', 'createdAt', 'updatedAt']) &&
+                     request.resource.data.name is string &&
+                     request.resource.data.name.size() > 0 &&
+                     request.resource.data.createdAt is timestamp &&
+                     request.resource.data.updatedAt is timestamp;
+      allow update: if request.resource.data.name is string &&
+                     request.resource.data.name.size() > 0 &&
+                     request.resource.data.updatedAt is timestamp;
+      allow delete: if true;
     }
 
     // ----- For Delivery -----
@@ -321,23 +383,15 @@ service cloud.firestore {
                request.resource.data.isGuest == true;
       }
 
-      // POS/Walk-in orders: allow creation without auth if it's a walk-in order
+      // POS/Walk-in orders: allow creation with or without Firebase Auth
+      // (POS uses custom session; request.auth is null, but rule works if Auth is added later)
       function isWalkInOrder() {
-        return request.auth == null &&
-               request.resource.data.walkin == true &&
+        return request.resource.data.walkin == true &&
                request.resource.data.isGuest == true &&
                request.resource.data.status == 'completed';
       }
 
-      // POS/Walk-in orders: allow creation when staff is signed in with Firebase Auth
-      function isStaffWalkInOrder() {
-        return request.auth != null &&
-               request.resource.data.walkin == true &&
-               request.resource.data.isGuest == true &&
-               request.resource.data.status == 'completed';
-      }
-
-      allow create: if isAuthedOrder() || isGuestOrder() || isWalkInOrder() || isStaffWalkInOrder();
+      allow create: if isAuthedOrder() || isGuestOrder() || isWalkInOrder();
 
       // Read access is open so the admin dashboard can list orders
       allow read: if true;
@@ -374,7 +428,6 @@ service cloud.firestore {
       allow read: if true;
 
       // Allow updating shift logs to add endTime (only if endTime is being added/updated)
-      // Also allow clockOutMethod and qrCodeId for driver app (QR code vs remote clock-out)
       allow update: if (
         // Prevent changing driverId
         request.resource.data.driverId == resource.data.driverId &&
@@ -382,24 +435,16 @@ service cloud.firestore {
         request.resource.data.driverName == resource.data.driverName &&
         // Prevent changing startTime
         request.resource.data.startTime == resource.data.startTime &&
-        // Only allow: endTime+updatedAt; or +createdAt; or +clockOutMethod (remote); or +clockOutMethod+qrCodeId (qr_code)
+        // Only allow updating endTime, createdAt, or updatedAt
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'updatedAt']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'createdAt', 'updatedAt']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'clockOutMethod', 'updatedAt']) ||
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'clockOutMethod', 'qrCodeId', 'updatedAt'])) &&
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endTime', 'createdAt', 'updatedAt']))) &&
         // Validate endTime is timestamp or null
         (!('endTime' in request.resource.data) || 
          request.resource.data.endTime is timestamp || 
          request.resource.data.endTime == null) &&
         // Validate updatedAt is timestamp
         (!('updatedAt' in request.resource.data) || 
-         request.resource.data.updatedAt is timestamp) &&
-        // Validate clockOutMethod if present ('qr_code' or 'remote')
-        (!('clockOutMethod' in request.resource.data) || 
-         request.resource.data.clockOutMethod in ['qr_code', 'remote']) &&
-        // Validate qrCodeId if present (string, for QR code clock-out)
-        (!('qrCodeId' in request.resource.data) || 
-         request.resource.data.qrCodeId is string)
+         request.resource.data.updatedAt is timestamp)
       );
 
       // Prevent deletion of shift logs (for audit trail)

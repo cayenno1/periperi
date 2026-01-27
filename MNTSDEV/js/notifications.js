@@ -18,6 +18,10 @@
     let notifUnsubscribe = null;   // unsubscribe for notifs onSnapshot
     let isInitialized = false;
     let previousOrderStates = new Map(); // orderId -> previous order data
+    let currentPage = 1;
+    const NOTIFICATIONS_PER_PAGE = 10;
+    let selectedNotifications = new Set(); // Set of notification IDs
+    let isSelectionMode = false;
 
     // Notification types
     const NOTIFICATION_TYPES = {
@@ -82,6 +86,7 @@
         );
 
         notifUnsubscribe = window.onSnapshot(q, (snapshot) => {
+            const previousCount = notifications.length;
             notifications = snapshot.docs.map((d) => {
                 const data = d.data() || {};
                 const createdAt = data.createdAt;
@@ -104,6 +109,21 @@
                     timestamp: ts
                 };
             });
+            
+            // Reset to page 1 if notifications count changed significantly
+            const totalPages = Math.ceil(notifications.length / NOTIFICATIONS_PER_PAGE);
+            if (currentPage > totalPages && totalPages > 0) {
+                currentPage = totalPages;
+            }
+            
+            // Remove deleted notifications from selection
+            const existingIds = new Set(notifications.map(n => n.id));
+            selectedNotifications.forEach(id => {
+                if (!existingIds.has(id)) {
+                    selectedNotifications.delete(id);
+                }
+            });
+            
             updateUnreadCount();
             renderNotifications();
         }, (error) => {
@@ -286,34 +306,84 @@
         }
     }
 
-    // Render notifications
+    // Render notifications with pagination
     function renderNotifications() {
         const list = document.getElementById('notificationList');
         const empty = document.getElementById('notificationEmpty');
+        const paginationContainer = document.getElementById('notificationPagination');
+        const selectionControls = document.getElementById('notificationSelectionControls');
+        
         if (!list) return;
 
         if (notifications.length === 0) {
             if (empty) empty.style.display = 'block';
             list.innerHTML = '';
+            if (paginationContainer) paginationContainer.style.display = 'none';
+            if (selectionControls) selectionControls.style.display = 'none';
             return;
         }
 
         if (empty) empty.style.display = 'none';
 
-        list.innerHTML = notifications.map(notif => {
+        // Calculate pagination
+        const totalPages = Math.ceil(notifications.length / NOTIFICATIONS_PER_PAGE);
+        const startIndex = (currentPage - 1) * NOTIFICATIONS_PER_PAGE;
+        const endIndex = startIndex + NOTIFICATIONS_PER_PAGE;
+        const paginatedNotifications = notifications.slice(startIndex, endIndex);
+
+        // Render selection controls - buttons are already in HTML, just update their state
+        if (selectionControls) {
+            if (isSelectionMode) {
+                selectionControls.style.display = 'flex';
+                const selectAllBtn = document.getElementById('selectAllNotifications');
+                const deleteSelectedBtn = document.getElementById('deleteSelectedNotifications');
+                
+                if (selectAllBtn) {
+                    const allSelected = paginatedNotifications.length > 0 && 
+                                      paginatedNotifications.every(n => selectedNotifications.has(n.id));
+                    selectAllBtn.innerHTML = allSelected ? 
+                        '<i class="fas fa-square"></i> Deselect All' : 
+                        '<i class="fas fa-check-square"></i> Select All';
+                }
+                
+                if (deleteSelectedBtn) {
+                    const selectedCount = Array.from(selectedNotifications).filter(id => 
+                        paginatedNotifications.some(n => n.id === id)
+                    ).length;
+                    deleteSelectedBtn.disabled = selectedCount === 0;
+                    deleteSelectedBtn.innerHTML = `<i class="fas fa-trash"></i> Delete (${selectedCount})`;
+                }
+            } else {
+                selectionControls.style.display = 'none';
+            }
+        }
+
+        // Render notification items
+        list.innerHTML = paginatedNotifications.map(notif => {
             const date = new Date(notif.timestamp);
             const timeAgo = getTimeAgo(date);
             const icon = getNotificationIcon(notif.type);
             const readClass = notif.read ? 'read' : 'unread';
+            const isSelected = selectedNotifications.has(notif.id);
+            const checkboxHtml = isSelectionMode ? `
+                <input type="checkbox" 
+                       class="notification-checkbox" 
+                       data-notification-id="${escapeHtml(notif.id)}"
+                       ${isSelected ? 'checked' : ''}
+                       onclick="event.stopPropagation(); window.notifications?.toggleNotificationSelection('${escapeHtml(notif.id)}')">
+            ` : '';
 
             return `
-                <div class="notification-item ${readClass}" data-notification-id="${escapeHtml(notif.id)}" onclick="window.notifications?.handleNotificationClick('${escapeHtml(notif.id)}')">
+                <div class="notification-item ${readClass} ${isSelected ? 'selected' : ''}" 
+                     data-notification-id="${escapeHtml(notif.id)}" 
+                     onclick="${isSelectionMode ? '' : `window.notifications?.handleNotificationClick('${escapeHtml(notif.id)}')`}">
+                    ${checkboxHtml}
                     <div class="notification-icon-small">${icon}</div>
                     <div class="notification-content">
                         <div class="notification-title">${escapeHtml(notif.title)}</div>
                         <div class="notification-message">${escapeHtml(notif.message)}</div>
                         <div class="notification-time">${timeAgo}</div>
-                        ${notif.type === NOTIFICATION_TYPES.ORDER_DECLINED && notif.actionRequired ? `
+                        ${notif.type === NOTIFICATION_TYPES.ORDER_DECLINED && notif.actionRequired && !isSelectionMode ? `
                             <button class="notification-action-btn" onclick="event.stopPropagation(); window.notifications?.recomplyOrder('${escapeHtml(notif.orderId || '')}')">
                                 <i class="fas fa-redo"></i> Recomply
                             </button>
@@ -323,6 +393,26 @@
                 </div>
             `;
         }).join('');
+
+        // Render pagination controls
+        if (paginationContainer && totalPages > 1) {
+            paginationContainer.style.display = 'flex';
+            paginationContainer.innerHTML = `
+                <button class="notification-pagination-btn" 
+                        ${currentPage === 1 ? 'disabled' : ''} 
+                        onclick="event.stopPropagation(); window.notifications?.goToPage(${currentPage - 1})">
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <span class="notification-pagination-info">Page ${currentPage} of ${totalPages}</span>
+                <button class="notification-pagination-btn" 
+                        ${currentPage === totalPages ? 'disabled' : ''} 
+                        onclick="event.stopPropagation(); window.notifications?.goToPage(${currentPage + 1})">
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            `;
+        } else if (paginationContainer) {
+            paginationContainer.style.display = 'none';
+        }
     }
 
     function getNotificationIcon(type) {
@@ -361,9 +451,159 @@
 
         if (dropdown.style.display === 'none' || !dropdown.style.display) {
             dropdown.style.display = 'flex';
+            currentPage = 1; // Reset to first page when opening
             renderNotifications();
         } else {
             dropdown.style.display = 'none';
+            // Exit selection mode when closing
+            if (isSelectionMode) {
+                exitSelectionMode();
+            }
+        }
+    }
+
+    function goToPage(page) {
+        const totalPages = Math.ceil(notifications.length / NOTIFICATIONS_PER_PAGE);
+        if (page >= 1 && page <= totalPages) {
+            currentPage = page;
+            renderNotifications();
+            // Scroll to top of notification list
+            const list = document.getElementById('notificationList');
+            if (list) {
+                list.scrollTop = 0;
+            }
+        }
+    }
+
+    function toggleSelectionMode() {
+        isSelectionMode = !isSelectionMode;
+        if (!isSelectionMode) {
+            exitSelectionMode();
+        } else {
+            selectedNotifications.clear();
+        }
+        renderNotifications();
+    }
+
+    function exitSelectionMode() {
+        isSelectionMode = false;
+        selectedNotifications.clear();
+    }
+
+    function toggleNotificationSelection(notificationId) {
+        if (selectedNotifications.has(notificationId)) {
+            selectedNotifications.delete(notificationId);
+        } else {
+            selectedNotifications.add(notificationId);
+        }
+        renderNotifications();
+    }
+
+    function selectAllNotifications() {
+        const list = document.getElementById('notificationList');
+        if (!list) return;
+        
+        const totalPages = Math.ceil(notifications.length / NOTIFICATIONS_PER_PAGE);
+        const startIndex = (currentPage - 1) * NOTIFICATIONS_PER_PAGE;
+        const endIndex = startIndex + NOTIFICATIONS_PER_PAGE;
+        const paginatedNotifications = notifications.slice(startIndex, endIndex);
+        
+        const allSelected = paginatedNotifications.every(n => selectedNotifications.has(n.id));
+        
+        if (allSelected) {
+            // Deselect all on current page
+            paginatedNotifications.forEach(n => selectedNotifications.delete(n.id));
+        } else {
+            // Select all on current page
+            paginatedNotifications.forEach(n => selectedNotifications.add(n.id));
+        }
+        renderNotifications();
+    }
+
+    async function deleteSelectedNotifications() {
+        const selectedIds = Array.from(selectedNotifications);
+        if (selectedIds.length === 0) return;
+
+        const count = selectedIds.length;
+        const message = count === 1 
+            ? 'Are you sure you want to delete this notification? This action cannot be undone.'
+            : `Are you sure you want to delete ${count} notifications? This action cannot be undone.`;
+
+        // Use custom modal instead of browser confirm
+        if (window.showConfirm && typeof window.showConfirm === 'function') {
+            window.showConfirm(message, async () => {
+                await performDelete(selectedIds);
+            }, () => {
+                // User cancelled, do nothing
+            });
+        } else {
+            // Fallback to browser confirm if modal not available
+            if (!confirm(message)) {
+                return;
+            }
+            await performDelete(selectedIds);
+        }
+    }
+
+    async function performDelete(selectedIds) {
+        const user = window.firebaseAuth?.currentUser;
+        if (!user || !window.firebaseDb || !window.doc || !window.deleteDoc) {
+            const errorMsg = 'Unable to delete notifications. Please try again.';
+            if (window.showAlert && typeof window.showAlert === 'function') {
+                window.showAlert(errorMsg, 'error');
+            } else if (window.utils && typeof window.utils.showModal === 'function') {
+                window.utils.showModal(errorMsg, {
+                    type: 'error',
+                    title: 'Error'
+                });
+            } else {
+                alert(errorMsg);
+            }
+            return;
+        }
+
+        try {
+            // Delete all selected notifications
+            for (const notifId of selectedIds) {
+                const ref = window.doc(window.firebaseDb, 'customers', user.uid, NOTIFS_SUBCOLLECTION, notifId);
+                await window.deleteDoc(ref);
+            }
+            
+            // Clear selection and exit selection mode
+            selectedNotifications.clear();
+            exitSelectionMode();
+            
+            // Show success message
+            const count = selectedIds.length;
+            const successMsg = count === 1 
+                ? 'Notification deleted successfully.'
+                : `${count} notifications deleted successfully.`;
+            
+            if (window.showAlert && typeof window.showAlert === 'function') {
+                window.showAlert(successMsg, 'success');
+            } else if (window.utils && typeof window.utils.showModal === 'function') {
+                window.utils.showModal(successMsg, {
+                    type: 'success',
+                    title: 'Success',
+                    autoClose: true,
+                    duration: 2000
+                });
+            }
+            
+            // onSnapshot will update the list automatically
+        } catch (e) {
+            console.error('Error deleting notifications:', e);
+            const errorMsg = 'Error deleting notifications. Please try again.';
+            if (window.showAlert && typeof window.showAlert === 'function') {
+                window.showAlert(errorMsg, 'error');
+            } else if (window.utils && typeof window.utils.showModal === 'function') {
+                window.utils.showModal(errorMsg, {
+                    type: 'error',
+                    title: 'Error'
+                });
+            } else {
+                alert(errorMsg);
+            }
         }
     }
 
@@ -485,7 +725,12 @@
         handleNotificationClick,
         markAllAsRead,
         recomplyOrder,
-        addSystemNotification
+        addSystemNotification,
+        goToPage,
+        toggleSelectionMode,
+        toggleNotificationSelection,
+        selectAllNotifications,
+        deleteSelectedNotifications
     };
 
     if (document.readyState === 'loading') {
@@ -498,10 +743,23 @@
         const dropdown = document.getElementById('notificationDropdown');
         const button = document.getElementById('notificationButton');
 
-        if (dropdown && button &&
-            !dropdown.contains(e.target) &&
-            !button.contains(e.target)) {
+        if (!dropdown || !button) return;
+
+        // Check if click is inside dropdown or button
+        const clickedInsideDropdown = dropdown.contains(e.target);
+        const clickedInsideButton = button.contains(e.target);
+        
+        // Also check if the clicked element is a button or inside a button within the dropdown
+        const clickedButton = e.target.closest('button');
+        const clickedInsideDropdownButton = clickedButton && dropdown.contains(clickedButton);
+
+        // Only close if click is completely outside dropdown and button
+        if (!clickedInsideDropdown && !clickedInsideButton && !clickedInsideDropdownButton) {
             dropdown.style.display = 'none';
+            // Exit selection mode when closing
+            if (isSelectionMode) {
+                exitSelectionMode();
+            }
         }
     });
 })();

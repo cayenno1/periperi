@@ -535,9 +535,70 @@
         .menu-detail-section { margin-top: var(--menu-space-lg); }
         .menu-detail-container { padding: 0 var(--menu-space-md); }
         .menu-detail-info { padding: var(--menu-space-lg) var(--menu-space-xl); }
-        .menu-detail-info-left h4 { margin-bottom: var(--menu-space-md); }
-        .detail-row { margin-bottom: var(--menu-space-sm); }
-        .detail-row:last-child { margin-bottom: 0; }
+        .menu-detail-info-left h4 { 
+            margin-bottom: var(--menu-space-lg); 
+            color: #3d2817; 
+            font-size: 1.25rem; 
+            font-weight: 700;
+        }
+        .detail-row { 
+            margin-bottom: var(--menu-space-md); 
+            padding: var(--menu-space-sm) 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .detail-row:last-child { 
+            margin-bottom: 0; 
+        }
+        .menu-detail-info-left .detail-label {
+            font-weight: 600;
+            color: #5a3f2a;
+            font-size: 0.9375rem;
+            margin-bottom: 4px;
+        }
+        .menu-detail-info-left .detail-value {
+            color: #222;
+            font-size: 0.9375rem;
+            font-weight: 500;
+        }
+        .menu-detail-info-left .detail-input {
+            width: 100%;
+            max-width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9375rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background-color: #fff;
+        }
+        .menu-detail-info-left .detail-input:focus {
+            outline: none;
+            border-color: #7E2021;
+            box-shadow: 0 0 0 3px rgba(126, 32, 33, 0.1);
+        }
+        .menu-detail-info-left .detail-textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+            width: 100%;
+        }
+        #menuDetailLinkSaucesRow {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: var(--menu-space-md) !important;
+            margin-top: var(--menu-space-lg) !important;
+        }
+        #menuDetailIncludedSaucesContainer {
+            background-color: #fff !important;
+        }
+        #menuDetailIncludedSaucesContainer label {
+            transition: background-color 0.2s ease;
+            border-radius: 4px;
+        }
+        #menuDetailIncludedSaucesContainer label:hover {
+            background-color: #f0f0f0 !important;
+        }
 
         /* Modals – consistent padding and mobile-friendly */
         .modal .modal-content { border-radius: var(--menu-radius); overflow: hidden; }
@@ -1396,6 +1457,16 @@
                         <div class="menu-detail-info-left">
                             <h4>Product Info</h4>
                             <div class="detail-row">
+                                <span class="detail-label">Dish Name (Internal)</span>
+                                <span class="detail-value" id="menuDetailName">—</span>
+                                <input type="text" class="detail-input" id="menuDetailNameInput" placeholder="Enter dish name" style="display: none;">
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Display Name (Optional)</span>
+                                <span class="detail-value" id="menuDetailDisplayName">—</span>
+                                <input type="text" class="detail-input" id="menuDetailDisplayNameInput" placeholder="Enter display name" style="display: none;">
+                            </div>
+                            <div class="detail-row">
                                 <span class="detail-label">Price</span>
                                 <span class="detail-value" id="menuDetailPrice">—</span>
                                 <input type="number" class="detail-input" id="menuDetailPriceInput" min="0" step="0.01" placeholder="0.00" style="display: none;">
@@ -1438,39 +1509,31 @@
                                 <span class="detail-value" id="menuDetailCalories">—</span>
                                 <input type="number" class="detail-input" id="menuDetailCaloriesInput" min="0" step="1" placeholder="0" style="display: none;">
                             </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Description</span>
+                                <span class="detail-value" id="menuDetailDescription">—</span>
+                                <textarea class="detail-input detail-textarea" id="menuDetailDescriptionInput" style="display: none;" placeholder="Enter product description"></textarea>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Allergens (Optional)</span>
+                                <span class="detail-value" id="menuDetailAllergens">—</span>
+                                <input type="text" class="detail-input" id="menuDetailAllergensInput" style="display: none;" placeholder="e.g., Contains nuts, dairy, gluten">
+                            </div>
                             <div class="detail-row" id="menuDetailChangeImageRow" style="display: none;">
                                 <button type="button" class="menu-detail-change-image-btn" id="menuDetailChangeImageBtn" onclick="document.getElementById('menuDetailImageInput').click()" title="Change Image">
                                     <i class="fas fa-camera"></i>
                                     Change Image
                                 </button>
                             </div>
-                            <div class="menu-detail-ingredients-section" style="margin-top: 24px;">
-                                <h5 style="margin-bottom: 16px;">Ingredients Info</h5>
-                                <ul class="menu-edit-ingredients" id="menuDetailIngredients" style="display: none;">
-                                    <li class="empty-state">No ingredients linked yet.</li>
-                                </ul>
-                                <div id="menuDetailIngredientsEditable">
-                                    <datalist id="menuIngredientsOptions"></datalist>
-                                    <div id="menuDetailIngredientsTable" style="display: none;">
-                                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
-                                            <thead>
-                                                <tr style="border-bottom: 2px solid #ddd; background: #f8f9fa;">
-                                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Ingredient Name</th>
-                                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Amount</th>
-                                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #495057;">Unit</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="menuDetailIngredientsList">
-                                                <!-- Ingredient rows will be added here -->
-                                            </tbody>
-                                        </table>
+                            <div class="detail-row" id="menuDetailLinkSaucesRow" style="display: none; margin-top: 24px; padding-top: 24px; border-top: 1px solid #e9ecef;">
+                                <div style="width: 100%;">
+                                    <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #3d2817; font-size: 0.9375rem;">Link Sauces (Optional)</label>
+                                    <div id="menuDetailIncludedSaucesContainer" class="checkbox-group" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 8px; background-color: #f8f9fa;">
+                                        <div class="empty-state" style="text-align: center; color: #999; padding: 20px;">
+                                            No sauces available. Add sauce items to the menu first.
+                                        </div>
                                     </div>
-                                    <div id="menuDetailIngredientsListFallback" style="display: none;">
-                                        <!-- Fallback for when not in table mode -->
-                                    </div>
-                                    <button type="button" class="btn btn-secondary btn-sm" id="addMenuDetailIngredientBtn" onclick="addMenuDetailIngredientRow()" style="margin-top: 10px;">
-                                        <i class="fas fa-plus"></i> Add Ingredient
-                                    </button>
+                                    <small class="form-hint" style="display: block; margin-top: 8px; color: #666; font-size: 0.8125rem; line-height: 1.4;">Check the sauces that come free with this meal. Customers can choose which ones they want when ordering.</small>
                                 </div>
                             </div>
                             <div class="menu-detail-actions" style="margin-top: 24px; display: flex; gap: 10px;">

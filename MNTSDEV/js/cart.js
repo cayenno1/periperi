@@ -154,6 +154,7 @@
     }
 
     // Add to cart function (works for both guest and authenticated users)
+    // NOTE: This function now delegates to customer-cart.js for items with linked sauces
     function addToCart(e) {
         if (!e) return;
         e.stopPropagation();
@@ -161,6 +162,13 @@
         const btn = e.target.closest('.add-to-cart-btn') || e.target.closest('.add-plus-btn');
         if (!btn) return;
 
+        // If customer-cart.js is available, use its addToCart which handles linked sauces
+        if (window.customerCart && window.customerCart.addToCart) {
+            // Delegate to customer-cart.js - it will handle linked sauces modal
+            return window.customerCart.addToCart(e);
+        }
+
+        // Fallback to old behavior if customer-cart.js not available
         const itemId = btn.dataset.itemId || '';
         let itemName = btn.dataset.itemName || '';
         const imageUrl = btn.dataset.itemImg || '';
@@ -225,6 +233,7 @@
     };
 
     // Global function for onclick handlers
+    // Set this, but customer-cart.js will overwrite it when it loads
     window.addToCart = addToCart;
 })();
 

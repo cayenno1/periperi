@@ -12,8 +12,9 @@
     <script src="js/profile-login.js"></script>
     <script src="js/profile-authentication.js"></script>
     <script src="js/utils.js" defer></script>
-    <script src="js/cart.js" defer></script>
     <script src="js/firestore.js" defer></script>
+    <script src="js/cart.js" defer></script>
+    <script src="js/customer-cart.js" defer></script>
     <script src="js/home.js" defer></script>
 </head>
 <body class="index-page">
@@ -43,8 +44,24 @@
                         <div class="notification-dropdown" id="notificationDropdown" style="display: none;">
                             <div class="notification-dropdown-header">
                                 <h3>Notifications</h3>
-                                <button class="notification-mark-all-read" id="markAllReadBtn" onclick="window.notifications?.markAllAsRead()">
-                                    Mark all as read
+                                <div class="notification-header-actions">
+                                    <button class="notification-select-btn" id="toggleSelectionBtn" onclick="event.stopPropagation(); window.notifications?.toggleSelectionMode()">
+                                        <i class="fas fa-check-square"></i> Select
+                                    </button>
+                                    <button class="notification-mark-all-read" id="markAllReadBtn" onclick="event.stopPropagation(); window.notifications?.markAllAsRead()">
+                                        Mark all as read
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="notification-selection-controls" id="notificationSelectionControls" style="display: none;">
+                                <button class="notification-select-all-btn" id="selectAllNotifications" onclick="event.stopPropagation(); window.notifications?.selectAllNotifications()">
+                                    <i class="fas fa-check-square"></i> Select All
+                                </button>
+                                <button class="notification-delete-btn" id="deleteSelectedNotifications" onclick="event.stopPropagation(); window.notifications?.deleteSelectedNotifications()">
+                                    <i class="fas fa-trash"></i> Delete (0)
+                                </button>
+                                <button class="notification-cancel-selection-btn" id="cancelSelection" onclick="event.stopPropagation(); window.notifications?.toggleSelectionMode()">
+                                    Cancel
                                 </button>
                             </div>
                             <div class="notification-list" id="notificationList">
@@ -53,6 +70,7 @@
                                     <p>No notifications</p>
                                 </div>
                             </div>
+                            <div class="notification-pagination" id="notificationPagination" style="display: none;"></div>
                         </div>
                     </div>
                     <div class="nav-icon profile-icon" title="Profile" id="profileButton">
@@ -153,7 +171,7 @@
                                         data-item-name="Special Combo Meal"
                                         data-item-price="399"
                                         data-item-img="new_dish.png"
-                                        onclick="event.stopPropagation(); window.cart.addToCart(event)">
+                                        onclick="event.stopPropagation(); window.addToCart(event)">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -311,5 +329,37 @@
             </button>
         </div>
     </div>
+
+  <!-- Linked Items Modal -->
+  <div id="linkedItemsModal" class="modal" style="display: none;">
+    <div class="modal-content pos-sauce-modal">
+      <div class="modal-header">
+        <h2 id="linkedItemsModalTitle">Choose your sauce</h2>
+        <span class="close-modal" onclick="window.closeLinkedItemsModal()">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p class="pos-sauce-modal-intro">
+          This meal includes the following linked sauces. 
+          Select which ones to add (all are <strong>free</strong>).
+        </p>
+        <div class="pos-sauce-list" id="linkedItemsList">
+          <!-- Dynamically rendered sauce items -->
+        </div>
+        <div class="pos-sauce-actions">
+          <button type="button" class="btn btn-secondary" onclick="window.customerCart?.confirmLinkedItems([])">
+            <i class="fas fa-times"></i> Skip
+          </button>
+          <button type="button" class="btn btn-outline-primary" 
+                  onclick="window.customerCart?.confirmLinkedItems(window.customerCart?.selectedLinkedItems || [])" 
+                  id="addSelectedBtn" disabled>
+            <i class="fas fa-check"></i> Add Selected
+          </button>
+          <button type="button" class="btn btn-primary" onclick="window.customerCart?.confirmLinkedItems(null)">
+            <i class="fas fa-check-double"></i> Add All Sauces
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

@@ -340,27 +340,6 @@
         </main>
     </div>
 
-    <!-- Sauce Selection Modal (Peri Chicken & Ribs) -->
-    <div id="posSauceModal" class="modal" style="display: none;">
-        <div class="modal-content pos-sauce-modal">
-            <div class="modal-header">
-                <h2 id="posSauceModalTitle">Choose Sauce</h2>
-                <span class="close-modal" onclick="closeSauceSelectionModal()">&times;</span>
-            </div>
-            <div class="modal-body">
-                <p class="pos-sauce-modal-intro">Select a sauce for your Peri Chicken & Ribs item. Sauces are <strong>free</strong> with this order.</p>
-                <div class="pos-sauce-list" id="posSauceList">
-                    <!-- Sauces will be rendered here -->
-                </div>
-                <div class="pos-sauce-actions">
-                    <button type="button" class="btn btn-secondary" onclick="confirmPeriRibsWithSauce(null)">
-                        No sauce
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Linked Items Modal (for products with includedSauces) -->
     <div id="posLinkedItemsModal" class="modal" style="display: none;">
         <div class="modal-content pos-sauce-modal">
@@ -369,16 +348,19 @@
                 <span class="close-modal" onclick="closeLinkedItemsModal()">&times;</span>
             </div>
             <div class="modal-body">
-                <p class="pos-sauce-modal-intro">This meal includes the following linked items. Select which ones to add (all are <strong>free</strong>).</p>
+                <p class="pos-sauce-modal-intro">This meal includes the following linked sauces. Select which ones to add (all are <strong>free</strong>).</p>
                 <div class="pos-sauce-list" id="posLinkedItemsList">
                     <!-- Linked items will be rendered here -->
                 </div>
                 <div class="pos-sauce-actions">
                     <button type="button" class="btn btn-secondary" onclick="confirmLinkedItems([])">
-                        Skip
+                        <i class="fas fa-times"></i> Skip
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="confirmLinkedItems(selectedLinkedItems)" id="posAddSelectedBtn" disabled>
+                        <i class="fas fa-check"></i> Add
                     </button>
                     <button type="button" class="btn btn-primary" onclick="confirmLinkedItems(null)">
-                        Add All
+                        <i class="fas fa-check-double"></i> Add All
                     </button>
                 </div>
             </div>

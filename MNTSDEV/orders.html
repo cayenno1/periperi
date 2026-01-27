@@ -42,8 +42,24 @@
         <div class="notification-dropdown" id="notificationDropdown" style="display: none;">
             <div class="notification-dropdown-header">
                 <h3>Notifications</h3>
-                <button class="notification-mark-all-read" id="markAllReadBtn" onclick="window.notifications?.markAllAsRead()">
-                    Mark all as read
+                <div class="notification-header-actions">
+                    <button class="notification-select-btn" id="toggleSelectionBtn" onclick="event.stopPropagation(); window.notifications?.toggleSelectionMode()">
+                        <i class="fas fa-check-square"></i> Select
+                    </button>
+                    <button class="notification-mark-all-read" id="markAllReadBtn" onclick="event.stopPropagation(); window.notifications?.markAllAsRead()">
+                        Mark all as read
+                    </button>
+                </div>
+            </div>
+            <div class="notification-selection-controls" id="notificationSelectionControls" style="display: none;">
+                <button class="notification-select-all-btn" id="selectAllNotifications" onclick="event.stopPropagation(); window.notifications?.selectAllNotifications()">
+                    <i class="fas fa-check-square"></i> Select All
+                </button>
+                <button class="notification-delete-btn" id="deleteSelectedNotifications" onclick="event.stopPropagation(); window.notifications?.deleteSelectedNotifications()">
+                    <i class="fas fa-trash"></i> Delete (0)
+                </button>
+                <button class="notification-cancel-selection-btn" id="cancelSelection" onclick="event.stopPropagation(); window.notifications?.toggleSelectionMode()">
+                    Cancel
                 </button>
             </div>
             <div class="notification-list" id="notificationList">
@@ -52,6 +68,7 @@
                     <p>No notifications</p>
                 </div>
             </div>
+            <div class="notification-pagination" id="notificationPagination" style="display: none;"></div>
         </div>
       </div>
       <div class="nav-icon profile-icon" title="Profile" id="profileButton">

@@ -249,13 +249,35 @@
             const user = window.firebaseAuth?.currentUser;
             
             if (user && window.firebaseDb && window.doc && window.collection && window.getDocs) {
-                // Load from Firestore
+                // Load directly from Firestore - this is the source of truth
                 const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
                 const cartItemsCol = window.collection(customerRef, 'cartItems');
                 const snap = await window.getDocs(cartItemsCol);
                 const items = [];
                 snap.forEach((docSnap) => {
-                    items.push({ id: docSnap.id, ...docSnap.data() });
+                    const data = docSnap.data();
+                    const lineId = data.lineId || docSnap.id;
+                    // Calculate unit price from total price
+                    const totalPrice = typeof data.price === 'number' ? data.price : Number(data.price) || 0;
+                    const qty = typeof data.quantity === 'number' ? data.quantity : Number(data.quantity) || 1;
+                    const unitPrice = qty > 0 ? totalPrice / qty : 0;
+                    
+                    items.push({ 
+                        id: docSnap.id, // Use Firestore doc ID
+                        lineId: lineId,
+                        itemId: data.itemId || data.id || '',
+                        menuId: data.menuId || '',
+                        name: data.name || '',
+                        imageUrl: data.imageUrl || data.image || '',
+                        price: totalPrice, // Total price for preview
+                        unitPrice: unitPrice, // Unit price
+                        quantity: qty,
+                        variation: data.variation || null,
+                        sauce: data.sauce || null,
+                        freeWithPeriRibs: data.freeWithPeriRibs || false,
+                        linkedToMainItem: data.linkedToMainItem || null,
+                        parentId: data.parentId || null
+                    });
                 });
                 return items;
             } else {
@@ -291,14 +313,106 @@
             const user = window.firebaseAuth?.currentUser;
 
             if (user && window.firebaseDb && window.doc && window.deleteDoc) {
-                // Logged-in: delete the Firestore cart item doc (id is doc id)
-                const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
-                const cartItemRef = window.doc(customerRef, 'cartItems', cartItemId);
-                await window.deleteDoc(cartItemRef);
+                // Try to use customer-cart.js removeFromCart first (handles linked free sauces)
+                if (window.customerCart && window.customerCart.removeFromCart) {
+                    // Find the lineId for this cart item
+                    const items = await loadCartItems();
+                    const itemToRemove = items.find(item => item.id === cartItemId || item.lineId === cartItemId);
+                    
+                    if (itemToRemove && itemToRemove.lineId) {
+                        await window.customerCart.removeFromCart(itemToRemove.lineId);
+                    } else {
+                        // Fallback: direct Firestore delete
+                        const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
+                        const cartItemRef = window.doc(customerRef, 'cartItems', cartItemId);
+                        await window.deleteDoc(cartItemRef);
+                    }
+                } else {
+                    // Fallback: direct Firestore delete with linked free sauce handling
+                    const items = await loadCartItems();
+                    const itemToRemove = items.find(item => item.id === cartItemId || item.lineId === cartItemId);
+                    
+                    if (itemToRemove) {
+                        const isMainItem = !itemToRemove.freeWithPeriRibs;
+                        
+                        // If it's a main item, find and delete all linked free sauces
+                        if (isMainItem && window.collection && window.getDocs) {
+                            const mainItemMenuId = itemToRemove.menuId || itemToRemove.itemId;
+                            const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
+                            const cartItemsCol = window.collection(customerRef, 'cartItems');
+                            const cartItemsSnapshot = await window.getDocs(cartItemsCol);
+                            
+                            // Find all free sauces linked to this main item
+                            const linkedFreeSauceDocs = [];
+                            cartItemsSnapshot.forEach((docSnap) => {
+                                const data = docSnap.data();
+                                if (data.freeWithPeriRibs === true) {
+                                    const linkedToMainItem = data.linkedToMainItem || data.parentId || data.menuId;
+                                    if (linkedToMainItem === mainItemMenuId) {
+                                        linkedFreeSauceDocs.push(docSnap.ref);
+                                    }
+                                }
+                            });
+                            
+                            // Delete all linked free sauces
+                            for (const freeSauceRef of linkedFreeSauceDocs) {
+                                try {
+                                    await window.deleteDoc(freeSauceRef);
+                                } catch (error) {
+                                    console.error('Error deleting linked free sauce:', error);
+                                }
+                            }
+                        }
+                        
+                        // Delete the main item
+                        const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
+                        const cartItemRef = window.doc(customerRef, 'cartItems', cartItemId);
+                        await window.deleteDoc(cartItemRef);
+                    } else {
+                        // Item not found, just delete by ID
+                        const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
+                        const cartItemRef = window.doc(customerRef, 'cartItems', cartItemId);
+                        await window.deleteDoc(cartItemRef);
+                    }
+                }
             } else {
-                // Guest: remove from localStorage cart by id
-                const cart = (window.cart?.getGuestCart?.() || []).filter((item) => item?.id !== cartItemId);
-                window.cart?.setGuestCart?.(cart);
+                // Guest: remove from localStorage cart by id (with linked free sauce handling)
+                const cart = window.cart?.getGuestCart?.() || [];
+                const itemToRemove = cart.find(item => item.id === cartItemId || item.lineId === cartItemId);
+                
+                if (itemToRemove) {
+                    const isMainItem = !itemToRemove.freeWithPeriRibs;
+                    
+                    // If it's a main item, find and remove all linked free sauces
+                    if (isMainItem) {
+                        const mainItemMenuId = itemToRemove.menuId || itemToRemove.itemId;
+                        
+                        const filteredCart = cart.filter((item) => {
+                            // Remove the main item being deleted
+                            if (item.id === cartItemId || item.lineId === cartItemId) return false;
+                            
+                            // Remove free sauces linked to this main item
+                            if (item.freeWithPeriRibs === true) {
+                                const linkedToMainItem = item.linkedToMainItem || item.parentId || item.menuId || item.itemId;
+                                if (linkedToMainItem === mainItemMenuId) {
+                                    return false; // Remove this free sauce
+                                }
+                            }
+                            
+                            return true; // Keep other items
+                        });
+                        
+                        window.cart?.setGuestCart?.(filteredCart);
+                    } else {
+                        // Just remove the single item (free sauce)
+                        const filteredCart = cart.filter((item) => item?.id !== cartItemId && item?.lineId !== cartItemId);
+                        window.cart?.setGuestCart?.(filteredCart);
+                    }
+                } else {
+                    // Item not found, just filter by ID
+                    const filteredCart = cart.filter((item) => item?.id !== cartItemId && item?.lineId !== cartItemId);
+                    window.cart?.setGuestCart?.(filteredCart);
+                }
             }
 
             // Refresh preview + count
@@ -446,25 +560,39 @@
         const itemsHtml = items.slice(0, 5).map(item => {
             const price = typeof item.price === 'number' ? item.price : Number(item.price) || 0;
             const qty = typeof item.quantity === 'number' ? item.quantity : Number(item.quantity) || 1;
-            const unitPrice = price / qty;
-            total += price;
+            const unitPrice = qty > 0 ? price / qty : 0;
+            const isFree = item.freeWithPeriRibs === true;
+            // Only add to total if not free
+            if (!isFree) {
+                total += price;
+            }
             
-            const itemId = item.id || '';
+            const itemId = item.id || item.lineId || '';
+            const lineId = item.lineId || item.id || '';
+            const priceDisplay = isFree ? 'Free' : formatPeso(unitPrice);
+            
+            // For free items, hide quantity controls
+            const qtyControls = isFree 
+                ? `<span class="cart-preview-qty-display" style="opacity:0.6;">${qty}</span>`
+                : `
+                    <button class="cart-preview-qty-btn" aria-label="Decrease quantity" onclick="window.utils.changeCartPreviewQty('${lineId}', -1, ${unitPrice})">-</button>
+                    <span class="cart-preview-qty-display">${qty}</span>
+                    <button class="cart-preview-qty-btn" aria-label="Increase quantity" onclick="window.utils.changeCartPreviewQty('${lineId}', 1, ${unitPrice})">+</button>
+                `;
+            
             return `
                 <div class="cart-preview-item">
                     <img src="${item.imageUrl || ''}" alt="${item.name || 'Item'}" class="cart-preview-item-img" onerror="this.style.display='none'">
                     <div class="cart-preview-item-info">
-                        <div class="cart-preview-item-name">${item.name || 'Item'}</div>
+                        <div class="cart-preview-item-name">${item.name || 'Item'}${isFree ? ' <span style="color:#4caf50;font-size:0.75em;">(Free)</span>' : ''}</div>
                         <div class="cart-preview-item-details">
                             <div class="cart-preview-qty">
-                                <button class="cart-preview-qty-btn" aria-label="Decrease quantity" onclick="window.utils.changeCartPreviewQty('${itemId}', -1, ${unitPrice})">-</button>
-                                <span class="cart-preview-qty-display">${qty}</span>
-                                <button class="cart-preview-qty-btn" aria-label="Increase quantity" onclick="window.utils.changeCartPreviewQty('${itemId}', 1, ${unitPrice})">+</button>
+                                ${qtyControls}
                             </div>
-                            <span class="cart-preview-item-price">${formatPeso(unitPrice)}</span>
+                            <span class="cart-preview-item-price">${priceDisplay}</span>
                         </div>
                     </div>
-                    <button class="cart-preview-remove-btn" aria-label="Remove item" onclick="window.utils.removeCartItemFromPreview('${itemId}')">
+                    <button class="cart-preview-remove-btn" aria-label="Remove item" onclick="window.utils.removeCartItemFromPreview('${lineId}')">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
@@ -530,35 +658,125 @@
     async function changeCartPreviewQty(cartItemId, delta, unitPrice) {
         if (!cartItemId || !delta) return;
         try {
+            
             await waitForFirebaseReady();
             const user = window.firebaseAuth?.currentUser;
 
             if (user && window.firebaseDb && window.doc && window.updateDoc) {
                 const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
-                const cartItemRef = window.doc(customerRef, 'cartItems', cartItemId);
-                // Fetch current to compute new qty
-                if (!window.getDoc) return;
-                const snap = await window.getDoc(cartItemRef);
-                if (!snap.exists()) return;
-                const data = snap.data() || {};
+                
+                // Find the cart item by lineId or document ID
+                let cartItemRef = null;
+                let data = null;
+                
+                if (window.collection && window.getDocs) {
+                    const cartItemsCol = window.collection(customerRef, 'cartItems');
+                    const snap = await window.getDocs(cartItemsCol);
+                    
+                    // Try to find by lineId first, then by document ID
+                    snap.forEach((docSnap) => {
+                        const docData = docSnap.data();
+                        const docLineId = docData.lineId || docSnap.id;
+                        if (docLineId === cartItemId || docSnap.id === cartItemId) {
+                            cartItemRef = docSnap.ref;
+                            data = docData;
+                        }
+                    });
+                } else {
+                    // Fallback: try direct document ID lookup
+                    cartItemRef = window.doc(customerRef, 'cartItems', cartItemId);
+                    if (window.getDoc) {
+                        const snap = await window.getDoc(cartItemRef);
+                        if (snap.exists()) {
+                            data = snap.data() || {};
+                        }
+                    }
+                }
+                
+                if (!cartItemRef || !data) {
+                    console.warn('Cart item not found:', cartItemId);
+                    return;
+                }
+                
+                // Check if item is free - prevent quantity changes
+                if (data.freeWithPeriRibs === true) {
+                    showToast('Free items cannot be modified. Remove the main item to change quantity.', 'info');
+                    return;
+                }
+                
                 const currentQty = typeof data.quantity === 'number' ? data.quantity : Number(data.quantity) || 1;
                 const numericUnit = typeof unitPrice === 'number' ? unitPrice : Number(unitPrice) || 0;
                 const newQty = Math.max(1, currentQty + delta);
+                const mainItemId = data.menuId || data.itemId || data.lineId;
+                
+                // Update main item quantity
                 await window.updateDoc(cartItemRef, {
                     quantity: newQty,
                     price: numericUnit * newQty,
                     updatedAt: new Date()
                 });
+                
+                // Sync free sauces linked to this main item
+                if (window.collection && window.getDocs) {
+                    const cartItemsCol = window.collection(customerRef, 'cartItems');
+                    const snap = await window.getDocs(cartItemsCol);
+                    
+                    const updatePromises = [];
+                    snap.forEach((docSnap) => {
+                        const sauceData = docSnap.data();
+                        if (sauceData.freeWithPeriRibs === true) {
+                            const linkedToMainItem = sauceData.linkedToMainItem || sauceData.parentId || sauceData.menuId || sauceData.itemId;
+                            if (linkedToMainItem === mainItemId) {
+                                updatePromises.push(
+                                    window.updateDoc(docSnap.ref, {
+                                        quantity: newQty,
+                                        updatedAt: new Date()
+                                    })
+                                );
+                            }
+                        }
+                    });
+                    
+                    // Wait for all free sauce updates to complete
+                    if (updatePromises.length > 0) {
+                        await Promise.all(updatePromises);
+                    }
+                }
             } else {
                 // Guest cart: update localStorage
                 const cart = window.cart?.getGuestCart?.() || [];
-                const idx = cart.findIndex((item) => item?.id === cartItemId);
+                // Find by lineId or id
+                const idx = cart.findIndex((item) => 
+                    item?.id === cartItemId || 
+                    item?.lineId === cartItemId
+                );
                 if (idx === -1) return;
+                
+                // Check if item is free - prevent quantity changes
+                if (cart[idx].freeWithPeriRibs === true) {
+                    showToast('Free items cannot be modified. Remove the main item to change quantity.', 'info');
+                    return;
+                }
+                
                 const numericUnit = typeof unitPrice === 'number' ? unitPrice : Number(unitPrice) || 0;
                 const currentQty = typeof cart[idx].quantity === 'number' ? cart[idx].quantity : Number(cart[idx].quantity) || 1;
                 const newQty = Math.max(1, currentQty + delta);
+                const mainItemId = cart[idx].menuId || cart[idx].itemId || cart[idx].lineId || cart[idx].id;
+                
+                // Update main item quantity
                 cart[idx].quantity = newQty;
                 cart[idx].price = numericUnit * newQty;
+                
+                // Sync free sauces linked to this main item
+                cart.forEach(item => {
+                    if (item.freeWithPeriRibs === true) {
+                        const linkedToMainItem = item.linkedToMainItem || item.parentId || item.menuId || item.itemId || item.lineId;
+                        if (linkedToMainItem === mainItemId) {
+                            item.quantity = newQty;
+                        }
+                    }
+                });
+                
                 window.cart?.setGuestCart?.(cart);
             }
 
@@ -814,5 +1032,6 @@
             }
         }
     });
+    
 })();
 

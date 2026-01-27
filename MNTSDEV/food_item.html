@@ -15,6 +15,7 @@
     <script src="js/utils.js" defer></script>
     <script src="js/cart.js" defer></script>
     <script src="js/firestore.js" defer></script>
+    <script src="js/customer-cart.js" defer></script>
     <script src="js/food-item.js" defer></script>
 </head>
 
@@ -102,22 +103,6 @@
         <div class="variation-section" id="variation-section" style="display: none;">
           <h3 class="section-subtitle">Choose Variation</h3>
           <div class="variation-buttons" id="variation-buttons"></div>
-        </div>
-
-        <!-- Sauce Selection -->
-        <div class="sauce-section" id="sauce-section" style="display: none;">
-          <h3 class="section-subtitle">Choose Sauce</h3>
-          <div class="sauce-carousel-container">
-            <button class="sauce-nav-btn sauce-nav-left" id="sauce-nav-left" onclick="window.foodItem.navigateSauces(-1)">
-              <i class="fas fa-chevron-left"></i>
-            </button>
-            <div class="sauce-cards-wrapper" id="sauce-cards-wrapper">
-              <div class="sauce-cards" id="sauce-cards"></div>
-            </div>
-            <button class="sauce-nav-btn sauce-nav-right" id="sauce-nav-right" onclick="window.foodItem.navigateSauces(1)">
-              <i class="fas fa-chevron-right"></i>
-            </button>
-          </div>
         </div>
 
         <div class="quantity-section">
@@ -307,6 +292,38 @@
         <i class="fas fa-sign-in-alt"></i>
         <span>Sign In</span>
       </button>
+    </div>
+  </div>
+
+  <!-- Linked Items Modal -->
+  <div id="linkedItemsModal" class="modal" style="display: none;">
+    <div class="modal-content pos-sauce-modal">
+      <div class="modal-header">
+        <h2 id="linkedItemsModalTitle">Choose your sauce</h2>
+        <span class="close-modal" onclick="window.closeLinkedItemsModal()">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p class="pos-sauce-modal-intro">
+          This meal includes the following linked sauces. 
+          Select which ones to add (all are <strong>free</strong>).
+        </p>
+        <div class="pos-sauce-list" id="linkedItemsList">
+          <!-- Dynamically rendered sauce items -->
+        </div>
+        <div class="pos-sauce-actions">
+          <button type="button" class="btn btn-secondary" onclick="window.customerCart?.confirmLinkedItems([])">
+            <i class="fas fa-times"></i> Skip
+          </button>
+          <button type="button" class="btn btn-outline-primary" 
+                  onclick="window.customerCart?.confirmLinkedItems(window.customerCart?.selectedLinkedItems || [])" 
+                  id="addSelectedBtn" disabled>
+            <i class="fas fa-check"></i> Add Selected
+          </button>
+          <button type="button" class="btn btn-primary" onclick="window.customerCart?.confirmLinkedItems(null)">
+            <i class="fas fa-check-double"></i> Add All Sauces
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </body>
