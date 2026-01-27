@@ -121,15 +121,11 @@
                             <li><a href="customer.html#most-ordered">Most Ordered</a></li>
                         </ul>
                     </li>
-                    <li class="nav-item menu-nav-dropdown">
-                        <button type="button" class="nav-link menu-toggle" onclick="toggleAnalyticsTabDropdown()">
+                    <li class="nav-item">
+                        <a href="sales.html#sales" class="nav-link">
                             <i class="fas fa-chart-bar"></i>
-                            <span>Analytics</span>
-                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
-                        </button>
-                        <ul class="menu-nav-submenu" id="analyticsTabDropdown">
-                            <li><a href="sales.html#sales">Sales</a></li>
-                        </ul>
+                            <span>Sales</span>
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a href="settings.html" class="nav-link">
@@ -168,7 +164,7 @@
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu" id="adminDropdown">
-                        <a href="#" class="dropdown-item">Profile Settings</a>
+                        <a href="view-user-profile.html" class="dropdown-item" onclick="showUserProfile(); return false;">Profile Settings</a>
                         <a href="#" class="dropdown-item">Logout</a>
                     </div>
                 </div>
@@ -202,19 +198,6 @@
                     }
                 })();
             </script>
-
-            <!-- Filter Section -->
-            <div class="filter-section">
-                <span>Filter by</span>
-                <button class="filter-btn" onclick="toggleDropdown('userFilterDropdown')">
-                    Users
-                    <i class="fas fa-chevron-down"></i>
-                </button>
-                <div class="dropdown-menu" id="userFilterDropdown">
-                    <a href="#" class="dropdown-item">Inventory</a>
-                    <a href="#" class="dropdown-item">Store Manager</a>
-                </div>
-            </div>
 
             <!-- Activity Logs -->
             <div class="activity-logs" id="activityLogsContainer">

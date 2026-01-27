@@ -10210,6 +10210,16 @@ input:checked + .toggle-slider:before {
 .pos-receipt-modal {
     max-width: 900px;
     width: 90%;
+    background: #f6e3c8; /* match beige POS receipt preview */
+}
+
+.pos-receipt-modal .modal-header,
+.pos-receipt-modal .modal-footer {
+    background: #ffffff;
+}
+
+.pos-receipt-modal .modal-body {
+    background: #f6e3c8;
 }
 
 .pos-receipts-container {
@@ -10218,6 +10228,16 @@ input:checked + .toggle-slider:before {
     flex-wrap: wrap;
     justify-content: center;
     align-items: flex-start;
+}
+
+.pos-receipts-container.pos-receipts-dual {
+    gap: 60px; /* closer to screenshot spacing */
+    flex-wrap: nowrap; /* keep receipts side by side on desktop */
+}
+
+.pos-receipt-panel.is-active .pos-receipt-content {
+    outline: 2px solid #ff9800;
+    outline-offset: 2px;
 }
 
 .pos-receipt-content {
@@ -10249,7 +10269,7 @@ input:checked + .toggle-slider:before {
 }
 
 .pos-receipt-header {
-    text-align: center;
+    text-align: left;
     margin-bottom: 20px;
     border-bottom: 2px dashed #000;
     padding-bottom: 15px;
@@ -10816,14 +10836,14 @@ input:checked + .toggle-slider:before {
 .pos-orders-log-content {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .pos-order-log-item {
     background: white;
     border: 1px solid #e9ecef;
     border-radius: 6px;
-    padding: 15px;
+    padding: 16px 18px 14px;
     transition: all 0.2s ease;
 }
 
@@ -10837,27 +10857,28 @@ input:checked + .toggle-slider:before {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
     border-bottom: 1px solid #e9ecef;
 }
 
 .pos-order-log-id {
-    font-weight: 600;
+    font-weight: 700;
     color: #7E2021;
-    font-size: 14px;
+    font-size: 15px;
+    letter-spacing: 0.02em;
 }
 
 .pos-order-log-time {
-    font-size: 12px;
-    color: #6c757d;
+    font-size: 11px;
+    color: #868e96;
 }
 
 .pos-order-log-details {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin-bottom: 10px;
+    gap: 4px;
+    margin-bottom: 12px;
 }
 
 .pos-order-log-row {
@@ -10870,11 +10891,11 @@ input:checked + .toggle-slider:before {
 .pos-order-log-label {
     font-weight: 600;
     color: #3d2817;
-    min-width: 80px;
+    min-width: 82px;
 }
 
 .pos-order-log-value {
-    color: #6c757d;
+    color: #495057;
     text-align: right;
     flex: 1;
     word-break: break-word;
@@ -10882,15 +10903,37 @@ input:checked + .toggle-slider:before {
 
 .pos-order-log-footer {
     display: flex;
-    justify-content: flex-end;
-    padding-top: 8px;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-top: 10px;
     border-top: 1px solid #e9ecef;
 }
 
 .pos-order-log-total {
     font-weight: bold;
     color: #7E2021;
-    font-size: 16px;
+    font-size: 17px;
+}
+
+.pos-order-log-footer .btn {
+    font-size: 12px;
+    padding: 5px 10px;
+}
+
+.pos-orders-log-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 10px;
+    border-top: 1px solid #e9ecef;
+}
+
+.pos-orders-log-pagination .pagination-info {
+    font-size: 12px;
+    color: #6c757d;
 }
 
 @media (max-width: 1024px) {

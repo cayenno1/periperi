@@ -1272,6 +1272,7 @@ function normalizeOrderDoc(docSnap) {
         deliveryInfo: deliveryInfo,
         deliveryMethod: deliveryMethod,
         serviceType: serviceType,
+        walkin: data.walkin === true || data.isWalkIn === true || deliveryInfo.walkin === true,
         tableNumber: tableNumber,
         address: deliveryInfo.address || data.address || '',
         restaurantAddress: restaurantAddress,
@@ -1296,16 +1297,20 @@ function filterOrdersByCriteria(orders) {
     
     let filtered = [...orders];
     
-    // For Orders tab (orders.html), only show online orders (delivery), exclude dine-in and pick-up
-    const isOrdersPage = window.location.pathname.includes('orders.html') || 
-                         document.getElementById('orderServiceTypeFilter') !== null;
+    // Orders tab should only show online orders (delivery/pick-up), never walk-in/POS
+    const isOrdersPage = !!document.getElementById('ordersTableBody');
     if (isOrdersPage) {
         filtered = filtered.filter(order => {
-            const serviceType = (order.serviceType || '').toLowerCase().trim();
-            // Only show delivery orders (exclude dine-in and pick-up)
-            return serviceType === 'delivery' || 
-                   (!serviceType || (serviceType !== 'dine-in' && serviceType !== 'dinein' && 
-                                     serviceType !== 'pick-up' && serviceType !== 'pickup' && serviceType !== 'pick_up'));
+            const rawServiceType = (order.serviceType || order.deliveryInfo?.serviceType || '').toLowerCase().trim();
+            const serviceType = rawServiceType.replace(/\s+/g, '-').replace(/_/g, '-');
+            const isWalkIn = order.walkin === true || order.deliveryInfo?.walkin === true;
+            const isDineIn = serviceType === 'dine-in' || serviceType === 'dinein';
+            const isTakeOut = serviceType === 'take-out' || serviceType === 'takeout';
+            // Keep only online delivery or pickup; drop POS/walk-in types
+            if (isWalkIn || isDineIn || isTakeOut) return false;
+            if (serviceType === 'pick-up' || serviceType === 'pickup') return true;
+            // Default include delivery/unspecified (online)
+            return serviceType === 'delivery' || serviceType === '' || serviceType === undefined;
         });
     }
     
@@ -3310,19 +3315,9 @@ function viewOrderDetails(orderId) {
             <div class="order-card-body">
                 <div class="receipt-actions-grid">
                     <button type="button" class="btn btn-receipt-kitchen" onclick="event.stopPropagation(); viewKitchenReceipt('${escapedOrderIdForOnclick}');">
-                        <i class="fas fa-utensils"></i>
-                        <span>View Kitchen Receipt</span>
-                    </button>
-                    ${showCustomerReceipt ? `
-                    <button type="button" class="btn btn-receipt-customer" onclick="event.stopPropagation(); viewCustomerReceipt('${escapedOrderIdForOnclick}');">
                         <i class="fas fa-receipt"></i>
-                        <span>View Customer Receipt</span>
+                        <span>View Receipts</span>
                     </button>
-                    <button type="button" class="btn btn-receipt-print" onclick="event.stopPropagation(); quickPrintCustomerReceipt('${escapedOrderIdForOnclick}');">
-                        <i class="fas fa-print"></i>
-                        <span>Quick Print</span>
-                    </button>
-                    ` : ''}
                 </div>
             </div>
         </div>
@@ -3807,31 +3802,94 @@ function closePaymentReceiptModal() {
     }
 }
 
-// Helper function to get current staff name
-function getCurrentStaffName() {
+// Helper functions for current staff context
+function getCurrentStaffContext() {
     const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
-    if (session) {
-        try {
-            const staffSession = JSON.parse(session);
-            if (staffSession.firstName && staffSession.lastName) {
-                let displayName = `${staffSession.firstName} ${staffSession.lastName}`;
-                if (staffSession.suffix) {
-                    displayName += ` ${staffSession.suffix}`;
-                }
-                return displayName;
-            } else if (staffSession.email) {
-                // Prefer user part over full email for receipts
-                const email = String(staffSession.email);
-                const namePart = email.split('@')[0];
-                return namePart ? namePart : email;
-            } else if (staffSession.staffId) {
-                return staffSession.staffId;
-            }
-        } catch (e) {
-            console.warn('Could not parse staff session:', e);
-        }
+    if (!session) {
+        return {
+            id: null,
+            name: 'Admin',
+            role: null,
+            email: null
+        };
     }
-    return 'Admin';
+
+    try {
+        const staffSession = JSON.parse(session);
+        let name = 'Admin';
+        if (staffSession.firstName && staffSession.lastName) {
+            name = `${staffSession.firstName} ${staffSession.lastName}`.trim();
+            if (staffSession.suffix) {
+                name += ` ${staffSession.suffix}`;
+            }
+        } else if (staffSession.email) {
+            const email = String(staffSession.email);
+            const namePart = email.split('@')[0];
+            name = namePart ? namePart : email;
+        } else if (staffSession.staffId) {
+            name = String(staffSession.staffId);
+        }
+
+        return {
+            id: staffSession.staffId || staffSession.id || staffSession.uid || null,
+            name,
+            role: staffSession.role || null,
+            email: staffSession.email || null
+        };
+    } catch (e) {
+        console.warn('Could not parse staff session:', e);
+        return {
+            id: null,
+            name: 'Admin',
+            role: null,
+            email: null
+        };
+    }
+}
+
+// Backwards-compatible helper for existing code paths
+function getCurrentStaffName() {
+    const ctx = getCurrentStaffContext();
+    return ctx.name || 'Admin';
+}
+
+// Generic admin activity logger
+// Writes to Firestore collection "adminLogs"
+async function logAdminActivity({ action, entityType, entityId = null, entityName = null, description = '', metadata = null }) {
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+
+        const fns = window.firestoreFunctions;
+        const db = window.db;
+        if (!fns || !db) {
+            console.warn('[adminLogs] Firestore not ready, skipping log for action:', action);
+            return;
+        }
+
+        const staff = getCurrentStaffContext();
+        const adminLogsRef = fns.collection(db, 'adminLogs');
+
+        const payload = {
+            action: action || 'unknown',
+            entityType: entityType || 'unknown',
+            entityId: entityId || null,
+            entityName: entityName || null,
+            description: description || '',
+            metadata: metadata || null,
+            staffId: staff.id,
+            staffName: staff.name,
+            staffRole: staff.role || null,
+            staffEmail: staff.email || null,
+            createdAt: fns.serverTimestamp()
+        };
+
+        await fns.addDoc(adminLogsRef, payload);
+        console.log('[adminLogs] Recorded admin activity:', payload);
+    } catch (error) {
+        console.warn('[adminLogs] Failed to record admin activity for action:', action, error);
+    }
 }
 
 async function verifyPaymentConfirm() {
@@ -4756,6 +4814,10 @@ function printCustomerReceipt(order, autoPrint) {
         <div class="pos-receipt-content">
             <div class="pos-receipt-header">
                 <h3>PABLO'S PERI PERI</h3>
+                <p>P2RW+RJ4, Zabarte Rd, Novaliches, Quezon City, Metro Manila – Pablo's Peri Peri</p>
+                <p>Contact: 0929 666 6474</p>
+                <p>TIN: 309-845-627-000</p>
+                <p>NON-VAT REGISTERED</p>
                 <p><strong>CUSTOMER COPY</strong></p>
                 <p><strong>${serviceLabel}</strong></p>
                 <p>Order ID: ${orderId}</p>
@@ -4824,6 +4886,227 @@ let currentReceiptPreviewOrder = null;
 let currentReceiptPreviewType = null;
 let currentReceiptZoom = 100;
 
+// POS-style receipt modal (Orders tab) state
+let currentOrdersReceiptOrder = null;
+let currentOrdersReceiptType = null;
+
+/**
+ * Show POS-style receipt modal on Orders page (separate customer/kitchen).
+ * Falls back silently if modal is not present.
+ * @param {object} order
+ * @param {string} type - 'kitchen' or 'customer'
+ */
+function showOrdersReceiptModal(order, type) {
+    if (!order) return;
+    
+    const modal = document.getElementById('ordersReceiptModal');
+    const contentEl = document.getElementById('ordersReceiptContent');
+    if (!modal || !contentEl) return;
+    
+    currentOrdersReceiptOrder = order;
+    currentOrdersReceiptType = type;
+    
+    // Match the POS "dual receipts" preview: show both copies side-by-side.
+    // Highlight the selected copy based on the action (View Customer / View Kitchen).
+    const customerReceiptHTML = generateCustomerReceiptHTML(order);
+    const kitchenReceiptHTML = generateKitchenReceiptHTML(order);
+
+    const activeCustomer = type !== 'kitchen';
+    const activeKitchen = type === 'kitchen';
+
+    contentEl.innerHTML = `
+        <div class="pos-receipts-container pos-receipts-dual">
+            <div class="pos-receipt-panel ${activeCustomer ? 'is-active' : ''}">
+                ${customerReceiptHTML}
+            </div>
+            <div class="pos-receipt-panel ${activeKitchen ? 'is-active' : ''}">
+                ${kitchenReceiptHTML}
+            </div>
+        </div>
+    `;
+    
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * Close Orders POS-style receipt modal
+ */
+function closeOrdersReceiptModal() {
+    const modal = document.getElementById('ordersReceiptModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    currentOrdersReceiptOrder = null;
+    currentOrdersReceiptType = null;
+}
+
+/**
+ * Print Orders POS-style receipt modal (same print CSS as POS).
+ * Prints only the currently viewed receipt (customer OR kitchen).
+ */
+function printOrdersReceipt() {
+    if (!currentOrdersReceiptOrder) return;
+
+    // Always print both copies (Customer + Kitchen), matching the POS receipts flow.
+    const receiptContent = `
+        <div class="pos-receipts-container">
+            ${generateCustomerReceiptHTML(currentOrdersReceiptOrder)}
+            ${generateKitchenReceiptHTML(currentOrdersReceiptOrder)}
+        </div>
+    `;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        if (typeof showNotification === 'function') {
+            showNotification('Pop-up blocked. Please allow pop-ups to print the receipt.', 'error');
+        } else {
+            alert('Pop-up blocked. Please allow pop-ups to print the receipt.');
+        }
+        return;
+    }
+    
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>Receipt - Pablo's Peri Peri</title>
+                <meta charset="UTF-8">
+                <style>
+                    @page {
+                        size: 80mm auto;
+                        margin: 0;
+                        padding: 0;
+                    }
+                    @media print {
+                        body { 
+                            margin: 0; 
+                            padding: 5mm 5mm; 
+                            width: 80mm;
+                            font-size: 10px;
+                        }
+                        * {
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                        .pos-receipts-container {
+                            page-break-after: always;
+                        }
+                        .pos-receipt-kitchen {
+                            page-break-before: always;
+                        }
+                    }
+                    body { 
+                        font-family: 'Courier New', monospace; 
+                        padding: 5mm; 
+                        margin: 0;
+                        background: white;
+                        width: 80mm;
+                        max-width: 80mm;
+                        font-size: 10px;
+                        line-height: 1.2;
+                    }
+                    .pos-receipts-container {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 20px;
+                    }
+                    .pos-receipt-panel { display: contents; }
+                    .pos-receipt-content { 
+                        background: white; 
+                        width: 100%;
+                        max-width: 80mm;
+                        margin: 0;
+                        padding: 0;
+                    }
+                    .pos-receipt-header { 
+                        text-align: center; 
+                        margin-bottom: 8px; 
+                        border-bottom: 1px dashed #000; 
+                        padding-bottom: 8px; 
+                    }
+                    .pos-receipt-header h3 { 
+                        margin: 0 0 4px 0; 
+                        font-size: 14px; 
+                        font-weight: bold; 
+                        line-height: 1.2;
+                    }
+                    .pos-receipt-header p { 
+                        margin: 2px 0; 
+                        font-size: 9px; 
+                        line-height: 1.2;
+                    }
+                    .pos-receipt-items {
+                        margin: 8px 0;
+                    }
+                    .pos-receipt-item { 
+                        display: flex; 
+                        justify-content: space-between; 
+                        margin-bottom: 4px; 
+                        padding-bottom: 4px; 
+                        border-bottom: 1px dotted #ccc; 
+                        font-size: 9px;
+                        line-height: 1.3;
+                    }
+                    .pos-receipt-item-name { 
+                        flex: 1; 
+                        text-align: left;
+                        word-wrap: break-word;
+                        padding-right: 4px;
+                    }
+                    .pos-receipt-item-qty { 
+                        margin: 0 4px; 
+                        text-align: center; 
+                        min-width: 20px; 
+                        flex-shrink: 0;
+                    }
+                    .pos-receipt-item-price { 
+                        text-align: right; 
+                        min-width: 50px; 
+                        flex-shrink: 0;
+                    }
+                    .pos-receipt-total { 
+                        border-top: 1px solid #000; 
+                        padding-top: 6px; 
+                        margin-top: 8px; 
+                    }
+                    .pos-receipt-total-row { 
+                        display: flex; 
+                        justify-content: space-between; 
+                        margin-bottom: 3px; 
+                        font-size: 10px;
+                        line-height: 1.3;
+                    }
+                    .pos-receipt-total-row.final { 
+                        font-weight: bold; 
+                        font-size: 12px; 
+                        margin-top: 6px; 
+                        padding-top: 6px; 
+                        border-top: 1px dashed #000; 
+                    }
+                    .pos-receipt-footer { 
+                        text-align: center; 
+                        margin-top: 10px; 
+                        padding-top: 8px; 
+                        border-top: 1px dashed #000; 
+                        font-size: 9px; 
+                        line-height: 1.3;
+                    }
+                </style>
+            </head>
+            <body>
+                ${receiptContent}
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+        printWindow.print();
+    }, 250);
+}
+
 /**
  * Show receipt preview in modal
  * @param {object} order - Order object
@@ -4831,6 +5114,14 @@ let currentReceiptZoom = 100;
  */
 function showReceiptPreview(order, type) {
     if (!order) return;
+    
+    // If the Orders page has the POS-style receipt modal, use it (separate receipts UI).
+    // This matches the POS "Receipt" modal design, as requested.
+    const ordersModal = document.getElementById('ordersReceiptModal');
+    if (ordersModal) {
+        showOrdersReceiptModal(order, type);
+        return;
+    }
     
     currentReceiptPreviewOrder = order;
     currentReceiptPreviewType = type;
@@ -4841,11 +5132,11 @@ function showReceiptPreview(order, type) {
     const contentEl = document.getElementById('receiptPreviewContent');
     
     if (!modal || !titleEl || !contentEl) {
-        // Fallback to old method if modal doesn't exist
-        if (type === 'kitchen') {
-            printKitchenReceipt(order, false);
+        // If preview modal is not available, show an error instead of opening a new tab
+        if (typeof showNotification === 'function') {
+            showNotification('Receipt preview modal not available on this page. Please refresh or contact admin.', 'error');
         } else {
-            printCustomerReceipt(order, false);
+            alert('Receipt preview is not available on this page.');
         }
         return;
     }
@@ -4904,11 +5195,11 @@ function generateKitchenReceiptHTML(order) {
     // POS-style kitchen receipt markup (match POS kitchen copy layout/classes)
     const orderId = escapeHtml(String(order.trackingId || order.id));
 
-    const serviceTypeRaw = String(order.serviceType || order.deliveryInfo?.serviceType || '').toLowerCase().trim();
-    const isDineIn = serviceTypeRaw === 'dine-in' || serviceTypeRaw === 'dinein';
-    const isTakeOut = serviceTypeRaw === 'take-out' || serviceTypeRaw === 'takeout';
-    const isPickUp = serviceTypeRaw === 'pick-up' || serviceTypeRaw === 'pickup' || serviceTypeRaw === 'pick_up';
-    const isDelivery = serviceTypeRaw === 'delivery' || (!isDineIn && !isTakeOut && !isPickUp && !!serviceTypeRaw);
+   const serviceTypeRaw = String(order.serviceType || order.deliveryInfo?.serviceType || '').toLowerCase().trim();
+   const isDineIn = serviceTypeRaw === 'dine-in' || serviceTypeRaw === 'dinein';
+   const isTakeOut = serviceTypeRaw === 'take-out' || serviceTypeRaw === 'takeout';
+   const isPickUp = serviceTypeRaw === 'pick-up' || serviceTypeRaw === 'pickup' || serviceTypeRaw === 'pick_up';
+   const isDelivery = serviceTypeRaw === 'delivery' || (!isDineIn && !isTakeOut && !isPickUp && !!serviceTypeRaw);
 
     let serviceLabel = '—';
     if (isTakeOut) serviceLabel = 'TAKE OUT';
@@ -4959,9 +5250,9 @@ function generateKitchenReceiptHTML(order) {
         return sum + ((Number.isFinite(q) && q > 0) ? q : 1);
     }, 0);
 
-    return `
-        <div class="pos-receipt-content pos-receipt-kitchen">
-            <div class="pos-receipt-header">
+   return `
+       <div class="pos-receipt-content pos-receipt-kitchen">
+           <div class="pos-receipt-header">
                 <h3>PABLO'S PERI PERI</h3>
                 <p><strong>KITCHEN COPY</strong></p>
                 <p><strong>${serviceLabel}</strong></p>
@@ -4999,24 +5290,39 @@ function generateCustomerReceiptHTML(order) {
     const subtotal = typeof order.subtotal === 'number' ? order.subtotal : (order.total || 0);
     const total = typeof order.total === 'number' ? order.total : 0;
     const discount = order.discount;
-    const paymentMode = escapeHtml(String(order.paymentMode || 'Cash'));
-    const customerName = typeof formatOrderCustomer === 'function' ? formatOrderCustomer(order) : (order.customerName || '—');
+    const paymentModeRaw = String(order.paymentMode || 'Cash');
+    const paymentMode = escapeHtml(paymentModeRaw);
+    const customerName = typeof formatOrderCustomer === 'function'
+        ? formatOrderCustomer(order)
+        : (order.customerName || order.deliveryInfo?.customerName || 'Walk-in Customer');
     const cashierName = escapeHtml(String(order.processedByName || order.cashierName || getCurrentStaffName() || 'Staff'));
-    const serviceType = (order.serviceType || '').toLowerCase().trim();
+
+    // Match POS receipt service label behaviour but support extra service types
+    const serviceTypeRaw = String(order.serviceType || order.deliveryInfo?.serviceType || '').toLowerCase().trim();
+    const isDineIn = serviceTypeRaw === 'dine-in' || serviceTypeRaw === 'dinein';
+    const isTakeOut = serviceTypeRaw === 'take-out' || serviceTypeRaw === 'takeout';
+    const isPickUp = serviceTypeRaw === 'pick-up' || serviceTypeRaw === 'pickup' || serviceTypeRaw === 'pick_up';
+    const isDelivery = serviceTypeRaw === 'delivery' || (!isDineIn && !isTakeOut && !isPickUp && !!serviceTypeRaw);
+    
     let serviceLabel = 'DINE IN';
-    if (serviceType === 'delivery') serviceLabel = 'DELIVERY';
-    else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up') serviceLabel = 'PICK UP';
-    else if (serviceType === 'take-out' || serviceType === 'takeout') serviceLabel = 'TAKE OUT';
-    else if (serviceType === 'dine-in' || serviceType === 'dinein') serviceLabel = 'DINE IN';
+    if (isTakeOut) serviceLabel = 'TAKE OUT';
+    else if (isPickUp) serviceLabel = 'PICK UP';
+    else if (isDelivery) serviceLabel = 'DELIVERY';
+    else if (serviceTypeRaw && !isDineIn) {
+        // Fallback for any other service types
+        serviceLabel = serviceTypeRaw.replace(/-/g, ' ').toUpperCase();
+    }
 
     let extraLine = '';
-    if (serviceType === 'dine-in' || serviceType === 'dinein') {
-        const tbl = order.tableNumber != null ? String(order.tableNumber) : '—';
-        extraLine = `<p>Table: ${escapeHtml(tbl)}</p>`;
-    } else if (serviceType === 'delivery') {
+    if (isDineIn) {
+        const tbl = order.tableNumber ?? order.deliveryInfo?.tableNumber;
+        if (tbl !== undefined && tbl !== null && String(tbl).trim() !== '') {
+            extraLine = `<p>Table: ${escapeHtml(String(tbl))}</p>`;
+        }
+    } else if (isDelivery) {
         const addr = order.address || order.deliveryInfo?.address || '—';
         extraLine = `<p>Delivery to: ${escapeHtml(addr)}</p>`;
-    } else if (serviceType === 'pick-up' || serviceType === 'pickup' || serviceType === 'pick_up') {
+    } else if (isPickUp) {
         extraLine = '<p>Pick-up</p>';
     }
 
@@ -5026,7 +5332,8 @@ function generateCustomerReceiptHTML(order) {
         const qty = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1;
         const price = typeof item.price === 'number' ? item.price : 0;
         const lineTotal = price * qty;
-        const freeNote = item.freeWithPeriRibs ? ' (Free with Peri Chicken & Ribs)' : '';
+        // Match POS receipt free item label
+        const freeNote = item.freeWithPeriRibs ? ' (Free)' : '';
         return `<div class="pos-receipt-item"><div class="pos-receipt-item-name">${name}${freeNote}</div><div class="pos-receipt-item-qty">${qty}x</div><div class="pos-receipt-item-price">₱${lineTotal.toFixed(2)}</div></div>`;
     }).join('');
 
@@ -5035,11 +5342,43 @@ function generateCustomerReceiptHTML(order) {
         : '';
 
     const now = new Date().toLocaleString();
+
+    // Try to mirror POS "Amount Paid" and "Change" rows
+    const paymentAmount = typeof order.paymentAmount === 'number' ? order.paymentAmount : total;
+    const change = typeof order.change === 'number'
+        ? order.change
+        : (paymentModeRaw.toLowerCase() === 'cash' ? Math.max(0, paymentAmount - total) : 0);
+    
+    // Build payment-specific rows (copied from POS behaviour)
+    let paymentRowsHtml = '';
+    if (paymentModeRaw.toLowerCase() === 'cash') {
+        paymentRowsHtml = `
+                <div class="pos-receipt-total-row">
+                    <span>Amount Paid:</span>
+                    <span>₱${paymentAmount.toFixed(2)}</span>
+                </div>
+                <div class="pos-receipt-total-row final">
+                    <span>Change:</span>
+                    <span>₱${change.toFixed(2)}</span>
+                </div>
+        `;
+    } else {
+        paymentRowsHtml = `
+                <div class="pos-receipt-total-row final">
+                    <span>Amount Paid:</span>
+                    <span>₱${paymentAmount.toFixed(2)}</span>
+                </div>
+        `;
+    }
     
     return `
-        <div class="pos-receipt-content">
+        <div class="pos-receipt-content pos-receipt-customer">
             <div class="pos-receipt-header">
                 <h3>PABLO'S PERI PERI</h3>
+                <p>P2RW+RJ4, Zabarte Rd, Novaliches, Quezon City, Metro Manila – Pablo's Peri Peri</p>
+                <p>Contact: 0929 666 6474</p>
+                <p>TIN: 309-845-627-000</p>
+                <p>NON-VAT REGISTERED</p>
                 <p><strong>CUSTOMER COPY</strong></p>
                 <p><strong>${serviceLabel}</strong></p>
                 <p>Order ID: ${orderId}</p>
@@ -5050,11 +5389,20 @@ function generateCustomerReceiptHTML(order) {
             </div>
             <div class="pos-receipt-items">${itemsHtml}</div>
             <div class="pos-receipt-total">
-                <div class="pos-receipt-total-row"><span>Subtotal:</span><span>₱${subtotal.toFixed(2)}</span></div>
+                <div class="pos-receipt-total-row">
+                    <span>Subtotal:</span>
+                    <span>₱${subtotal.toFixed(2)}</span>
+                </div>
                 ${discountHtml}
-                <div class="pos-receipt-total-row"><span>Total:</span><span>₱${total.toFixed(2)}</span></div>
-                <div class="pos-receipt-total-row"><span>Payment Method:</span><span><strong>${paymentMode}</strong></span></div>
-                <div class="pos-receipt-total-row final"><span>Amount Paid:</span><span>₱${total.toFixed(2)}</span></div>
+                <div class="pos-receipt-total-row">
+                    <span>Total:</span>
+                    <span>₱${total.toFixed(2)}</span>
+                </div>
+                <div class="pos-receipt-total-row">
+                    <span>Payment Method:</span>
+                    <span><strong>${paymentMode}</strong></span>
+                </div>
+                ${paymentRowsHtml}
             </div>
             <div class="pos-receipt-footer">
                 <p>Thank you for your order!</p>
@@ -5148,7 +5496,8 @@ function printReceiptFromPreview() {
 }
 
 /**
- * Quick print customer receipt without preview (for table row quick action)
+ * Quick customer receipt action from order details.
+ * Now always opens the preview modal first, then user can print from there.
  */
 function quickPrintCustomerReceipt(orderId) {
     const order = ordersState.find(o => o.id === orderId);
@@ -5156,8 +5505,8 @@ function quickPrintCustomerReceipt(orderId) {
         showNotification('Order not found.', 'error');
         return;
     }
-    // Print directly without showing preview
-    printCustomerReceipt(order, true);
+    // Open customer receipt preview (modal has Print button)
+    showReceiptPreview(order, 'customer');
 }
 
 /**
@@ -5348,6 +5697,7 @@ window.onclick = function(event) {
     const orderModal = document.getElementById('orderDetailsModal');
     const receiptModal = document.getElementById('paymentReceiptModal');
     const receiptPreviewModal = document.getElementById('receiptPreviewModal');
+    const ordersReceiptModal = document.getElementById('ordersReceiptModal');
     const driverSelectionModal = document.getElementById('driverSelectionModal');
     const driverProfileModal = document.getElementById('driverProfileModal');
     
@@ -5359,6 +5709,9 @@ window.onclick = function(event) {
     }
     if (event.target === receiptPreviewModal) {
         closeReceiptPreviewModal();
+    }
+    if (event.target === ordersReceiptModal) {
+        closeOrdersReceiptModal();
     }
     if (event.target === driverSelectionModal) {
         closeDriverSelectionModal();
@@ -11680,6 +12033,21 @@ async function handleMenuFormSubmit(event) {
 
         menuState = await MenuStore.createItem(menuPayload);
         renderMenuState();
+
+        // Log admin activity for menu creation
+        logAdminActivity({
+            action: 'menu_create',
+            entityType: 'menu',
+            entityId: menuPayload.data.menuId,
+            entityName: formattedName,
+            description: `${formattedName} added to the menu (category: ${category}).`,
+            metadata: {
+                category,
+                basePrice: finalBasePrice,
+                hasVariations: !!hasFormVariations
+            }
+        });
+
         showNotification(`${formattedName} added to the menu!`, 'success');
         // Clear collected form variations after successful save
         addFormVariations = [];
@@ -14909,10 +15277,23 @@ async function handleMenuItemDelete() {
     }
 
     setMenuModalLoading(true);
+    const deletedItem = { ...currentMenuEditItem };
     try {
         await waitForFirebaseReady();
         menuState = await MenuStore.deleteItem(currentMenuEditItem.id);
         renderMenuState();
+        // Log admin activity for menu deletion/archive
+        logAdminActivity({
+            action: 'menu_delete',
+            entityType: 'menu',
+            entityId: deletedItem.id || deletedItem.menuId,
+            entityName: deletedItem.name || deletedItem.displayName,
+            description: `${deletedItem.name || deletedItem.displayName || 'Menu item'} was moved to archive.`,
+            metadata: {
+                category: deletedItem.category || null,
+                isActive: deletedItem.isActive ?? null
+            }
+        });
         showNotification(`${currentMenuEditItem.name} was moved to archive. It will be permanently deleted after 30 days.`, 'success');
         closeMenuItemModal();
     } catch (error) {
@@ -14943,6 +15324,17 @@ async function handleMenuItemActiveToggle() {
             closeMenuItemModal();
         }
         const label = currentMenuEditItem?.name || previousName || 'Menu item';
+        // Log admin activity for activation/deactivation
+        logAdminActivity({
+            action: nextState ? 'menu_activate' : 'menu_deactivate',
+            entityType: 'menu',
+            entityId: itemId,
+            entityName: label,
+            description: `${label} was marked as ${nextState ? 'active' : 'inactive'}.`,
+            metadata: {
+                isActive: nextState
+            }
+        });
         showNotification(`${label} is now ${nextState ? 'active' : 'inactive'}.`, 'success');
     } catch (error) {
         console.error('Toggle menu item active state failed:', error);
@@ -14977,7 +15369,7 @@ function addUser() {
     alert('Add User - This would open a form to add new admin users');
 }
 
-// Activity logs functions
+// Activity logs functions (adminLogs collection)
 async function loadAndRenderActivityLogs() {
     const container = document.getElementById('activityLogsContainer');
     const loadingEl = document.getElementById('activityLogsLoading');
@@ -14996,104 +15388,92 @@ async function loadAndRenderActivityLogs() {
         if (!isFirestoreReady()) {
             await waitForFirebaseReady();
         }
-        
+
         const fns = window.firestoreFunctions;
         const db = window.db;
-        const logsRef = fns.collection(db, 'logsStaff');
-        
-        // Try to get logs ordered by startTime desc, fallback if index missing
+        const logsRef = fns.collection(db, 'adminLogs');
+
+        // Try to get logs ordered by createdAt desc, fallback if index missing
         let logsSnapshot;
         try {
-            logsSnapshot = await fns.getDocs(fns.query(
-                logsRef,
-                fns.orderBy('startTime', 'desc')
-            ));
+            logsSnapshot = await fns.getDocs(
+                fns.query(logsRef, fns.orderBy('createdAt', 'desc'), fns.limit(200))
+            );
         } catch (orderError) {
-            console.warn('Could not order by startTime (index may be missing), getting all logs:', orderError);
+            console.warn('[adminLogs] Could not order by createdAt (index may be missing), getting all logs:', orderError);
             logsSnapshot = await fns.getDocs(logsRef);
         }
-        
+
         const logs = [];
         logsSnapshot.forEach(doc => {
-            const logData = doc.data();
+            const data = doc.data();
             logs.push({
                 id: doc.id,
-                ...logData
+                ...data
             });
         });
-        
-        // Sort by startTime if not already sorted
+
+        // Sort by createdAt if not already sorted
         logs.sort((a, b) => {
-            const aTime = a.startTime?.toDate?.() || new Date(0);
-            const bTime = b.startTime?.toDate?.() || new Date(0);
+            const aTime = a.createdAt?.toDate?.() || new Date(0);
+            const bTime = b.createdAt?.toDate?.() || new Date(0);
             return bTime - aTime; // Most recent first
         });
-        
+
         loadingEl.style.display = 'none';
-        
+
         if (logs.length === 0) {
             emptyEl.style.display = 'block';
             return;
         }
-        
+
         // Group logs by date
         const logsByDate = {};
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
-        
+
         logs.forEach(log => {
-            const startTime = log.startTime?.toDate?.() || null;
-            const endTime = log.endTime?.toDate?.() || null;
-            
-            // Process startTime log
-            if (startTime) {
-                const dateKey = startTime.toDateString();
-                if (!logsByDate[dateKey]) {
-                    logsByDate[dateKey] = [];
-                }
-                logsByDate[dateKey].push({
-                    type: 'login',
-                    time: startTime,
-                    driverName: log.driverName || 'Unknown',
-                    driverId: log.driverId || ''
-                });
+            const createdAt = log.createdAt?.toDate?.() || null;
+            if (!createdAt) {
+                return;
             }
-            
-            // Process endTime log
-            if (endTime) {
-                const dateKey = endTime.toDateString();
-                if (!logsByDate[dateKey]) {
-                    logsByDate[dateKey] = [];
-                }
-                logsByDate[dateKey].push({
-                    type: 'logout',
-                    time: endTime,
-                    driverName: log.driverName || 'Unknown',
-                    driverId: log.driverId || ''
-                });
+
+            const dateKey = createdAt.toDateString();
+            if (!logsByDate[dateKey]) {
+                logsByDate[dateKey] = [];
             }
+            logsByDate[dateKey].push({
+                time: createdAt,
+                action: log.action || 'unknown',
+                entityType: log.entityType || 'unknown',
+                entityName: log.entityName || '',
+                description: log.description || '',
+                staffName: log.staffName || 'Unknown admin',
+                staffRole: log.staffRole || '',
+                staffId: log.staffId || null
+            });
         });
-        
+
         // Sort logs within each date group by time (most recent first)
         Object.keys(logsByDate).forEach(dateKey => {
             logsByDate[dateKey].sort((a, b) => b.time - a.time);
         });
-        
+
         // Render log groups
         const dateKeys = Object.keys(logsByDate).sort((a, b) => {
             return new Date(b) - new Date(a); // Most recent dates first
         });
-        
+
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
         dateKeys.forEach(dateKey => {
             const date = new Date(dateKey);
             const dateLogs = logsByDate[dateKey];
-            
+
             // Determine date label
-            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-            
             let dateLabel = '';
             const dateTime = date.getTime();
             if (dateTime === today.getTime()) {
@@ -15103,39 +15483,58 @@ async function loadAndRenderActivityLogs() {
             } else {
                 dateLabel = dayNames[date.getDay()];
             }
-            
+
             // Format full date
             const fullDate = `${dayNames[date.getDay()]}, ${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-            
+
             const logGroup = document.createElement('div');
             logGroup.className = 'log-group';
             logGroup.innerHTML = `
                 <h3>${dateLabel}</h3>
                 <p class="log-date">${fullDate}</p>
             `;
-            
+
             dateLogs.forEach(log => {
                 const timeStr = log.time.toLocaleTimeString('en-US', {
                     hour: '2-digit',
                     minute: '2-digit',
                     hour12: true
                 });
-                
-                const actionText = log.type === 'login' ? 'Logged in' : 'Logged out';
-                const avatar = log.driverName.toLowerCase().includes('owner') || log.driverName.toLowerCase().includes('admin') ? '👩' : '👨';
-                
+
+                // Human-friendly action text
+                const prettyAction = String(log.action || '')
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, c => c.toUpperCase()) || 'Activity';
+
+                const entityLabel = log.entityName
+                    ? `${log.entityType || 'item'} "${log.entityName}"`
+                    : (log.entityType || 'item');
+
+                const detailText = log.description || `${prettyAction} on ${entityLabel}.`;
+
+                // Avatar: initials from staff name
+                const initials = (log.staffName || 'A')
+                    .split(' ')
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map(part => part.charAt(0).toUpperCase())
+                    .join('') || 'A';
+
+                const roleSuffix = log.staffRole ? ` • ${escapeHtml(log.staffRole)}` : '';
+
                 const logItem = document.createElement('div');
                 logItem.className = 'log-item';
                 logItem.innerHTML = `
-                    <div class="log-avatar">${avatar}</div>
+                    <div class="log-avatar">${initials}</div>
                     <div class="log-content">
-                        <span class="log-action">${actionText} ${timeStr}</span>
-                        <span class="log-user">@${escapeHtml(log.driverName)}</span>
+                        <span class="log-action">${escapeHtml(prettyAction)} • ${timeStr}</span>
+                        <span class="log-user">${escapeHtml(log.staffName)}${roleSuffix}</span>
+                        <span class="log-user" style="margin-top:4px;">${escapeHtml(detailText)}</span>
                     </div>
                 `;
                 logGroup.appendChild(logItem);
             });
-            
+
             container.appendChild(logGroup);
         });
         
@@ -17085,8 +17484,22 @@ async function handlePromotionFormSubmit(event) {
         });
         
         const promotionRef = fns.collection(db, 'promotionList');
-        await fns.addDoc(promotionRef, promotionData);
-        
+        const promoDocRef = await fns.addDoc(promotionRef, promotionData);
+
+        // Log admin activity for promotion creation
+        logAdminActivity({
+            action: 'promotion_create',
+            entityType: 'promotion',
+            entityId: promoDocRef.id,
+            entityName: promoTitle,
+            description: `Promotion "${promoTitle}" was created.`,
+            metadata: {
+                placement: promoPlacement,
+                startDate: promoStartDateValue,
+                endDate: promoEndDateValue
+            }
+        });
+
         showNotification('Promotion saved successfully!', 'success');
         
         // Reset form
@@ -17113,23 +17526,32 @@ window.removeVariation = removeVariation;
 window.addMenuDetailVariation = addMenuDetailVariation;
 window.removeMenuDetailVariation = removeMenuDetailVariation;
 
-// User Profile Dashboard Functions
+// User Profile navigation
+// When "Profile Settings" is clicked in the header dropdown,
+// navigate to the View User Profile page for the currently logged-in staff.
 function showUserProfile() {
-    document.getElementById('userProfileDashboard').style.display = 'block';
-    // Hide other sections if they exist
-    const adminProfiles = document.querySelector('.admin-profiles');
-    if (adminProfiles) {
-        adminProfiles.style.display = 'none';
+    try {
+        const sessionRaw = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+        if (sessionRaw) {
+            const staffSession = JSON.parse(sessionRaw);
+            const staffId = staffSession.staffId || staffSession.id || staffSession.uid;
+            if (staffId) {
+                const encodedId = encodeURIComponent(String(staffId));
+                window.location.href = `view-user-profile.html?id=${encodedId}`;
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn('Unable to read staffSession for profile redirect:', e);
     }
+    
+    // Fallback: go to admin profile list if we cannot determine the staff ID
+    window.location.href = 'admin-profile.html';
 }
 
+// Legacy no-op (kept for compatibility with old templates)
 function hideUserProfile() {
-    document.getElementById('userProfileDashboard').style.display = 'none';
-    // Show other sections if they exist
-    const adminProfiles = document.querySelector('.admin-profiles');
-    if (adminProfiles) {
-        adminProfiles.style.display = 'block';
-    }
+    // Intentionally left blank
 }
 
 window.showUserProfile = showUserProfile;

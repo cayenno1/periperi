@@ -338,6 +338,12 @@
             <nav class="navigation">
                 <ul class="nav-list">
                     <li class="nav-item">
+                        <a href="pos.html" class="nav-link">
+                            <i class="fas fa-cash-register"></i>
+                            <span>POS</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="index.html" class="nav-link">
                             <i class="fas fa-shopping-cart"></i>
                             <span>Orders</span>
@@ -360,7 +366,19 @@
                             <li><a href="menu.html#menu-list">Menu List</a></li>
                             <li><a href="menu.html#addFoodDashboard">Add Product</a></li>
                             <li><a href="menu.html#menu-product-detail">Product Detail</a></li>
-                            <li><a href="menu.html#promotionDashboard">Promotion</a></li>
+                            <li><a href="menu.html#tableNumbers">Table Number</a></li>
+                            <li><a href="menu.html#ingredient-logs">Ingredient Logs</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item menu-nav-dropdown">
+                        <button type="button" class="nav-link menu-toggle" onclick="togglePromotionTabDropdown()">
+                            <i class="fas fa-bullhorn"></i>
+                            <span>Promotion</span>
+                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                        </button>
+                        <ul class="menu-nav-submenu" id="promotionTabDropdown">
+                            <li><a href="menu.html#bannerCatalogue">Banner Catalogue</a></li>
+                            <li><a href="menu.html#promotionDashboard">Create Banner</a></li>
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
@@ -376,7 +394,7 @@
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a href="sales.html" class="nav-link">
+                        <a href="sales.html#sales" class="nav-link">
                             <i class="fas fa-chart-bar"></i>
                             <span>Sales</span>
                         </a>
@@ -418,7 +436,7 @@
                         <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu" id="adminDropdown">
-                        <a href="#" class="dropdown-item" onclick="showUserProfile()">Profile Settings</a>
+                        <a href="view-user-profile.html" class="dropdown-item" onclick="showUserProfile(); return false;">Profile Settings</a>
                         <a href="#" class="dropdown-item">Logout</a>
                     </div>
                 </div>
@@ -653,10 +671,29 @@
         let currentUserRole = null;
         let canEdit = false;
 
-        // Get staff ID from URL parameters
+        // Get staff ID from URL parameters or current session (fallback)
         function getStaffIdFromURL() {
             const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('id');
+            const idFromUrl = urlParams.get('id');
+            if (idFromUrl) {
+                return idFromUrl;
+            }
+
+            // Fallback: use currently logged-in staff from session
+            try {
+                const sessionRaw = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (sessionRaw) {
+                    const staffSession = JSON.parse(sessionRaw);
+                    const staffId = staffSession.staffId || staffSession.id || staffSession.uid;
+                    if (staffId) {
+                        return String(staffId);
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not read staffSession for profile view:', e);
+            }
+
+            return null;
         }
 
         // Wait for Firebase to initialize

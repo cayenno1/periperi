@@ -5,7 +5,7 @@ service cloud.firestore {
 
     // ----- Shared validation helpers -----
     function isValidRole(role) {
-      return role in ['Staff', 'Admin', 'Manager', 'Owner', 'System_Admin'];
+      return role in ['Staff', 'Admin', 'Manager', 'System_Admin'];
     }
     
     function isValidStatus(status) {
@@ -114,6 +114,39 @@ service cloud.firestore {
                          request.resource.data.quantity > 0;
         allow delete: if request.auth != null && request.auth.uid == userId;
       }
+
+      // ----- Notifications (subcollection under customers) -----
+      // Customers can read their own notifications and mark them as read
+      // Cloud Functions can create notifications (bypass rules with admin SDK)
+      match /notifs/{notifId} {
+        // Only the signed-in user can read their own notifications
+        allow read: if request.auth != null && request.auth.uid == userId;
+        // Allow creating notifications (client-side and Cloud Functions)
+        // Cloud Functions use admin SDK and bypass rules, but client needs this
+        allow create: if request.auth != null && 
+                         request.auth.uid == userId &&
+                         request.resource.data.keys().hasAll(['type', 'title', 'message', 'read', 'createdAt']) &&
+                         request.resource.data.type is string &&
+                         request.resource.data.title is string &&
+                         request.resource.data.message is string &&
+                         request.resource.data.read is bool &&
+                         request.resource.data.createdAt is timestamp &&
+                         // Optional fields validation
+                         (!('orderId' in request.resource.data) || request.resource.data.orderId is string || request.resource.data.orderId == null) &&
+                         (!('orderNumber' in request.resource.data) || request.resource.data.orderNumber is string || request.resource.data.orderNumber == null) &&
+                         (!('declineReason' in request.resource.data) || request.resource.data.declineReason is string || request.resource.data.declineReason == null) &&
+                         (!('oldStatus' in request.resource.data) || request.resource.data.oldStatus is string || request.resource.data.oldStatus == null) &&
+                         (!('newStatus' in request.resource.data) || request.resource.data.newStatus is string || request.resource.data.newStatus == null) &&
+                         (!('actionRequired' in request.resource.data) || request.resource.data.actionRequired is bool);
+        // Allow updating notifications (to mark as read)
+        allow update: if request.auth != null && 
+                         request.auth.uid == userId &&
+                         // Only allow updating the 'read' field
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+                         request.resource.data.read is bool;
+        // Allow users to delete their own notifications
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // ----- Staff -----
@@ -140,6 +173,34 @@ service cloud.firestore {
          (request.resource.data.status is string && isValidStatus(request.resource.data.status)))
       );
 
+      allow delete: if false;
+    }
+
+    // ----- Admin Activity Logs (adminLogs) -----
+    // Records important actions performed in the admin dashboard (menu changes, promotions, etc.)
+    match /adminLogs/{logId} {
+      // Allow reading logs so the Activity Logs page can display them.
+      // (Admin-side currently uses custom session-based auth, not Firebase Auth.)
+      allow read: if true;
+
+      // Allow creation of new log entries from the admin UI, with basic shape validation.
+      allow create: if
+        request.resource.data.action is string &&
+        request.resource.data.action.size() > 0 &&
+        request.resource.data.entityType is string &&
+        request.resource.data.entityType.size() > 0 &&
+        (!('entityId' in request.resource.data) || request.resource.data.entityId is string || request.resource.data.entityId == null) &&
+        (!('entityName' in request.resource.data) || request.resource.data.entityName is string || request.resource.data.entityName == null) &&
+        (!('description' in request.resource.data) || request.resource.data.description is string) &&
+        (!('staffId' in request.resource.data) || request.resource.data.staffId is string || request.resource.data.staffId == null) &&
+        (!('staffName' in request.resource.data) || request.resource.data.staffName is string || request.resource.data.staffName == null) &&
+        (!('staffRole' in request.resource.data) || request.resource.data.staffRole is string || request.resource.data.staffRole == null) &&
+        (!('staffEmail' in request.resource.data) || request.resource.data.staffEmail is string || request.resource.data.staffEmail == null) &&
+        (!('metadata' in request.resource.data) || request.resource.data.metadata is map || request.resource.data.metadata == null) &&
+        hasValidTimestamps(request.resource.data);
+
+      // Prevent client-side updates/deletes of existing log entries to keep an audit trail.
+      allow update: if false;
       allow delete: if false;
     }
 
@@ -178,6 +239,25 @@ service cloud.firestore {
       allow create: if isValidMenuItem(request.resource.data);
       allow update: if isValidMenuItemUpdate(request.resource.data, resource.data);
       allow delete: if true; // Allow deletes to move items to menuArchives
+
+      // ----- Reviews Subcollection (under menu items) -----
+      // Used by: menu/{itemId}/reviews/{reviewId}
+      match /reviews/{reviewId} {
+        // Public read (dish pages need to show reviews)
+        allow read: if true;
+        // Only signed-in users can create reviews for themselves
+        allow create: if request.auth != null &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.itemId == menuId;
+        // Only the review owner can edit their own review
+        allow update: if request.auth != null &&
+                      resource.data.userId == request.auth.uid &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.itemId == menuId;
+        // Optional: allow users to delete their own review
+        allow delete: if request.auth != null &&
+                      resource.data.userId == request.auth.uid;
+      }
     }
 
     // ----- Menu Archives -----

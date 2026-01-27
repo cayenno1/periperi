@@ -7,6 +7,9 @@ let posDailyServings = {}; // Cache for today's serving counts
 let posSelectedCategory = 'all'; // Currently selected category filter
 let posPaymentMethod = 'cash'; // Current payment method: 'cash' or 'gcash'
 let posServiceType = 'dine-in'; // Current service type: 'dine-in' or 'take-out'
+let walkInOrdersState = []; // Cached walk-in orders for log pagination
+let walkInOrdersPage = 1;
+const WALK_IN_ORDERS_PER_PAGE = 10;
 
 let posPendingLinkedItems = null; // { product, quantity } when linked items modal is open
 
@@ -1228,6 +1231,10 @@ function showReceipt(orderId, orderData, paymentAmount, change, customerName = '
         <div class="pos-receipt-content pos-receipt-customer">
             <div class="pos-receipt-header">
                 <h3>PABLO'S PERI PERI</h3>
+                <p>P2RW+RJ4, Zabarte Rd, Novaliches, Quezon City, Metro Manila – Pablo's Peri Peri</p>
+                <p>Contact: 0929 666 6474</p>
+                <p>TIN: 309-845-627-000</p>
+                <p>NON-VAT REGISTERED</p>
                 <p><strong>CUSTOMER COPY</strong></p>
                 <p><strong>${orderData.serviceType === 'take-out' ? 'TAKE OUT' : 'DINE IN'}</strong></p>
                 <p>Order ID: ${orderId}</p>
@@ -1333,7 +1340,11 @@ function showReceipt(orderId, orderData, paymentAmount, change, customerName = '
 
 // Close receipt modal
 function closeReceiptModal() {
-    document.getElementById('posReceiptModal').style.display = 'none';
+    const modal = document.getElementById('posReceiptModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.style.zIndex = '';
+    }
 }
 
 // Print receipt
@@ -1723,10 +1734,10 @@ async function loadWalkInOrdersLog() {
             return bTime - aTime; // Most recent first
         });
         
-        // Limit to last 50 orders for performance
-        const displayOrders = orders.slice(0, 50);
-        
-        renderWalkInOrdersLog(displayOrders);
+        // Cache and render first page
+        walkInOrdersState = orders;
+        walkInOrdersPage = 1;
+        renderWalkInOrdersLogPage();
         
     } catch (error) {
         console.error('Error loading walk-in orders log:', error);
@@ -1739,8 +1750,27 @@ async function loadWalkInOrdersLog() {
     }
 }
 
+function renderWalkInOrdersLogPage() {
+    const totalOrders = walkInOrdersState.length;
+    const totalPages = Math.max(1, Math.ceil(totalOrders / WALK_IN_ORDERS_PER_PAGE));
+    if (walkInOrdersPage > totalPages) {
+        walkInOrdersPage = totalPages;
+    }
+    const startIndex = (walkInOrdersPage - 1) * WALK_IN_ORDERS_PER_PAGE;
+    const pageOrders = walkInOrdersState.slice(startIndex, startIndex + WALK_IN_ORDERS_PER_PAGE);
+    renderWalkInOrdersLog(pageOrders, totalOrders, totalPages);
+}
+
+function changeWalkInOrdersPage(direction) {
+    const totalPages = Math.max(1, Math.ceil(walkInOrdersState.length / WALK_IN_ORDERS_PER_PAGE));
+    const nextPage = walkInOrdersPage + direction;
+    if (nextPage < 1 || nextPage > totalPages) return;
+    walkInOrdersPage = nextPage;
+    renderWalkInOrdersLogPage();
+}
+
 // Render walk-in orders log
-function renderWalkInOrdersLog(orders) {
+function renderWalkInOrdersLog(orders, totalOrders = 0, totalPages = 1) {
     const logContent = document.getElementById('posOrdersLogContent');
     if (!logContent) return;
     
@@ -1754,7 +1784,7 @@ function renderWalkInOrdersLog(orders) {
         return;
     }
     
-    logContent.innerHTML = orders.map(order => {
+    const ordersHtml = orders.map(order => {
         // Format timestamp
         const createdAt = order.createdAt?.toDate?.() || (order.createdAt ? new Date(order.createdAt) : new Date());
         const timeStr = createdAt.toLocaleString('en-US', {
@@ -1796,6 +1826,8 @@ function renderWalkInOrdersLog(orders) {
         // Format cashier name
         const cashierName = order.processedByName || 'Staff';
         
+        const orderKey = (order.orderId || order.id || '').replace(/'/g, "\\'");
+        
         return `
             <div class="pos-order-log-item">
                 <div class="pos-order-log-header">
@@ -1826,10 +1858,53 @@ function renderWalkInOrdersLog(orders) {
                 </div>
                 <div class="pos-order-log-footer">
                     <span class="pos-order-log-total">${totalDisplay}</span>
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewWalkInOrderReceipt('${orderKey}')">
+                        <i class="fas fa-receipt"></i> Receipt
+                    </button>
                 </div>
             </div>
         `;
     }).join('');
+    
+    const paginationNeeded = totalOrders > WALK_IN_ORDERS_PER_PAGE;
+    const paginationHtml = paginationNeeded ? `
+        <div class="pos-orders-log-pagination">
+            <button class="btn btn-sm btn-secondary" onclick="changeWalkInOrdersPage(-1)" ${walkInOrdersPage === 1 ? 'disabled' : ''}>
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>
+            <span class="pagination-info">Page ${walkInOrdersPage} of ${totalPages}</span>
+            <button class="btn btn-sm btn-secondary" onclick="changeWalkInOrdersPage(1)" ${walkInOrdersPage === totalPages ? 'disabled' : ''}>
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    ` : '';
+    
+    logContent.innerHTML = `
+        ${ordersHtml}
+        ${paginationHtml}
+    `;
+}
+
+function viewWalkInOrderReceipt(orderId) {
+    if (!orderId) {
+        alert('Unable to open receipt for this order.');
+        return;
+    }
+    const order = walkInOrdersState.find(o => o.orderId === orderId || o.id === orderId);
+    if (!order) {
+        alert('Order not found in the current log.');
+        return;
+    }
+    // Ensure receipt modal appears above the log modal
+    const receiptModal = document.getElementById('posReceiptModal');
+    if (receiptModal) {
+        receiptModal.style.zIndex = '10010';
+    }
+    const paymentAmount = typeof order.paymentAmount === 'number' ? order.paymentAmount : order.total || 0;
+    const change = typeof order.change === 'number' ? order.change : 0;
+    const customerName = order.customerName || order.deliveryInfo?.customerName || '';
+    const tableNumber = order.tableNumber || order.deliveryInfo?.tableNumber || '';
+    showReceipt(order.orderId || order.id, order, paymentAmount, change, customerName, tableNumber);
 }
 
 // Open walk-in orders log modal
