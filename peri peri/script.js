@@ -3228,7 +3228,7 @@ async function acceptOrderWithoutDriver(orderId) {
     }
 }
 
-function viewOrderDetails(orderId) {
+async function viewOrderDetails(orderId) {
     if (!orderId) {
         showNotification('Order ID is missing.', 'error');
         return;
@@ -3249,6 +3249,33 @@ function viewOrderDetails(orderId) {
     if (!modal || !content) {
         showNotification('Order details modal not found.', 'error');
         return;
+    }
+    
+    // Check if order is a delivery order
+    const isDeliveryOrder = order.serviceType === 'delivery' || order.driverId || order.driverPhone;
+    
+    // Fetch full order document to get payment details (for delivery orders)
+    let paymentCashReceived = null;
+    let paymentChange = null;
+    
+    if (isDeliveryOrder) {
+        try {
+            if (isFirestoreReady()) {
+                const fns = window.firestoreFunctions;
+                const orderRef = fns.doc(window.db, 'orders', orderId);
+                const orderDoc = await fns.getDoc(orderRef);
+                
+                if (orderDoc.exists()) {
+                    const orderData = orderDoc.data();
+                    const payment = orderData.payment || {};
+                    paymentCashReceived = payment.cashReceived;
+                    paymentChange = payment.change;
+                }
+            }
+        } catch (error) {
+            console.warn('Could not fetch payment details:', error);
+            // Continue without payment details
+        }
     }
     
     // Get customer name
@@ -3295,6 +3322,28 @@ function viewOrderDetails(orderId) {
             <i class="fas fa-exclamation-circle"></i> Payment Not Verified
         </div>`
         : '';
+    
+    // Payment details HTML for delivery orders
+    const paymentDetailsHtml = isDeliveryOrder && (paymentCashReceived !== null || paymentChange !== null) ? `
+        ${paymentCashReceived !== null ? `
+        <div class="detail-row-enhanced">
+            <div class="detail-label-enhanced">
+                <i class="fas fa-money-bill"></i>
+                <span>Cash Received</span>
+            </div>
+            <div class="detail-value-enhanced">${formatCurrency(paymentCashReceived)}</div>
+        </div>
+        ` : ''}
+        ${paymentChange !== null ? `
+        <div class="detail-row-enhanced">
+            <div class="detail-label-enhanced">
+                <i class="fas fa-coins"></i>
+                <span>Change</span>
+            </div>
+            <div class="detail-value-enhanced">${formatCurrency(paymentChange)}</div>
+        </div>
+        ` : ''}
+    ` : '';
     
     const escapedOrderIdForOnclick = String(orderId).replace(/'/g, "\\'").replace(/"/g, '\\"');
     // Customer receipts should be viewable for all orders (better customer service and record keeping)
@@ -3428,6 +3477,7 @@ function viewOrderDetails(orderId) {
                     </div>
                     <div class="detail-value-enhanced">${escapeHtml(order.paymentMode || 'Unspecified')}</div>
                 </div>
+                ${paymentDetailsHtml}
                 ${paymentStatusHtml ? `<div class="payment-status-wrapper">${paymentStatusHtml}</div>` : ''}
             </div>
         </div>
