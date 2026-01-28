@@ -477,7 +477,6 @@
     const tracker = document.getElementById('tracker');
     const paymentSubtitleEl = document.getElementById('paymentSubtitle');
     const receiptEl = document.getElementById('receipt');
-    const reorderBtn = document.getElementById('reorderBtn');
     const receiptBtn = document.getElementById('receiptBtn');
     const reviewsSegment = document.getElementById('reviewsSegment');
     const orderItemReviews = document.getElementById('orderItemReviews');
@@ -756,20 +755,6 @@
     }
 
     // Actions
-    if (reorderBtn) {
-      // Only show reorder when the order is completed (not cancelled/declined)
-      if (!statusInfo.isCompleted || statusInfo.isCancelled) {
-        reorderBtn.style.display = 'none';
-        reorderBtn.onclick = null;
-      } else {
-        reorderBtn.style.display = '';
-        checkReorderAvailability(order, displayStatus, reorderBtn);
-        reorderBtn.onclick = function () {
-          handleReorder(order, displayStatus, reorderBtn);
-        };
-      }
-    }
-
     if (receiptBtn) {
       receiptBtn.onclick = function () {
         if (currentOrderForReceipt) {

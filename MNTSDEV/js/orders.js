@@ -38,31 +38,6 @@
         return maxServingsPerDay !== null && maxServingsPerDay !== undefined && maxServingsPerDay > 0;
     }
 
-  function getReorderState(order) {
-    if (!order || order.status !== 'completed') {
-      return { allowed: false, reason: 'Order not completed yet.' };
-    }
-    const itemsArr = Array.isArray(order.raw?.items) ? order.raw.items : [];
-    if (!itemsArr.length) {
-      return { allowed: false, reason: 'Order has no items.' };
-    }
-
-    for (const it of itemsArr) {
-      const id = it?.itemId;
-      if (!id) {
-        return { allowed: false, reason: 'Missing menu link for an item.' };
-      }
-      if (missingItemsCache.has(id)) {
-        return { allowed: false, reason: 'Item is no longer on the menu.' };
-      }
-      // If availability is unknown yet, allow the button; it will be re-checked on click.
-      if (Object.prototype.hasOwnProperty.call(itemAvailability, id) && itemAvailability[id] === false) {
-        return { allowed: false, reason: 'Item is unavailable.' };
-      }
-    }
-    return { allowed: true, reason: '' };
-    }
-
     function formatOrderDate(raw) {
         if (!raw) return '';
         try {
@@ -124,10 +99,6 @@
             const itemsHtml = order.items
                 .map(i => `<span style='display:inline-block; margin-right:8px;'>• ${i}</span>`)
                 .join('');
-            const { allowed: reorderAllowed, reason: reorderReason } = getReorderState(order);
-            const reorderButton = order.status === 'completed'
-                ? `<button class="filter-btn ${reorderAllowed ? '' : 'disabled'}" ${reorderAllowed ? `onclick="window.orders.reorder('${order.id}')"` : 'disabled style="opacity:0.5;cursor:not-allowed;pointer-events:none;"'} title="${reorderAllowed ? '' : (reorderReason || 'Unavailable to reorder')}"><span>${reorderAllowed ? 'Reorder' : 'Unavailable'}</span></button>`
-                : '';
 
             // Get display label for status
             const statusLabel = getStatusDisplayLabel(order.raw?.status || order.status);
@@ -151,7 +122,6 @@
                     <div class="card-price">₱${totalDisplay}</div>
                     <div style="display:flex; gap:8px;">
                         <button class="filter-btn" onclick="window.orders.viewDetails('${order.id}')"><span>View details</span></button>
-                        ${reorderButton}
                     </div>
                 </div>
             </div>
@@ -404,103 +374,6 @@
         }
     }
 
-    async function reorder(id) {
-        const order = orders.find(o => o.id === id);
-        const raw = order?.raw;
-        const items = Array.isArray(raw?.items) ? raw.items : [];
-
-        if (!order || !items.length) {
-            if (window.showAlert) {
-                window.showAlert('Order not found or has no items.', 'error');
-            } else {
-                alert('Order not found or has no items.');
-            }
-            return;
-        }
-
-        const { ok, message } = await ensureItemsExist(items);
-        if (!ok) {
-            console.warn(message || 'Items are not available to reorder.');
-            refreshAvailability(items.map(it => it.itemId).filter(Boolean));
-            return;
-        }
-
-        // Normalize items for cart reuse
-        const cartItems = items.map((it, idx) => {
-            const qty = safeNumber(it.quantity, 1) || 1;
-            const unit = safeNumber(it.unitPrice, safeNumber(it.price, 0));
-            const lineTotal = safeNumber(it.lineTotal, unit * qty);
-
-            return {
-                id: it.itemId || `reorder-${Date.now()}-${idx}`,
-                itemId: it.itemId || null,
-                name: it.name || 'Item',
-                imageUrl: it.imageUrl || null,
-                price: lineTotal, // stored as line total in cart
-                quantity: qty,
-                variation: it.variation || null,
-                sauce: it.sauce || null
-            };
-        });
-
-        const totalQty = cartItems.reduce((sum, item) => sum + safeNumber(item.quantity, 0), 0);
-
-        try {
-            await window.utils?.waitForFirebaseReady?.();
-            const db = window.firebaseDb;
-            const auth = window.firebaseAuth;
-            const user = auth?.currentUser;
-
-            if (user && db && window.doc && window.collection && window.getDocs && window.deleteDoc && window.setDoc) {
-                // Clear existing Firestore cart
-                const customerRef = window.doc(db, 'customers', user.uid);
-                const cartCol = window.collection(customerRef, 'cartItems');
-                const snap = await window.getDocs(cartCol);
-                for (const docSnap of snap.docs) {
-                    await window.deleteDoc(docSnap.ref);
-                }
-
-                // Seed cart with reordered items
-                for (const item of cartItems) {
-                    const cartDoc = window.doc(cartCol);
-                    await window.setDoc(cartDoc, {
-                        itemId: item.itemId,
-                        name: item.name,
-                        imageUrl: item.imageUrl,
-                        price: item.price,
-                        quantity: item.quantity,
-                        variation: item.variation || null,
-                        sauce: item.sauce || null,
-                        createdAt: new Date()
-                    });
-                }
-            } else {
-                // Guest cart fallback
-                window.localStorage?.setItem(GUEST_CART_KEY, JSON.stringify(cartItems));
-            }
-
-            if (typeof window.setCartCount === 'function') {
-                window.setCartCount(totalQty);
-            } else {
-                window.localStorage?.setItem('ppp_cart_count', String(totalQty));
-            }
-
-            // Go to cart review
-            if (typeof window.goToCart === 'function') {
-                window.goToCart();
-            } else {
-                window.location.href = 'cart_review.html';
-            }
-        } catch (error) {
-            console.error('Error while reordering:', error);
-            if (window.showAlert) {
-                window.showAlert('Could not reorder right now. Please try again.', 'error');
-            } else {
-                alert('Could not reorder right now. Please try again.');
-            }
-        }
-    }
-
     // Initialize filter buttons
     function initFilters() {
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -538,7 +411,6 @@
     // Expose to window
     window.orders = {
         viewDetails,
-        reorder,
         loadMore
     };
 

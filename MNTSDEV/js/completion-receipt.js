@@ -69,10 +69,6 @@
         el.style.display = show ? displayValue : 'none';
     }
 
-    function getOrderIdFromPage() {
-        return urlParams.get('orderId') || null;
-    }
-
     function initializeReceipt() {
         document.getElementById('orderNumber').textContent = Math.floor(Math.random() * 9000) + 1000;
         document.getElementById('orderDate').textContent = orderDate;
@@ -107,25 +103,10 @@
             document.getElementById('storeLocation').textContent = storeLocation;
             document.getElementById('storeLocationLine').style.display = 'block';
         }
-
-        // Action CTA: Track / View Status
-        const orderId = getOrderIdFromPage();
-        setElDisplay('trackOrderBtn', !!orderId, 'inline-flex');
     }
 
     function goToAccount() {
         window.location.href = 'account.html';
-    }
-
-    function goToOrderDetails() {
-        const orderId = getOrderIdFromPage();
-        if (!orderId) return;
-        window.location.href = `order_details.html?orderId=${encodeURIComponent(orderId)}`;
-    }
-
-    function orderAgain() {
-        // We route to order details where a full Reorder flow already exists (availability checks, etc.)
-        goToOrderDetails();
     }
 
     function printReceipt() {
@@ -499,32 +480,20 @@
                 }
             }
 
-            // Action CTA: Track / View Status
-            setElDisplay('trackOrderBtn', !!orderId, 'inline-flex');
-
             // Loyalty points (signed-in customers)
             loadAndRenderLoyalty(total);
-
-            // Reorder / Order again (only for completed orders)
-            const statusRaw = String(order.status || '').trim().toLowerCase();
-            const isCompleted = statusRaw === 'completed' || statusRaw === 'delivered';
-            setElDisplay('orderAgainBtn', isCompleted && !!orderId, 'inline-flex');
         }
     }
 
     // Expose functions to window
     window.completionReceipt = {
         goToAccount,
-        goToOrderDetails,
-        orderAgain,
         printReceipt,
         saveReceipt
     };
 
     // Global functions for onclick handlers
     window.goToAccount = goToAccount;
-    window.goToOrderDetails = goToOrderDetails;
-    window.orderAgain = orderAgain;
     window.printReceipt = printReceipt;
     window.saveReceipt = saveReceipt;
 

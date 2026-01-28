@@ -2080,6 +2080,17 @@
         });
         updateGCashDetailsVisibility();
 
+        // GCash reference number: digits only, max 13
+        const gcashRefInput = document.getElementById('gcash-ref');
+        if (gcashRefInput) {
+            gcashRefInput.addEventListener('input', () => {
+                const digitsOnly = String(gcashRefInput.value || '').replace(/\D+/g, '').slice(0, 13);
+                if (gcashRefInput.value !== digitsOnly) {
+                    gcashRefInput.value = digitsOnly;
+                }
+            });
+        }
+
         // No guest ordering: require login to access checkout.
         if (window.firebaseAuth && window.onAuthStateChanged) {
             window.onAuthStateChanged(window.firebaseAuth, (user) => {
