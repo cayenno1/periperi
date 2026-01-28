@@ -384,6 +384,70 @@
       display: block;
     }
 
+    /* Filters */
+    .driver-filters {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .driver-filters label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #6b7280;
+      white-space: nowrap;
+    }
+
+    .driver-filters input[type="date"] {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1.5px solid #e5e7eb;
+      background: #ffffff;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #1a1a1a;
+      cursor: pointer;
+      min-width: 150px;
+    }
+
+    .driver-filters input[type="date"]:focus {
+      outline: none;
+      border-color: #e53935;
+    }
+
+    @media (max-width: 767px) {
+      .driver-filters {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .driver-filters > div {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .driver-filters label {
+        font-size: 0.8rem;
+      }
+
+      .driver-filters select,
+      .driver-filters input[type="date"] {
+        width: 100%;
+        min-width: auto;
+      }
+
+      .driver-filters button {
+        width: 100%;
+      }
+    }
+
     /* Modal */
     .driver-modal-overlay {
       position: fixed;
@@ -780,6 +844,22 @@
       <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="completed">
         <span>Completed</span>
       </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="driver-filters">
+      <div>
+        <label for="sortOrder">Sort:</label>
+        <select id="sortOrder" class="driver-select">
+          <option value="new-to-old">New to Old</option>
+          <option value="old-to-new">Old to New</option>
+        </select>
+      </div>
+      <div>
+        <label for="dateFilter">Date:</label>
+        <input type="date" id="dateFilter">
+      </div>
+      <button id="clearFilters" class="driver-btn driver-btn-secondary">Clear Filters</button>
     </div>
 
     <!-- Orders Grid -->
@@ -1939,6 +2019,10 @@
     let pendingOrders = [];
     let completedOrders = [];
     
+    // Filter state
+    let sortOrder = 'new-to-old';
+    let dateFilter = '';
+    
     async function loadDriverOrders() {
       if (!currentDriver || !currentDriver.id) {
         console.error('No driver ID available');
@@ -1980,10 +2064,12 @@
               const matchesDriver = orderDriverId === driverId || orderDriverId === driverDocId;
               if (!matchesDriver) return;
               
+              const createdAtDate = orderData.createdAt ? (orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt)) : new Date();
               const order = {
                 id: docSnap.id,
                 trackingId: orderData.trackingId || docSnap.id,
-                createdAt: orderData.createdAt ? (orderData.createdAt.toDate ? new Date(orderData.createdAt.toDate()) : new Date(orderData.createdAt)).toLocaleString() : new Date().toLocaleString(),
+                createdAt: createdAtDate.toLocaleString(),
+                createdAtTs: createdAtDate.getTime(),
                 pickup: {
                   name: "Pablo's Peri Peri",
                   address: orderData.restaurantAddress || 'Zabarte Road, Brgy. Kaligayahan, Quezon City'
@@ -2040,32 +2126,72 @@
       applyView(); 
     }
 
+    function applyFilters(orders) {
+      let filtered = [...orders];
+      
+      // Apply date filter
+      if (dateFilter) {
+        const filterDate = new Date(dateFilter);
+        filterDate.setHours(0, 0, 0, 0);
+        const filterDateEnd = new Date(filterDate);
+        filterDateEnd.setHours(23, 59, 59, 999);
+        
+        filtered = filtered.filter(order => {
+          // For completed orders, use completedAtTs; for pending, use createdAtTs
+          const orderDate = order.completedAtTs || order.createdAtTs;
+          const orderDateObj = new Date(orderDate);
+          return orderDateObj >= filterDate && orderDateObj <= filterDateEnd;
+        });
+      }
+      
+      // Apply sort
+      filtered.sort((a, b) => {
+        // Use completedAtTs for completed orders, createdAtTs for pending
+        const aTime = a.completedAtTs || a.createdAtTs || 0;
+        const bTime = b.completedAtTs || b.createdAtTs || 0;
+        
+        if (sortOrder === 'new-to-old') {
+          return bTime - aTime; // Descending (newest first)
+        } else {
+          return aTime - bTime; // Ascending (oldest first)
+        }
+      });
+      
+      return filtered;
+    }
+
     function renderPending(){
       const container = document.getElementById('pendingOrdersList');
       const empty = document.getElementById('pendingOrdersEmpty');
       const count = document.getElementById('pendingCount');
-      if (count) count.textContent = pendingOrders.length;
-      if (!pendingOrders.length){ 
+      
+      const filtered = applyFilters(pendingOrders);
+      
+      if (count) count.textContent = filtered.length;
+      if (!filtered.length){ 
         container.innerHTML = ''; 
         empty.style.display = 'block'; 
         return; 
       }
       empty.style.display = 'none';
-      container.innerHTML = pendingOrders.map(order => cardTemplate(order, 'pending')).join('');
+      container.innerHTML = filtered.map(order => cardTemplate(order, 'pending')).join('');
     }
 
     function renderCompleted(){
       const container = document.getElementById('completedOrdersList');
       const empty = document.getElementById('completedOrdersEmpty');
       const count = document.getElementById('completedCount');
-      if (count) count.textContent = completedOrders.length;
-      if (!completedOrders.length){ 
+      
+      const filtered = applyFilters(completedOrders);
+      
+      if (count) count.textContent = filtered.length;
+      if (!filtered.length){ 
         container.innerHTML = ''; 
         empty.style.display = 'block'; 
         return; 
       }
       empty.style.display = 'none';
-      container.innerHTML = completedOrders.map(order => cardTemplate(order, 'completed')).join('');
+      container.innerHTML = filtered.map(order => cardTemplate(order, 'completed')).join('');
     }
 
     function cardTemplate(order, list){
@@ -2710,6 +2836,37 @@
       }
     }
     
+    // Filter event listeners
+    (function initFilters() {
+      const sortSelect = document.getElementById('sortOrder');
+      const dateInput = document.getElementById('dateFilter');
+      const clearBtn = document.getElementById('clearFilters');
+      
+      if (sortSelect) {
+        sortSelect.addEventListener('change', function() {
+          sortOrder = this.value;
+          renderAll();
+        });
+      }
+      
+      if (dateInput) {
+        dateInput.addEventListener('change', function() {
+          dateFilter = this.value;
+          renderAll();
+        });
+      }
+      
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+          sortOrder = 'new-to-old';
+          dateFilter = '';
+          if (sortSelect) sortSelect.value = 'new-to-old';
+          if (dateInput) dateInput.value = '';
+          renderAll();
+        });
+      }
+    })();
+
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initDriverDashboard);
     } else {
