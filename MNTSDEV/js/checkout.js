@@ -626,7 +626,21 @@
     async function placeOrder() {
         const btn = document.querySelector('.proceed-btn');
         // Prevent double submission if already processing
-        if (btn && btn.disabled) return;
+        if (btn && (btn.disabled || btn.dataset.processing === 'true')) return;
+
+        const unlockPlaceOrderButton = () => {
+            if (!btn) return;
+            btn.disabled = false;
+            btn.classList.remove('is-processing');
+            delete btn.dataset.processing;
+        };
+
+        // Lock immediately on click so it can't double-send
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('is-processing');
+            btn.dataset.processing = 'true';
+        }
 
         clearCheckoutErrors();
 
@@ -649,11 +663,7 @@
                 } else {
                     alert(errorMessage);
                 }
-                // Re-enable button
-                if (btn) {
-                    btn.disabled = false;
-                    btn.classList.remove('is-processing');
-                }
+                unlockPlaceOrderButton();
                 // Don't continue to normal order flow - return early
                 return;
             }
@@ -665,6 +675,7 @@
             } else {
                 alert('You appear to be offline. Please reconnect and try again.');
             }
+            unlockPlaceOrderButton();
             return;
         }
 
@@ -690,6 +701,7 @@
                 alert('Please select a payment method.');
             }
             scrollToFirstCheckoutError();
+            unlockPlaceOrderButton();
             return;
         }
 
@@ -704,6 +716,7 @@
                 }
                 flagCheckoutError(document.querySelector('.delivery-options'));
                 scrollToFirstCheckoutError();
+                unlockPlaceOrderButton();
                 return;
             }
         }
@@ -727,6 +740,7 @@
                     alert('Please upload your GCash payment screenshot before placing your order.');
                 }
                 scrollToFirstCheckoutError();
+                unlockPlaceOrderButton();
                 return;
             }
             gcashFile = file;
@@ -740,6 +754,7 @@
                     alert('Please enter your GCash account name.');
                 }
                 scrollToFirstCheckoutError();
+                unlockPlaceOrderButton();
                 return;
             }
 
@@ -752,6 +767,7 @@
                     alert('Please enter your GCash reference number.');
                 }
                 scrollToFirstCheckoutError();
+                unlockPlaceOrderButton();
                 return;
             }
         }
@@ -787,16 +803,8 @@
                 alert('Please provide your name and mobile number.');
             }
             scrollToFirstCheckoutError();
-            if (btn) {
-                btn.disabled = false;
-                btn.classList.remove('is-processing');
-            }
+            unlockPlaceOrderButton();
             return;
-        }
-
-        if (btn) {
-            btn.disabled = true;
-            btn.classList.add('is-processing');
         }
         const paymentType = paymentMethod === 'cash' ? 'Cash' : 'GCash';
 
@@ -881,10 +889,7 @@
 
                 if (hasAddrError) {
                     scrollToFirstCheckoutError();
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.classList.remove('is-processing');
-                    }
+                    unlockPlaceOrderButton();
                     return;
                 }
 
@@ -958,10 +963,7 @@
                 } else {
                     alert(`Failed to upload your GCash payment screenshot: ${errorMsg}. Please check your connection and try again.`);
                 }
-                if (btn) {
-                    btn.disabled = false;
-                    btn.classList.remove('is-processing');
-                }
+                unlockPlaceOrderButton();
                 return;
             }
         }
@@ -1026,10 +1028,7 @@
                     alert('Unable to complete checkout right now. Please try again.');
                 }
             }
-            if (btn) {
-                btn.disabled = false;
-                btn.classList.remove('is-processing');
-            }
+            unlockPlaceOrderButton();
             // Reset points used tracker on error
             pointsUsedInOrder = 0;
             return;
