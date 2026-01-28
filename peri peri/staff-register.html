@@ -396,7 +396,6 @@
                     <option value="">Select role</option>
                     <option value="Cashier">Cashier</option>
                     <option value="Driver">Driver</option>
-                    <option value="Owner">Owner</option>
                     <option value="Admin">Admin</option>
                 </select>
                 <span class="error-message" id="roleError"></span>
@@ -462,7 +461,7 @@
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-analytics.js";
-        import { getFirestore, collection, setDoc, doc, getDoc, serverTimestamp, query, where, getDocs } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+        import { getFirestore, collection, setDoc, doc, getDoc, serverTimestamp, query, where, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
         // Your web app's Firebase configuration
         // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -491,7 +490,8 @@
             serverTimestamp,
             query,
             where,
-            getDocs
+            getDocs,
+            addDoc
         };
     </script>
 
@@ -800,17 +800,23 @@
                 }, 5000);
 
                 console.log('Staff registered successfully with ID:', staffId);
-                console.log('Registration data saved to Firebase:', {
-                    firstName,
-                    middleName,
-                    lastName,
-                    suffix,
-                    email,
-                    phoneNumber,
-                    staffId,
-                    role,
-                    documentId: staffId
-                });
+
+                // Record admin activity if global logger is available
+                if (typeof logAdminActivity === 'function') {
+                    const fullName = [firstName, middleName, lastName, suffix].filter(Boolean).join(' ').trim();
+                    logAdminActivity({
+                        action: 'staff_create',
+                        entityType: 'staff',
+                        entityId: staffId,
+                        entityName: fullName || staffId,
+                        description: `Staff account ${fullName || staffId} was created with role ${role}.`,
+                        metadata: {
+                            staffId,
+                            email,
+                            role
+                        }
+                    });
+                }
 
             } catch (error) {
                 console.error('Error registering staff:', error);
@@ -870,6 +876,8 @@
         window.validatePhoneNumber = validatePhoneNumber;
         window.handleRegister = handleRegister;
     </script>
+    <!-- Shared admin scripts (logging, helpers, etc.) -->
+    <script src="script.js"></script>
 </body>
 </html>
 

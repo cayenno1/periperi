@@ -76,6 +76,61 @@ let lastPendingIdCustomerIds = new Set();
 let idVerificationAlertUnsubscribe = null;
 let pendingIdCustomerDetails = [];
 
+// New order tracking system - tracks which orders have been viewed/interacted with
+const ViewedOrdersManager = (() => {
+    const STORAGE_KEY = 'viewedOrders';
+    
+    // Get viewed orders from localStorage
+    function getViewedOrders() {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            return stored ? new Set(JSON.parse(stored)) : new Set();
+        } catch (e) {
+            console.error('Error reading viewed orders from localStorage:', e);
+            return new Set();
+        }
+    }
+    
+    // Save viewed orders to localStorage
+    function saveViewedOrders(viewedSet) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(viewedSet)));
+        } catch (e) {
+            console.error('Error saving viewed orders to localStorage:', e);
+        }
+    }
+    
+    // Mark an order as viewed
+    function markAsViewed(orderId) {
+        if (!orderId) return;
+        const viewed = getViewedOrders();
+        viewed.add(String(orderId));
+        saveViewedOrders(viewed);
+    }
+    
+    // Check if an order has been viewed
+    function isViewed(orderId) {
+        if (!orderId) return true; // If no ID, consider it viewed
+        const viewed = getViewedOrders();
+        return viewed.has(String(orderId));
+    }
+    
+    // Check if an order is new (pending/new status and not viewed)
+    function isNewOrder(order) {
+        if (!order || !order.id) return false;
+        const status = (order.status || '').toLowerCase().trim();
+        const isPending = status === 'pending' || status === 'new';
+        return isPending && !isViewed(order.id);
+    }
+    
+    return {
+        markAsViewed,
+        isViewed,
+        isNewOrder,
+        getViewedOrders
+    };
+})();
+
 // InventoryStore removed - system is now recipe-based
 
 // ============================================================================
@@ -498,7 +553,16 @@ const MenuStore = (() => {
             limitedStartDate: item.limitedStartDate || null,
             limitedEndDate: item.limitedEndDate || null,
             createdAt: item.createdAt || null,
-            updatedAt: item.updatedAt || null
+            updatedAt: item.updatedAt || null,
+            // Include linked sauces - preserve from Firebase
+            includedSauces: Array.isArray(item.includedSauces) && item.includedSauces.length > 0
+                ? item.includedSauces.map(sauce => ({
+                    sauceId: sauce.sauceId || sauce.menuId || sauce.id || null,
+                    menuId: sauce.menuId || sauce.sauceId || sauce.id || null,
+                    sauceName: sauce.sauceName || sauce.name || null,
+                    id: sauce.id || sauce.sauceId || sauce.menuId || null
+                }))
+                : null
         };
     }
 
@@ -1487,6 +1551,9 @@ function renderOrdersTable(orders) {
         const isDeclined = orderStatusLower === 'declined';
         const hasDriver = !!(order.driverId && (typeof order.driverId === 'string' ? order.driverId.trim() : order.driverId));
         
+        // Check if this is a new order that hasn't been viewed
+        const isNewOrder = ViewedOrdersManager.isNewOrder(order);
+        
         // Check if GCash payment needs verification
         const paymentModeLower = (order.paymentMode || '').toLowerCase();
         const isGCashOrder = paymentModeLower === 'gcash' || paymentModeLower === 'g-cash';
@@ -1622,6 +1689,11 @@ function renderOrdersTable(orders) {
         // Use action buttons directly (receipt buttons removed - receipt accessible via row click)
         const allActionsHTML = actionButtonsHTML;
         
+        // Add highlighting class for new orders
+        if (isNewOrder) {
+            row.classList.add('new-order-row');
+        }
+        
         // Make row clickable to show order details (which includes receipt access)
         if (order.id) {
             row.style.cursor = 'pointer';
@@ -1630,13 +1702,19 @@ function renderOrdersTable(orders) {
                 if (!e.target.closest('.order-action-buttons') && 
                     !e.target.closest('.order-action-btn') && 
                     !e.target.closest('select')) {
+                    // Mark order as viewed when clicked
+                    ViewedOrdersManager.markAsViewed(order.id);
                     viewOrderDetails(order.id);
                 }
             };
         }
         
+        // Add notification badge for new orders
+        const newOrderBadge = isNewOrder ? '<span class="new-order-badge" title="New Order"><i class="fas fa-circle"></i></span>' : '';
+        
         row.innerHTML = `
             <td class="order-id-column">
+                ${newOrderBadge}
                 ${escapeHtml(order.trackingId || order.id)}
             </td>
             <td class="customer-name-column">${escapeHtml(customerName)}</td>
@@ -1913,84 +1991,122 @@ function toggleDropdown(dropdownId) {
     }
 }
 
-// Sidebar Menu tab dropdown (Menu Catalogue / List / Add Product / Product Detail)
-function toggleMenuTabDropdown() {
-    const submenu = document.getElementById('menuTabDropdown');
+// ===== Sidebar dropdowns (Menu / Promotion / Customer / Analytics) =====
+
+// Close all sidebar dropdowns, optionally keeping one submenu open by id
+function closeAllSidebarDropdowns(exceptSubmenuId) {
+    const dropdowns = document.querySelectorAll('.menu-nav-dropdown');
+    dropdowns.forEach(item => {
+        const submenu = item.querySelector('.menu-nav-submenu');
+        const icon = item.querySelector('.menu-toggle-icon');
+        if (!submenu) return;
+
+        const isExcept = exceptSubmenuId && submenu.id === exceptSubmenuId;
+        if (isExcept) return;
+
+        submenu.classList.remove('show');
+        item.classList.remove('active');
+        if (icon) {
+            icon.classList.remove('open');
+        }
+    });
+}
+
+// Generic toggle for a given submenu id
+function toggleSidebarDropdown(submenuId) {
+    const submenu = document.getElementById(submenuId);
     if (!submenu) return;
-    
+
     const navItem = submenu.closest('.menu-nav-dropdown');
     const icon = navItem ? navItem.querySelector('.menu-toggle-icon') : null;
-    if (!icon) return;
+    if (!navItem || !icon) return;
 
-    const willShow = !submenu.classList.contains('show');
-    submenu.classList.toggle('show', willShow);
-    navItem.classList.toggle('active', willShow);
+    const isOpen = submenu.classList.contains('show');
 
-    // Update icon: > when closed, v when open
-    if (willShow) {
-        icon.classList.add('open');
-    } else {
+    // Close all others first
+    closeAllSidebarDropdowns(isOpen ? null : submenuId);
+
+    if (isOpen) {
+        // This one was open – close it
+        submenu.classList.remove('show');
+        navItem.classList.remove('active');
         icon.classList.remove('open');
+    } else {
+        // Open this one
+        submenu.classList.add('show');
+        navItem.classList.add('active');
+        icon.classList.add('open');
     }
+}
+
+// Convenience wrappers used by HTML onclick handlers
+function toggleMenuTabDropdown() {
+    toggleSidebarDropdown('menuTabDropdown');
 }
 
 function toggleCustomerTabDropdown() {
-    const submenu = document.getElementById('customerTabDropdown');
-    const navItem = submenu ? submenu.closest('.menu-nav-dropdown') : null;
-    const icon = navItem ? navItem.querySelector('.menu-toggle-icon') : null;
-    if (!submenu || !icon) return;
-
-    const willShow = !submenu.classList.contains('show');
-    submenu.classList.toggle('show', willShow);
-    navItem.classList.toggle('active', willShow);
-
-    // Update icon: > when closed, v when open
-    if (willShow) {
-        icon.classList.add('open');
-    } else {
-        icon.classList.remove('open');
-    }
+    toggleSidebarDropdown('customerTabDropdown');
 }
 
 function togglePromotionTabDropdown() {
-    const submenu = document.getElementById('promotionTabDropdown');
-    const navItem = submenu ? submenu.closest('.menu-nav-dropdown') : null;
-    const icon = navItem ? navItem.querySelector('.menu-toggle-icon') : null;
-    if (!submenu || !icon) return;
-
-    const willShow = !submenu.classList.contains('show');
-    submenu.classList.toggle('show', willShow);
-    navItem.classList.toggle('active', willShow);
-
-    // Update icon: > when closed, v when open
-    if (willShow) {
-        icon.classList.add('open');
-    } else {
-        icon.classList.remove('open');
-    }
+    toggleSidebarDropdown('promotionTabDropdown');
 }
 
 function toggleAnalyticsTabDropdown() {
-    const submenu = document.getElementById('analyticsTabDropdown');
-    if (!submenu) return;
-    
-    const navItem = submenu.closest('.menu-nav-dropdown');
-    const icon = navItem ? navItem.querySelector('.menu-toggle-icon') : null;
-    if (!icon) return;
-
-    const willShow = !submenu.classList.contains('show');
-    submenu.classList.toggle('show', willShow);
-    navItem.classList.toggle('active', willShow);
-
-    // Update icon: > when closed, v when open
-    if (willShow) {
-        icon.classList.add('open');
-    } else {
-        icon.classList.remove('open');
-    }
+    toggleSidebarDropdown('analyticsTabDropdown');
 }
 
-// Close dropdowns when clicking outside or on toggle button again
+// Ensure the correct submenu stays open based on current page/hash
+function updateSidebarActiveState() {
+    const currentPath = window.location.pathname.replace(/\\/g, '/').split('/').pop() || 'index.html';
+    const currentHash = window.location.hash || '';
+
+    const submenuLinks = document.querySelectorAll('.menu-nav-submenu a');
+
+    submenuLinks.forEach(link => {
+        link.classList.remove('active');
+
+        const href = link.getAttribute('href');
+        if (!href) return;
+
+        // Resolve the link's path and hash relative to current origin
+        let linkPath = href;
+        let linkHash = '';
+
+        const hashIndex = href.indexOf('#');
+        if (hashIndex !== -1) {
+            linkPath = href.substring(0, hashIndex);
+            linkHash = href.substring(hashIndex);
+        }
+
+        const normalizedLinkPath = linkPath.split('/').pop();
+
+        const pathMatches = !normalizedLinkPath || normalizedLinkPath === currentPath;
+        const hashMatches =
+            (linkHash && linkHash === currentHash) ||
+            (!linkHash && !currentHash);
+
+        if (pathMatches && hashMatches) {
+            link.classList.add('active');
+
+            // Make sure its parent submenu is open
+            const submenu = link.closest('.menu-nav-submenu');
+            if (submenu) {
+                const navItem = submenu.closest('.menu-nav-dropdown');
+                const icon = navItem ? navItem.querySelector('.menu-toggle-icon') : null;
+                submenu.classList.add('show');
+                if (navItem) navItem.classList.add('active');
+                if (icon) icon.classList.add('open');
+            }
+        }
+    });
+}
+
+// Run on load and when hash changes (for in-page navigation)
+document.addEventListener('DOMContentLoaded', updateSidebarActiveState);
+window.addEventListener('hashchange', updateSidebarActiveState);
+
+// Close profile/filter dropdowns when clicking outside or on toggle button again
 document.addEventListener('click', function(event) {
     // Check if clicking on a link inside a dropdown - don't close dropdowns in this case
     const clickedLink = event.target.closest('a[href]');
@@ -2302,10 +2418,14 @@ async function updateOrderStatus(orderId, newStatus) {
         
         await fns.updateDoc(orderRef, updateData);
         
-        // Print kitchen receipt when order moves to In Kitchen (cashier gives to kitchen)
+        // Print both kitchen receipt and customer receipt when order moves to In Kitchen
         if (actualNewStatus === 'preparing' || preparingStatuses.includes(normalizedNewStatus)) {
             if (typeof printKitchenReceipt === 'function') {
                 printKitchenReceipt(order);
+            }
+            // Also print customer receipt simultaneously
+            if (typeof printCustomerReceipt === 'function') {
+                printCustomerReceipt(order);
             }
         }
         
@@ -2316,21 +2436,40 @@ async function updateOrderStatus(orderId, newStatus) {
                 const deliveryRef = fns.doc(window.db, 'for_delivery', deliveryId);
                 const existingDoc = await fns.getDoc(deliveryRef);
                 
+                // Get driver info from order or driversState
+                let driverName = order.driverName || '';
+                let driverPhone = order.driverPhone || '';
+                if (order.driverId && (!driverName || !driverPhone)) {
+                    const driver = driversState.find(d => 
+                        d.driverId === order.driverId || d.id === order.driverId
+                    );
+                    if (driver) {
+                        driverName = driverName || driver.name || '';
+                        driverPhone = driverPhone || driver.phoneNumber || driver.phone || '';
+                    }
+                }
+                
                 if (!existingDoc.exists()) {
                     await fns.setDoc(deliveryRef, {
                         deliveryId: deliveryId,
                         orderId: orderId,
                         driverId: order.driverId || '',
+                        driverName: driverName,
+                        driverPhone: driverPhone,
                         timeAssigned: fns.serverTimestamp(),
                         timeDelivered: null,
                         createdAt: fns.serverTimestamp(),
                 updatedAt: fns.serverTimestamp()
             });
                 } else {
-                    await fns.updateDoc(deliveryRef, {
+                    // Update with driver info if available
+                    const updateData = {
                         timeAssigned: fns.serverTimestamp(),
                         updatedAt: fns.serverTimestamp()
-                    });
+                    };
+                    if (driverName) updateData.driverName = driverName;
+                    if (driverPhone) updateData.driverPhone = driverPhone;
+                    await fns.updateDoc(deliveryRef, updateData);
                 }
             } catch (deliveryError) {
                 console.error('Error creating/updating for_delivery document:', deliveryError);
@@ -2346,6 +2485,9 @@ async function updateOrderStatus(orderId, newStatus) {
                 printCustomerReceipt(order);
             }
         }
+        
+        // Mark order as viewed when status is changed
+        ViewedOrdersManager.markAsViewed(orderId);
         
         // Update local state
             const orderIndex = ordersState.findIndex(o => o.id === orderId);
@@ -3091,6 +3233,9 @@ function viewOrderDetails(orderId) {
         showNotification('Order ID is missing.', 'error');
         return;
     }
+    
+    // Mark order as viewed when viewing details
+    ViewedOrdersManager.markAsViewed(orderId);
     
     const order = ordersState.find(o => o.id === orderId);
     if (!order) {
@@ -3920,6 +4065,9 @@ async function verifyPaymentConfirm() {
                 updatedAt: fns.serverTimestamp()
             });
             
+            // Mark order as viewed when payment is verified
+            ViewedOrdersManager.markAsViewed(currentVerifyingOrderId);
+            
             // Update local state
             const orderIndex = ordersState.findIndex(o => o.id === currentVerifyingOrderId);
             if (orderIndex !== -1) {
@@ -4527,6 +4675,9 @@ async function reopenOrder(orderId) {
             previousStatus: 'declined',
             updatedAt: fns.serverTimestamp()
         });
+        
+        // Mark order as viewed when reopened
+        ViewedOrdersManager.markAsViewed(orderId);
         
         // Update local state
         const orderIndex = ordersState.findIndex(o => o.id === orderId);
@@ -5769,6 +5920,15 @@ document.addEventListener('keydown', function(event) {
         zoomReceiptPreview('out');
         return;
     }
+
+    // Sidebar: close menu dropdowns when clicking outside the sidebar
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        const clickedInsideSidebar = event.target.closest('.sidebar');
+        if (!clickedInsideSidebar) {
+            closeAllSidebarDropdowns();
+        }
+    }
 });
 
 // Driver management functions
@@ -6196,8 +6356,9 @@ function calculateMostOrderedItems(orders, period, limit = 20) {
         });
     });
     
-    // Convert to array and sort by quantity
+    // Convert to array, exclude sauce category, and sort by quantity
     return Object.values(itemStats)
+        .filter(item => (item.category || '').toLowerCase() !== 'sauce')
         .sort((a, b) => b.quantity - a.quantity)
         .slice(0, limit);
 }
@@ -7962,370 +8123,9 @@ function changePage(page) {
 // exportInventoryReport removed - system is now recipe-based
 
 // initInventoryManagement removed - system is now recipe-based
-// Ingredient logs can still be initialized separately if needed
 async function initInventoryManagement() {
     // Recipe-based system: no inventory management needed
-    // Initialize ingredient logs if the UI exists
-    const logsSection = document.getElementById('ingredientLogsSection');
-    if (logsSection) {
-        initIngredientLogs();
-    }
 }
-
-// ============================================================================
-// INGREDIENT LOGS UI FUNCTIONS
-// ============================================================================
-
-let ingredientLogsUnsubscribe = null;
-let ingredientLogsState = [];
-
-// Initialize ingredient logs
-async function initIngredientLogs() {
-    const logsTableBody = document.getElementById('ingredientLogsTableBody');
-    if (!logsTableBody) return; // Logs table not on this page
-    
-    if (!isFirestoreReady()) {
-        await waitForFirebaseReady();
-    }
-    
-    const fns = window.firestoreFunctions;
-    if (!fns || !window.db) return;
-    
-    // Initialize date filter (optional - leave empty to show all dates)
-    const dateInput = document.getElementById('ingredientLogDateFilter');
-    if (dateInput) {
-        // Leave empty by default to show all logs
-        dateInput.value = '';
-    }
-    
-    // Subscribe to real-time logs
-    const logsCol = fns.collection(window.db, 'ingredientLogs');
-    const logsQuery = fns.query(logsCol, fns.orderBy('timestamp', 'desc'), fns.limit(200));
-    
-    if (typeof fns.onSnapshot === 'function') {
-        if (typeof ingredientLogsUnsubscribe === 'function') {
-            ingredientLogsUnsubscribe();
-        }
-        
-        ingredientLogsUnsubscribe = fns.onSnapshot(
-            logsQuery,
-            (snapshot) => {
-                ingredientLogsState = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                // Apply current filters
-                const ingredientSelect = document.getElementById('ingredientLogFilter');
-                const dateInput = document.getElementById('ingredientLogDateFilter');
-                const typeSelect = document.getElementById('ingredientLogTypeFilter');
-                const searchInput = document.getElementById('ingredientLogSearch');
-                const ingredientId = ingredientSelect ? ingredientSelect.value || null : null;
-                const filterDate = dateInput && dateInput.value ? dateInput.value : null;
-                const filterType = typeSelect ? typeSelect.value || null : null;
-                const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : null;
-                renderIngredientLogs(ingredientId, filterDate, filterType, searchTerm);
-                updateIngredientLogFilter();
-            },
-            (error) => {
-                console.error('Error subscribing to ingredient logs:', error);
-            }
-        );
-    }
-}
-
-// Current sort state
-let ingredientLogsSortColumn = 'timestamp';
-let ingredientLogsSortDirection = 'desc';
-
-// Render ingredient logs table
-function renderIngredientLogs(filterIngredientId = null, filterDate = null, filterType = null, searchTerm = null) {
-    const tableBody = document.getElementById('ingredientLogsTableBody');
-    if (!tableBody) return;
-    
-    let logsToShow = [...ingredientLogsState];
-    
-    // Filter by ingredient
-    if (filterIngredientId) {
-        logsToShow = logsToShow.filter(log => log.ingredientId === filterIngredientId);
-    }
-    
-    // Filter by date
-    if (filterDate) {
-        const filterDateStr = filterDate; // YYYY-MM-DD format
-        logsToShow = logsToShow.filter(log => {
-            const logDate = log.date || (log.timestamp?.toDate ? log.timestamp.toDate().toISOString().split('T')[0] : new Date(log.timestamp).toISOString().split('T')[0]);
-            return logDate === filterDateStr;
-        });
-    }
-    
-    // Filter by type
-    if (filterType) {
-        logsToShow = logsToShow.filter(log => log.type === filterType);
-    }
-    
-    // Filter by search term
-    if (searchTerm) {
-        logsToShow = logsToShow.filter(log => {
-            const ingredientName = (log.ingredientName || log.ingredientId || '').toLowerCase();
-            const orderId = (log.orderId || '').toLowerCase();
-            const menuItem = (log.menuItemName || '').toLowerCase();
-            return ingredientName.includes(searchTerm) || 
-                   orderId.includes(searchTerm) || 
-                   menuItem.includes(searchTerm);
-        });
-    }
-    
-    // Sort logs
-    logsToShow.sort((a, b) => {
-        let aVal, bVal;
-        
-        switch (ingredientLogsSortColumn) {
-            case 'timestamp':
-                aVal = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime();
-                bVal = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime();
-                break;
-            case 'ingredient':
-                aVal = (a.ingredientName || a.ingredientId || '').toLowerCase();
-                bVal = (b.ingredientName || b.ingredientId || '').toLowerCase();
-                break;
-            case 'type':
-                aVal = a.type || '';
-                bVal = b.type || '';
-                break;
-            case 'amount':
-                aVal = Number(a.amount || 0);
-                bVal = Number(b.amount || 0);
-                break;
-            default:
-                return 0;
-        }
-        
-        if (ingredientLogsSortColumn === 'timestamp' || ingredientLogsSortColumn === 'amount') {
-            return ingredientLogsSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-        } else {
-            if (aVal < bVal) return ingredientLogsSortDirection === 'asc' ? -1 : 1;
-            if (aVal > bVal) return ingredientLogsSortDirection === 'asc' ? 1 : -1;
-            return 0;
-        }
-    });
-    
-    // Update summary statistics
-    updateIngredientLogsSummary(logsToShow);
-    
-    if (logsToShow.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5" class="empty-table">No logs match the current filters.</td></tr>';
-        return;
-    }
-    
-    tableBody.innerHTML = logsToShow.map(log => {
-        const timestamp = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
-        const timeStr = timestamp.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        
-        const typeClass = log.type === 'received' ? 'text-success' : 'text-danger';
-        const typeIcon = log.type === 'received' ? 'fa-arrow-down' : 'fa-arrow-up';
-        const typeLabel = log.type === 'received' ? 'Received' : 'Used';
-        
-        const amount = Number(log.amount || 0);
-        const amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
-        
-        const orderInfo = log.orderId 
-            ? `Order: ${log.orderId}${log.menuItemName ? ` (${log.menuItemName})` : ''}`
-            : (log.menuItemName || '—');
-        
-        return `
-            <tr>
-                <td>${escapeHtml(timeStr)}</td>
-                <td>${escapeHtml(log.ingredientName || log.ingredientId || 'Unknown')}</td>
-                <td style="text-align: center;"><span class="${typeClass}"><i class="fas ${typeIcon}"></i> ${typeLabel}</span></td>
-                <td style="text-align: right; font-weight: 600;">${amountStr}</td>
-                <td>${escapeHtml(orderInfo)}</td>
-            </tr>
-        `;
-    }).join('');
-    
-    // Update sort icons
-    updateSortIcons();
-}
-
-// Update summary statistics
-function updateIngredientLogsSummary(logs) {
-    const summarySection = document.getElementById('ingredientLogsSummary');
-    const totalUsedEl = document.getElementById('totalUsed');
-    const totalReceivedEl = document.getElementById('totalReceived');
-    const netUsageEl = document.getElementById('netUsage');
-    
-    if (!summarySection) return;
-    
-    let totalUsed = 0;
-    let totalReceived = 0;
-    
-    logs.forEach(log => {
-        const amount = Number(log.amount || 0);
-        if (log.type === 'used') {
-            totalUsed += amount;
-        } else if (log.type === 'received') {
-            totalReceived += amount;
-        }
-    });
-    
-    const netUsage = totalReceived - totalUsed;
-    
-    if (totalUsedEl) totalUsedEl.textContent = totalUsed.toLocaleString('en-US', { maximumFractionDigits: 2 });
-    if (totalReceivedEl) totalReceivedEl.textContent = totalReceived.toLocaleString('en-US', { maximumFractionDigits: 2 });
-    if (netUsageEl) {
-        netUsageEl.textContent = netUsage.toLocaleString('en-US', { maximumFractionDigits: 2 });
-        netUsageEl.className = 'summary-value ' + (netUsage >= 0 ? 'positive' : 'negative');
-    }
-    
-    // Show summary if there are logs
-    summarySection.style.display = logs.length > 0 ? 'flex' : 'none';
-}
-
-// Sort ingredient logs
-function sortIngredientLogs(column) {
-    if (ingredientLogsSortColumn === column) {
-        // Toggle direction if same column
-        ingredientLogsSortDirection = ingredientLogsSortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-        // New column, default to desc for timestamp/amount, asc for text
-        ingredientLogsSortColumn = column;
-        ingredientLogsSortDirection = (column === 'timestamp' || column === 'amount') ? 'desc' : 'asc';
-    }
-    
-    // Get current filter values and re-render
-    const ingredientSelect = document.getElementById('ingredientLogFilter');
-    const dateInput = document.getElementById('ingredientLogDateFilter');
-    const typeSelect = document.getElementById('ingredientLogTypeFilter');
-    const searchInput = document.getElementById('ingredientLogSearch');
-    
-    const ingredientId = ingredientSelect ? ingredientSelect.value || null : null;
-    const filterDate = dateInput && dateInput.value ? dateInput.value : null;
-    const filterType = typeSelect ? typeSelect.value || null : null;
-    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : null;
-    
-    renderIngredientLogs(ingredientId, filterDate, filterType, searchTerm);
-}
-
-// Update sort icons
-function updateSortIcons() {
-    // Reset all icons
-    document.querySelectorAll('.sort-icon').forEach(icon => {
-        icon.className = 'fas fa-sort sort-icon';
-    });
-    
-    // Update active column icon
-    const activeIcon = document.getElementById(`sortIcon-${ingredientLogsSortColumn}`);
-    if (activeIcon) {
-        activeIcon.className = `fas fa-sort-${ingredientLogsSortDirection === 'asc' ? 'up' : 'down'} sort-icon active`;
-    }
-}
-
-// Update filter dropdown
-function updateIngredientLogFilter() {
-    const filterSelect = document.getElementById('ingredientLogFilter');
-    if (!filterSelect) return;
-    
-    const uniqueIngredients = [...new Map(ingredientLogsState.map(log => [
-        log.ingredientId,
-        { id: log.ingredientId, name: log.ingredientName || log.ingredientId }
-    ])).values()];
-    
-    const currentValue = filterSelect.value;
-    filterSelect.innerHTML = '<option value="">All Ingredients</option>' +
-        uniqueIngredients.map(ing => 
-            `<option value="${escapeHtml(ing.id)}">${escapeHtml(ing.name)}</option>`
-        ).join('');
-    
-    if (currentValue) {
-        filterSelect.value = currentValue;
-    }
-}
-
-// Filter logs by ingredient, date, type, and search term
-function filterIngredientLogs() {
-    const ingredientSelect = document.getElementById('ingredientLogFilter');
-    const dateInput = document.getElementById('ingredientLogDateFilter');
-    const typeSelect = document.getElementById('ingredientLogTypeFilter');
-    const searchInput = document.getElementById('ingredientLogSearch');
-    
-    const ingredientId = ingredientSelect ? ingredientSelect.value || null : null;
-    const filterDate = dateInput && dateInput.value ? dateInput.value : null;
-    const filterType = typeSelect ? typeSelect.value || null : null;
-    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : null;
-    
-    renderIngredientLogs(ingredientId, filterDate, filterType, searchTerm);
-}
-
-// Clear all filters
-function clearIngredientLogFilters() {
-    const ingredientSelect = document.getElementById('ingredientLogFilter');
-    const dateInput = document.getElementById('ingredientLogDateFilter');
-    const typeSelect = document.getElementById('ingredientLogTypeFilter');
-    const searchInput = document.getElementById('ingredientLogSearch');
-    
-    if (ingredientSelect) ingredientSelect.value = '';
-    if (dateInput) dateInput.value = '';
-    if (typeSelect) typeSelect.value = '';
-    if (searchInput) searchInput.value = '';
-    
-    filterIngredientLogs();
-}
-
-// Export logs
-async function exportIngredientLogs() {
-    try {
-        const logs = ingredientLogsState.length > 0 
-            ? ingredientLogsState 
-            : await IngredientLogStore.getLogs();
-        
-        if (!logs || logs.length === 0) {
-            showNotification('No logs available to export.', 'info');
-            return;
-        }
-        
-        const csv = [
-            ['Timestamp', 'Ingredient', 'Type', 'Amount', 'Order ID', 'Menu Item'].join(','),
-            ...logs.map(log => {
-                const timestamp = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
-                return [
-                    timestamp.toISOString(),
-                    `"${log.ingredientName || log.ingredientId || ''}"`,
-                    log.type || '',
-                    log.amount || 0,
-                    log.orderId || '',
-                    `"${log.menuItemName || ''}"`
-                ].join(',');
-            })
-        ].join('\n');
-        
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `ingredient_logs_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        
-        showNotification('Ingredient logs exported successfully!', 'success');
-    } catch (error) {
-        console.error('Export ingredient logs failed:', error);
-        showNotification(error.message || 'Unable to export ingredient logs.', 'error');
-    }
-}
-
-// Expose functions globally
-window.filterIngredientLogs = filterIngredientLogs;
-window.exportIngredientLogs = exportIngredientLogs;
-window.clearIngredientLogFilters = clearIngredientLogFilters;
-window.sortIngredientLogs = sortIngredientLogs;
 
 // Inventory functions removed - system is now recipe-based
 
@@ -9875,6 +9675,77 @@ function updateMenuListCategoryFilter() {
     });
 }
 
+// Render linked sauces in view mode (show only linked sauces or "No sauces")
+function renderMenuDetailLinkedSaucesView(menuItem) {
+    const container = document.getElementById('menuDetailIncludedSaucesContainer');
+    if (!container) return;
+    
+    // Debug logging
+    console.log('Product Detail - Rendering linked sauces view:', {
+        menuItemId: menuItem?.id,
+        hasIncludedSauces: !!menuItem?.includedSauces,
+        includedSaucesType: Array.isArray(menuItem?.includedSauces) ? 'array' : typeof menuItem?.includedSauces,
+        includedSaucesLength: Array.isArray(menuItem?.includedSauces) ? menuItem.includedSauces.length : 0,
+        includedSauces: menuItem?.includedSauces,
+        hasVariations: !!(menuItem?.variations && menuItem.variations.length > 0)
+    });
+    
+    // Get current linked sauces from menuItem
+    const linkedSauces = [];
+    if (menuItem && menuItem.includedSauces && Array.isArray(menuItem.includedSauces) && menuItem.includedSauces.length > 0) {
+        // Find the actual sauce items from menuState
+        menuItem.includedSauces.forEach(sauceRef => {
+            const sauceId = String(sauceRef.sauceId || sauceRef.menuId || sauceRef.id || '');
+            if (sauceId && sauceId !== 'undefined' && sauceId !== 'null') {
+                const sauceItem = menuState.find(item => 
+                    String(item.id) === sauceId || String(item.menuId || item.id) === sauceId
+                );
+                if (sauceItem) {
+                    linkedSauces.push({
+                        id: sauceItem.id,
+                        name: sauceItem.displayName || sauceItem.name,
+                        sauceName: sauceRef.sauceName || sauceItem.displayName || sauceItem.name
+                    });
+                } else {
+                    console.warn('Product Detail - Linked sauce not found in menuState:', {
+                        sauceId: sauceId,
+                        sauceRef: sauceRef
+                    });
+                }
+            }
+        });
+    }
+    
+    console.log('Product Detail - Found linked sauces:', linkedSauces);
+    
+    // Clear existing content
+    container.innerHTML = '';
+    
+    if (linkedSauces.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="text-align: center; color: #999; padding: 20px; font-style: italic;">No sauces</div>';
+        return;
+    }
+    
+    // Display linked sauces as a list with visual indicators
+    linkedSauces.forEach(sauce => {
+        const sauceItem = document.createElement('div');
+        sauceItem.style.cssText = 'display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 8px; background-color: #fff; border: 1px solid #e0e0e0; border-radius: 6px; border-left: 3px solid #7E2021;';
+        
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-link';
+        icon.style.cssText = 'color: #7E2021; font-size: 0.875rem; flex-shrink: 0;';
+        
+        const name = document.createElement('span');
+        name.textContent = sauce.name || sauce.sauceName;
+        name.style.cssText = 'flex: 1; font-size: 0.9375rem; color: #3d2817; font-weight: 500;';
+        
+        sauceItem.appendChild(icon);
+        sauceItem.appendChild(name);
+        container.appendChild(sauceItem);
+    });
+}
+
+// Render linked sauces in edit mode (show checkboxes for all available sauces)
 function updateMenuDetailIncludedSaucesCheckboxes(menuItem) {
     const container = document.getElementById('menuDetailIncludedSaucesContainer');
     if (!container) return;
@@ -9901,7 +9772,7 @@ function updateMenuDetailIncludedSaucesCheckboxes(menuItem) {
     
     // Get current selections from menuItem - handle multiple ID formats
     const currentSelections = new Set();
-    if (menuItem && menuItem.includedSauces && Array.isArray(menuItem.includedSauces)) {
+    if (menuItem && menuItem.includedSauces && Array.isArray(menuItem.includedSauces) && menuItem.includedSauces.length > 0) {
         menuItem.includedSauces.forEach(sauce => {
             // Try multiple ID fields and convert to string for consistent comparison
             const sauceId = String(sauce.sauceId || sauce.menuId || sauce.id || '');
@@ -9911,10 +9782,14 @@ function updateMenuDetailIncludedSaucesCheckboxes(menuItem) {
         });
     }
     
-    console.log('Product Detail - Current linked sauces:', {
+    console.log('Product Detail - Edit mode - Current linked sauces:', {
         menuItemId: menuItem?.id,
+        hasIncludedSauces: !!menuItem?.includedSauces,
+        includedSaucesType: Array.isArray(menuItem?.includedSauces) ? 'array' : typeof menuItem?.includedSauces,
+        includedSaucesLength: Array.isArray(menuItem?.includedSauces) ? menuItem.includedSauces.length : 0,
         includedSauces: menuItem?.includedSauces,
-        currentSelections: Array.from(currentSelections)
+        currentSelections: Array.from(currentSelections),
+        hasVariations: !!(menuItem?.variations && menuItem.variations.length > 0)
     });
     
     // Clear existing content
@@ -9925,44 +9800,127 @@ function updateMenuDetailIncludedSaucesCheckboxes(menuItem) {
         return;
     }
     
-    // Add checkbox for each sauce
+    // Create a grid container for sauce cards
+    const gridContainer = document.createElement('div');
+    gridContainer.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;';
+    
+    // Add clickable card for each sauce
     sauceItems.forEach(item => {
-        const checkboxWrapper = document.createElement('label');
-        checkboxWrapper.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; border-radius: 6px; margin-bottom: 6px; transition: background-color 0.2s ease;';
-        checkboxWrapper.onmouseover = function() {
-            this.style.backgroundColor = '#f0f0f0';
-        };
-        checkboxWrapper.onmouseout = function() {
-            this.style.backgroundColor = 'transparent';
-        };
-        
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.value = item.id;
-        checkbox.style.cssText = 'width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: #7E2021; flex-shrink: 0;';
-        
         // Check if this sauce is already selected - compare both id and menuId as strings
         const itemIdStr = String(item.id || '');
         const itemMenuIdStr = String(item.menuId || item.id || '');
-        const isChecked = currentSelections.has(itemIdStr) || currentSelections.has(itemMenuIdStr);
+        const isSelected = currentSelections.has(itemIdStr) || currentSelections.has(itemMenuIdStr);
         
-        if (isChecked) {
-            checkbox.checked = true;
-            console.log('Product Detail - Pre-checking sauce:', {
-                sauceName: item.displayName || item.name,
+        // Create sauce card
+        const sauceCard = document.createElement('div');
+        sauceCard.className = 'sauce-selection-card';
+        sauceCard.dataset.sauceId = item.id;
+        sauceCard.dataset.selected = isSelected ? 'true' : 'false';
+        
+        // Set card styles - green border for selected, red for unselected
+        const borderColor = isSelected ? '#28a745' : '#dc3545';
+        const borderWidth = '3px';
+        const backgroundColor = isSelected ? '#f0f9f4' : '#fff5f5';
+        
+        sauceCard.style.cssText = `
+            padding: 16px;
+            border: ${borderWidth} solid ${borderColor};
+            border-radius: 8px;
+            background-color: ${backgroundColor};
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            position: relative;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        // Add hover effect
+        sauceCard.onmouseenter = function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+        };
+        sauceCard.onmouseleave = function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = 'none';
+        };
+        
+        // Add selection icon
+        const icon = document.createElement('i');
+        icon.className = isSelected ? 'fas fa-check-circle' : 'fas fa-times-circle';
+        icon.style.cssText = `
+            font-size: 1.5rem;
+            color: ${isSelected ? '#28a745' : '#dc3545'};
+            margin-bottom: 8px;
+        `;
+        
+        // Add sauce name
+        const name = document.createElement('span');
+        name.textContent = item.displayName || item.name;
+        name.style.cssText = `
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #3d2817;
+            word-break: break-word;
+            line-height: 1.3;
+        `;
+        
+        // Add status text
+        const status = document.createElement('span');
+        status.textContent = isSelected ? 'Linked' : 'Not Linked';
+        status.style.cssText = `
+            font-size: 0.75rem;
+            color: ${isSelected ? '#28a745' : '#dc3545'};
+            margin-top: 4px;
+            font-weight: 500;
+        `;
+        
+        sauceCard.appendChild(icon);
+        sauceCard.appendChild(name);
+        sauceCard.appendChild(status);
+        
+        // Add click handler to toggle selection
+        sauceCard.addEventListener('click', function() {
+            const wasSelected = this.dataset.selected === 'true';
+            const newSelected = !wasSelected;
+            
+            // Update card state
+            this.dataset.selected = newSelected ? 'true' : 'false';
+            
+            // Update border and background
+            const newBorderColor = newSelected ? '#28a745' : '#dc3545';
+            const newBackgroundColor = newSelected ? '#f0f9f4' : '#fff5f5';
+            this.style.borderColor = newBorderColor;
+            this.style.backgroundColor = newBackgroundColor;
+            
+            // Update icon (find it within this card)
+            const cardIcon = this.querySelector('i');
+            if (cardIcon) {
+                cardIcon.className = newSelected ? 'fas fa-check-circle' : 'fas fa-times-circle';
+                cardIcon.style.color = newBorderColor;
+            }
+            
+            // Update status text (find it within this card)
+            const cardStatus = this.querySelectorAll('span')[1]; // Second span is the status
+            if (cardStatus) {
+                cardStatus.textContent = newSelected ? 'Linked' : 'Not Linked';
+                cardStatus.style.color = newBorderColor;
+            }
+            
+            console.log('Product Detail - Sauce selection toggled:', {
                 sauceId: item.id,
-                menuId: item.menuId
+                sauceName: item.displayName || item.name,
+                selected: newSelected
             });
-        }
+        });
         
-        const label = document.createElement('span');
-        label.textContent = item.displayName || item.name;
-        label.style.cssText = 'flex: 1; cursor: pointer; font-size: 0.9375rem; color: #333; line-height: 1.5;';
-        
-        checkboxWrapper.appendChild(checkbox);
-        checkboxWrapper.appendChild(label);
-        container.appendChild(checkboxWrapper);
+        gridContainer.appendChild(sauceCard);
     });
+    
+    container.appendChild(gridContainer);
 }
 
 function updateIncludedSaucesCheckboxes() {
@@ -10633,10 +10591,16 @@ function renderMenuDetailsCarousel() {
     if (descriptionInput) descriptionInput.value = item.description || '';
     if (allergensInput) allergensInput.value = item.allergens || '';
 
-    // Update Link Sauces checkboxes
+    // Update Link Sauces - show view mode or edit mode based on menuDetailEditing
     const includedSaucesContainer = document.getElementById('menuDetailIncludedSaucesContainer');
     if (includedSaucesContainer) {
-        updateMenuDetailIncludedSaucesCheckboxes(item);
+        if (menuDetailEditing) {
+            // Edit mode - show checkboxes
+            updateMenuDetailIncludedSaucesCheckboxes(item);
+        } else {
+            // View mode - show only linked sauces or "No sauces"
+            renderMenuDetailLinkedSaucesView(item);
+        }
     }
 
     // Ensure the Product Info tab is selected by default whenever we render
@@ -10986,14 +10950,16 @@ async function saveMenuDetailChanges() {
         // Ingredients section removed from Product Detail - keep existing ingredients
         const ingredients = currentItem.ingredients || [];
         
-        // Gather included sauces from checkboxes - same logic as Add Product form
+        // Gather included sauces from selection cards
         const includedSaucesContainer = document.getElementById('menuDetailIncludedSaucesContainer');
         const includedSauces = [];
         if (includedSaucesContainer) {
-            const checkedBoxes = includedSaucesContainer.querySelectorAll('input[type="checkbox"]:checked');
-            checkedBoxes.forEach(checkbox => {
-                if (checkbox.value && checkbox.value.trim()) {
-                    const sauceItem = menuState.find(item => item.id === checkbox.value);
+            // Find all selected sauce cards (cards with data-selected="true")
+            const selectedCards = includedSaucesContainer.querySelectorAll('.sauce-selection-card[data-selected="true"]');
+            selectedCards.forEach(card => {
+                const sauceId = card.dataset.sauceId;
+                if (sauceId && sauceId.trim()) {
+                    const sauceItem = menuState.find(item => item.id === sauceId);
                     if (sauceItem) {
                         includedSauces.push({
                             sauceId: sauceItem.id,
@@ -11041,6 +11007,28 @@ async function saveMenuDetailChanges() {
         
         menuState = await MenuStore.updateItem(currentItem.id, payload);
         renderMenuState();
+        
+        // Log admin activity for menu edit (from product detail)
+        const itemName = nameValue || currentItem.name || 'Menu item';
+        logAdminActivity({
+            action: 'menu_edit',
+            entityType: 'menu',
+            entityId: currentItem.id,
+            entityName: itemName,
+            description: `${itemName} was updated from product detail view (category: ${categoryValue}, price: PHP ${priceValue.toFixed(2)}).`,
+            metadata: {
+                category: categoryValue,
+                price: priceValue,
+                isActive: availabilityValue,
+                calories: caloriesValue,
+                hasLinkedSauces: includedSauces.length > 0,
+                linkedSaucesCount: includedSauces.length,
+                hasVariations: variations && variations.length > 0,
+                variationsCount: variations ? variations.length : 0,
+                imageChanged: !!menuDetailNewImageFile
+            }
+        });
+        
         showNotification('Menu item updated successfully.', 'success');
         setMenuDetailEditMode(false);
         return true;
@@ -11148,16 +11136,10 @@ function showMenuCatalogue() {
     const productDetailSection = document.getElementById('menu-product-detail');
     const promotionSection = document.getElementById('promotionDashboard');
     const bannerCatalogueSection = document.getElementById('bannerCatalogue');
-    const tableNumbersSection = document.getElementById('tableNumbers');
-    const ingredientLogsSection = document.getElementById('ingredient-logs');
-    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
     const catalogueGrid = document.getElementById('menu-catalogue-grid');
     const menuListTable = document.getElementById('menu-list');
     if (foodSection) foodSection.style.display = 'block';
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
-    if (tableNumbersSection) tableNumbersSection.style.display = 'none';
-    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
-    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'none';
     if (catalogueGrid) {
         catalogueGrid.style.display = 'block';
         catalogueGrid.style.visibility = 'visible';
@@ -11204,16 +11186,10 @@ async function showMenuList() {
     const productDetailSection = document.getElementById('menu-product-detail');
     const promotionSection = document.getElementById('promotionDashboard');
     const bannerCatalogueSection = document.getElementById('bannerCatalogue');
-    const tableNumbersSection = document.getElementById('tableNumbers');
-    const ingredientLogsSection = document.getElementById('ingredient-logs');
-    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
     const catalogueGrid = document.getElementById('menu-catalogue-grid');
     const menuListTable = document.getElementById('menu-list');
     if (foodSection) foodSection.style.display = 'block';
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
-    if (tableNumbersSection) tableNumbersSection.style.display = 'none';
-    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
-    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'none';
     if (catalogueGrid) {
         catalogueGrid.style.display = 'none';
         catalogueGrid.style.visibility = 'hidden';
@@ -11253,17 +11229,11 @@ function showAddProduct() {
     const productDetailSection = document.getElementById('menu-product-detail');
     const promotionSection = document.getElementById('promotionDashboard');
     const bannerCatalogueSection = document.getElementById('bannerCatalogue');
-    const tableNumbersSection = document.getElementById('tableNumbers');
-    const ingredientLogsSection = document.getElementById('ingredient-logs');
-    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
     if (foodSection) foodSection.style.display = 'none';
     if (addFoodSection) addFoodSection.style.display = 'block';
     if (productDetailSection) productDetailSection.style.display = 'none';
     if (promotionSection) promotionSection.style.display = 'none';
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
-    if (tableNumbersSection) tableNumbersSection.style.display = 'none';
-    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
-    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'none';
     menuDetailVisible = false;
     menuDetailEditing = false;
     renderMenuDetailsCarousel();
@@ -11287,16 +11257,10 @@ function showMenuProductDetail() {
     const productDetailSection = document.getElementById('menu-product-detail');
     const promotionSection = document.getElementById('promotionDashboard');
     const bannerCatalogueSection = document.getElementById('bannerCatalogue');
-    const tableNumbersSection = document.getElementById('tableNumbers');
-    const ingredientLogsSection = document.getElementById('ingredient-logs');
-    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
     if (foodSection) foodSection.style.display = 'none';
     if (promotionSection) promotionSection.style.display = 'none';
     if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
     if (addFoodSection) addFoodSection.style.display = 'none';
-    if (tableNumbersSection) tableNumbersSection.style.display = 'none';
-    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
-    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'none';
     if (productDetailSection) productDetailSection.style.display = 'block';
     if (!menuState || !menuState.length) {
         menuDetailVisible = false;
@@ -11400,17 +11364,37 @@ function setMenuDetailEditMode(isEditing) {
     if (changeImageRow) {
         changeImageRow.style.display = isEditing ? 'block' : 'none';
     }
-    // Show/hide Link Sauces section (only in edit mode)
+    // Show/hide Link Sauces section (show in both view and edit mode)
     const linkSaucesRow = document.getElementById('menuDetailLinkSaucesRow');
+    const linkSaucesHint = document.getElementById('menuDetailLinkSaucesHint');
     if (linkSaucesRow) {
-        linkSaucesRow.style.display = isEditing ? 'block' : 'none';
-        // If entering edit mode, update the Link Sauces checkboxes with current selections
-        if (isEditing && menuState && menuState.length && currentMenuDetailIndex >= 0) {
+        // Always show the linked sauces section
+        linkSaucesRow.style.display = 'block';
+        // Update hint text based on mode
+        if (linkSaucesHint) {
+            if (isEditing) {
+                linkSaucesHint.textContent = 'Select the sauces that come free with this meal. Customers can choose which ones they want when ordering. Changes will be saved when you click Save.';
+            } else {
+                linkSaucesHint.textContent = 'These are the sauces linked to this meal. Click Edit to modify the linked sauces.';
+            }
+        }
+        // Update the Link Sauces display whenever the section is shown
+        if (menuState && menuState.length && currentMenuDetailIndex >= 0) {
             const currentItem = menuState[currentMenuDetailIndex];
-            if (currentItem && typeof updateMenuDetailIncludedSaucesCheckboxes === 'function') {
+            if (currentItem) {
                 // Small delay to ensure the container is visible before updating
                 setTimeout(() => {
-                    updateMenuDetailIncludedSaucesCheckboxes(currentItem);
+                    if (isEditing) {
+                        // Edit mode - show checkboxes
+                        if (typeof updateMenuDetailIncludedSaucesCheckboxes === 'function') {
+                            updateMenuDetailIncludedSaucesCheckboxes(currentItem);
+                        }
+                    } else {
+                        // View mode - show only linked sauces
+                        if (typeof renderMenuDetailLinkedSaucesView === 'function') {
+                            renderMenuDetailLinkedSaucesView(currentItem);
+                        }
+                    }
                 }, 50);
             }
         }
@@ -11429,10 +11413,7 @@ async function toggleMenuDetailEdit() {
     // Enter edit mode
     if (!menuDetailEditing) {
         setMenuDetailEditMode(true);
-        // Update Link Sauces checkboxes when entering edit mode
-        if (typeof updateMenuDetailIncludedSaucesCheckboxes === 'function') {
-            updateMenuDetailIncludedSaucesCheckboxes(currentItem);
-        }
+        // setMenuDetailEditMode will handle updating the linked sauces display
         return;
     }
 
@@ -14302,6 +14283,21 @@ async function verifyId(customerId, imageUrl) {
             idVerifiedBy: verifiedBy
         });
         
+        // Log admin activity for ID verification
+        if (typeof logAdminActivity === 'function') {
+            const displayName = customerData.fullName || customerData.name || customerData.email || customerId;
+            logAdminActivity({
+                action: 'id_verify',
+                entityType: 'customer',
+                entityId: customerId,
+                entityName: displayName || customerId,
+                description: `Senior/PWD ID for ${displayName || customerId} was verified.`,
+                metadata: {
+                    verifiedBy
+                }
+            });
+        }
+
         showNotification('ID verified successfully', 'success');
         
         // Refresh the customer data and update the tab/list so badges update
@@ -14365,6 +14361,21 @@ async function confirmId(customerId, imageUrl) {
             idVerifiedBy: verifiedBy
         });
         
+        // Log admin activity for ID confirmation
+        if (typeof logAdminActivity === 'function') {
+            const displayName = customerData.fullName || customerData.name || customerData.email || customerId;
+            logAdminActivity({
+                action: 'id_confirm',
+                entityType: 'customer',
+                entityId: customerId,
+                entityName: displayName || customerId,
+                description: `Senior/PWD ID for ${displayName || customerId} was confirmed (no discount).`,
+                metadata: {
+                    verifiedBy
+                }
+            });
+        }
+
         showNotification('ID confirmed successfully', 'success');
         
         // Refresh the customer data and update the tab/list so badges update
@@ -14546,6 +14557,22 @@ async function confirmIdDecline() {
         };
         
         await fns.updateDoc(customerDocRef, updateData);
+
+        // Log admin activity for ID decline
+        if (typeof logAdminActivity === 'function') {
+            const displayName = customerData.fullName || customerData.name || customerData.email || currentDeclineCustomerId;
+            logAdminActivity({
+                action: 'id_decline',
+                entityType: 'customer',
+                entityId: currentDeclineCustomerId,
+                entityName: displayName || currentDeclineCustomerId,
+                description: `Senior/PWD ID for ${displayName || currentDeclineCustomerId} was declined. Reason: ${declineReason}`,
+                metadata: {
+                    verifiedBy,
+                    declineReason
+                }
+            });
+        }
         
         showNotification('ID declined and image deleted', 'success');
         closeIdDeclineModal();
@@ -15143,6 +15170,24 @@ async function handleMenuEditSubmit(event) {
 
         menuState = await MenuStore.updateItem(currentMenuEditItem.id, payload);
         renderMenuState();
+        
+        // Log admin activity for menu edit
+        logAdminActivity({
+            action: 'menu_edit',
+            entityType: 'menu',
+            entityId: currentMenuEditItem.id,
+            entityName: formattedName,
+            description: `${formattedName} was updated (category: ${categoryValue}, price: PHP ${priceValue.toFixed(2)}).`,
+            metadata: {
+                category: categoryValue,
+                price: priceValue,
+                quantity: quantityValue,
+                calories: caloriesValue,
+                hasLinkedSauces: includedSauces.length > 0,
+                linkedSaucesCount: includedSauces.length
+            }
+        });
+        
         showNotification(`${formattedName} updated successfully.`, 'success');
         closeMenuItemModal();
     } catch (error) {
@@ -15370,7 +15415,14 @@ function addUser() {
 }
 
 // Activity logs functions (adminLogs collection)
-async function loadAndRenderActivityLogs() {
+function formatDateKey(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+async function loadAndRenderActivityLogs(selectedDateStr = null) {
     const container = document.getElementById('activityLogsContainer');
     const loadingEl = document.getElementById('activityLogsLoading');
     const emptyEl = document.getElementById('activityLogsEmpty');
@@ -15422,22 +15474,28 @@ async function loadAndRenderActivityLogs() {
 
         loadingEl.style.display = 'none';
 
-        if (logs.length === 0) {
-            emptyEl.style.display = 'block';
-            return;
-        }
-
-        // Group logs by date
         const logsByDate = {};
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
 
+        const selectedKey = selectedDateStr && selectedDateStr.trim()
+            ? selectedDateStr.trim()
+            : null;
+
         logs.forEach(log => {
             const createdAt = log.createdAt?.toDate?.() || null;
             if (!createdAt) {
                 return;
+            }
+
+            // Optional date filter (YYYY-MM-DD)
+            if (selectedKey) {
+                const createdKey = formatDateKey(createdAt);
+                if (createdKey !== selectedKey) {
+                    return;
+                }
             }
 
             const dateKey = createdAt.toDateString();
@@ -15468,6 +15526,27 @@ async function loadAndRenderActivityLogs() {
 
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+        const summaryEl = document.getElementById('activityLogsSummaryText');
+
+        if (dateKeys.length === 0) {
+            emptyEl.style.display = 'block';
+            if (summaryEl) {
+                summaryEl.textContent = selectedKey
+                    ? `No activity recorded for ${selectedKey}.`
+                    : 'No recent admin activity.';
+            }
+            window.__adminLogsLastGroupedByDate = {};
+            return;
+        }
+
+        if (summaryEl) {
+            if (selectedKey) {
+                summaryEl.textContent = `Showing activity for ${selectedKey} (${logs.length} entr${logs.length === 1 ? 'y' : 'ies'})`;
+            } else {
+                summaryEl.textContent = `Showing recent admin activity (${logs.length} entr${logs.length === 1 ? 'y' : 'ies'})`;
+            }
+        }
 
         dateKeys.forEach(dateKey => {
             const date = new Date(dateKey);
@@ -15538,6 +15617,9 @@ async function loadAndRenderActivityLogs() {
             container.appendChild(logGroup);
         });
         
+        // Store latest grouping globally for PDF export
+        window.__adminLogsLastGroupedByDate = logsByDate;
+
     } catch (error) {
         console.error('Error loading activity logs:', error);
         loadingEl.style.display = 'none';
@@ -15547,6 +15629,144 @@ async function loadAndRenderActivityLogs() {
         </div>`;
         showNotification('Failed to load activity logs.', 'error');
     }
+}
+
+// Apply/clear date filter for activity logs
+function applyActivityLogsDateFilter() {
+    const input = document.getElementById('activityLogsDate');
+    const value = input ? (input.value || '').trim() : '';
+    loadAndRenderActivityLogs(value || null);
+}
+
+function clearActivityLogsDateFilter() {
+    const input = document.getElementById('activityLogsDate');
+    if (input) {
+        input.value = '';
+    }
+    loadAndRenderActivityLogs(null);
+}
+
+// Generate a printable view (PDF via browser print) for selected date's logs
+async function generateActivityLogsPdfForSelectedDate() {
+    const input = document.getElementById('activityLogsDate');
+    const selectedDateStr = input ? (input.value || '').trim() : '';
+
+    // Ensure logs are loaded for the selected date
+    await loadAndRenderActivityLogs(selectedDateStr || null);
+
+    const grouped = window.__adminLogsLastGroupedByDate || {};
+    const dateKeys = Object.keys(grouped);
+    if (dateKeys.length === 0) {
+        alert('No activity logs found for the selected date.');
+        return;
+    }
+
+    // When a filter is applied there should be only one date, but handle generically
+    const targetDateKey = dateKeys[0];
+    const dateLogs = grouped[targetDateKey];
+    if (!dateLogs || !dateLogs.length) {
+        alert('No activity logs found for the selected date.');
+        return;
+    }
+
+    const date = new Date(targetDateKey);
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const fullDate = `${dayNames[date.getDay()]}, ${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+
+    let rowsHtml = '';
+    dateLogs
+        .slice() // copy
+        .sort((a, b) => a.time - b.time) // chronological for PDF
+        .forEach(log => {
+            const timeStr = log.time.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+            const prettyAction = String(log.action || '')
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, c => c.toUpperCase()) || 'Activity';
+            const detailText = log.description || '';
+            const roleSuffix = log.staffRole ? ` (${log.staffRole})` : '';
+
+            rowsHtml += `
+                <tr>
+                    <td>${timeStr}</td>
+                    <td>${escapeHtml(log.staffName || 'Unknown admin')}${roleSuffix ? escapeHtml(roleSuffix) : ''}</td>
+                    <td>${escapeHtml(prettyAction)}</td>
+                    <td>${escapeHtml(detailText)}</td>
+                </tr>
+            `;
+        });
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert('Pop-up blocked. Please allow pop-ups to download the PDF.');
+        return;
+    }
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Activity Logs - ${fullDate}</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    padding: 20px;
+                    font-size: 12px;
+                }
+                h1 {
+                    font-size: 20px;
+                    margin-bottom: 4px;
+                }
+                h2 {
+                    font-size: 14px;
+                    margin-top: 0;
+                    color: #555;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                }
+                th, td {
+                    border: 1px solid #ccc;
+                    padding: 6px 8px;
+                    text-align: left;
+                    vertical-align: top;
+                }
+                th {
+                    background-color: #f2f2f2;
+                    font-weight: 600;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Pablo's Peri Peri - Admin Activity Logs</h1>
+            <h2>${fullDate}</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Admin</th>
+                        <th>Action</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    // Let the browser's print dialog handle "Save as PDF"
+    printWindow.focus();
+    printWindow.print();
 }
 
 function toggleReviewOptions(reviewId) {
@@ -15630,16 +15850,6 @@ document.addEventListener('DOMContentLoaded', function() {
             promotionForm.addEventListener('submit', handlePromotionFormSubmit);
             promotionForm.dataset.bound = 'true';
         }
-        // Table number modal click-outside-to-close
-        const tableNumberModal = document.getElementById('tableNumberModal');
-        if (tableNumberModal && !tableNumberModal.dataset.bound) {
-            tableNumberModal.addEventListener('click', event => {
-                if (event.target === tableNumberModal) {
-                    closeTableNumberModal();
-                }
-            });
-            tableNumberModal.dataset.bound = 'true';
-        }
         const deleteBtn = document.getElementById('menuEditDeleteBtn');
         if (deleteBtn && !deleteBtn.dataset.bound) {
             deleteBtn.addEventListener('click', handleMenuItemDelete);
@@ -15680,6 +15890,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         (hash === '#menu-product-detail' && linkHash === '#product-detail') ||
                         (isProductDetailVisible && linkHash === '#menu-product-detail')) {
                         link.classList.add('active');
+                        // Ensure the parent submenu stays open for the active link
+                        const submenu = link.closest('.menu-nav-submenu');
+                        if (submenu) {
+                            const navItem = submenu.closest('.menu-nav-dropdown');
+                            const icon = navItem ? navItem.querySelector('.menu-toggle-icon') : null;
+                            submenu.classList.add('show');
+                            if (navItem) navItem.classList.add('active');
+                            if (icon) icon.classList.add('open');
+                        }
                     }
                 }
             });
@@ -15712,10 +15931,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 showCreateBanner();
             } else if (hash === '#bannerCatalogue') {
                 showBannerCatalogue();
-            } else if (hash === '#tableNumbers') {
-                showTableNumbers();
-            } else if (hash === '#ingredient-logs') {
-                showIngredientLogs();
             } else if (hash === '#menu-product-detail' || hash === '#product-detail') {
                 showMenuProductDetail();
             } else {
@@ -15729,12 +15944,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     const foodSection = document.getElementById('foodSection');
                     const addFoodSection = document.getElementById('addFoodDashboard');
                     const promotionSection = document.getElementById('promotionDashboard');
-                    const ingredientLogsSection = document.getElementById('ingredient-logs');
                     if (foodSection) foodSection.style.display = 'none';
                     if (addFoodSection) addFoodSection.style.display = 'none';
                     if (productDetailSection) productDetailSection.style.display = 'none';
                     if (promotionSection) promotionSection.style.display = 'none';
-                    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
                     menuDetailVisible = false;
                     menuDetailEditing = false;
                     // Reset to base title if no section is shown
@@ -16134,6 +16347,11 @@ window.updateMenuQuantity = updateMenuQuantity;
 window.updateMenuVariationQuantity = updateMenuVariationQuantity;
 
 function showCreateBanner() {
+    // Initialize the "No time limit" toggle state
+    setTimeout(() => {
+        togglePromoDateInputs();
+    }, 100);
+    
     // Show create banner form, hide other sections
     const foodSection = document.getElementById('foodSection');
     const addFoodSection = document.getElementById('addFoodDashboard');
@@ -16194,101 +16412,107 @@ function showBannerCatalogue() {
     }
 }
 
-// Render banner catalogue
+// Helper: format Date for datetime-local input (YYYY-MM-DDTHH:MM)
+function formatDateForDatetimeLocal(date) {
+    if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// Render banner catalogue - rebuilt to be simple and deterministic
 async function renderBannerCatalogue() {
     const loadingEl = document.getElementById('bannerCatalogueLoading');
     const emptyEl = document.getElementById('bannerCatalogueEmpty');
     const gridEl = document.getElementById('bannerCatalogueGrid');
-    
+
     if (!loadingEl || !emptyEl || !gridEl) return;
-    
+
+    // Initial state: show loading, hide content/empty
     loadingEl.style.display = 'block';
     emptyEl.style.display = 'none';
     gridEl.style.display = 'none';
-    gridEl.innerHTML = '';
-    
+    gridEl.innerHTML = ''; // hard reset
+
     try {
         if (!isFirestoreReady()) {
             await waitForFirebaseReady();
         }
-        
+
         const fns = window.firestoreFunctions;
         const db = window.db;
         const promotionsRef = fns.collection(db, 'promotionList');
         const snapshot = await fns.getDocs(promotionsRef);
-        
-        const banners = [];
-        snapshot.forEach(doc => {
-            banners.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
-        
+
+        // Build a plain array of banners, one per Firestore document
+        let banners = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
         loadingEl.style.display = 'none';
-        
-        if (banners.length === 0) {
+
+        if (!banners.length) {
             emptyEl.style.display = 'block';
             return;
         }
-        
-        gridEl.style.display = 'grid';
-        
-        // Sort by creation date (newest first)
+
+        // Sort newest first, but otherwise keep every document
         banners.sort((a, b) => {
             const aDate = a.createdAt?.toDate?.() || new Date(0);
             const bDate = b.createdAt?.toDate?.() || new Date(0);
             return bDate - aDate;
         });
-        
-        banners.forEach(banner => {
-            const bannerCard = document.createElement('div');
-            bannerCard.className = 'banner-card';
-            bannerCard.style.cssText = 'background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);';
-            
-            // Format dates
+
+        // Render: one card for each banner document, using a single innerHTML assignment
+        const now = new Date();
+        const html = banners.map(banner => {
             const startDate = banner.startDate?.toDate?.() || null;
             const endDate = banner.endDate?.toDate?.() || null;
-            const startDateStr = startDate ? startDate.toLocaleDateString() + ' ' + startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—';
-            const endDateStr = endDate ? endDate.toLocaleDateString() + ' ' + endDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—';
-            
-            // Check if active
-            const now = new Date();
-            const isActive = startDate && endDate && now >= startDate && now <= endDate;
-            
-            bannerCard.innerHTML = `
-                <div class="banner-image" style="width: 100%; height: 150px; overflow: hidden; background: #f5f5f5;">
-                    <img src="${banner.imageUrl || ''}" alt="${banner.title || 'Banner'}" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="banner-content" style="padding: 16px;">
-                    <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #333;">${escapeHtml(banner.title || 'Untitled Banner')}</h3>
-                    <p style="margin: 0 0 12px 0; color: #666; font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(banner.description || '')}</p>
-                    <div style="margin-bottom: 12px;">
-                        <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; background: ${isActive ? '#d4edda' : '#f8d7da'}; color: ${isActive ? '#155724' : '#721c24'};">
-                            ${isActive ? 'Active' : 'Inactive'}
-                        </span>
-                        <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; background: #e7f3ff; color: #004085; margin-left: 8px;">
-                            ${escapeHtml(banner.placement || 'banner')}
-                        </span>
+            const noTimeLimit = banner.noTimeLimit === true;
+            const startDateStr = startDate
+                ? startDate.toLocaleDateString() + ' ' +
+                  startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '—';
+            const endDateStr = endDate
+                ? endDate.toLocaleDateString() + ' ' +
+                  endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '—';
+
+            const isActive = noTimeLimit || (startDate && endDate && now >= startDate && now <= endDate);
+
+            return `
+                <div class="banner-card" style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <div class="banner-image" style="width: 100%; height: 150px; overflow: hidden; background: #f5f5f5;">
+                        <img src="${banner.imageUrl || ''}" alt="${escapeHtml(banner.title || 'Banner')}" style="width: 100%; height: 100%; object-fit: cover;">
                     </div>
-                    <div style="font-size: 12px; color: #6c757d; margin-bottom: 12px;">
-                        <div><strong>Start:</strong> ${startDateStr}</div>
-                        <div><strong>End:</strong> ${endDateStr}</div>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-secondary" style="flex: 1; padding: 8px;" onclick="editBanner('${banner.id}')">
-                            <i class="fas fa-edit"></i> Edit
-                        </button>
-                        <button class="btn btn-danger" style="flex: 1; padding: 8px;" onclick="deleteBanner('${banner.id}', '${escapeHtml(banner.title || 'Banner')}')">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
+                    <div class="banner-content" style="padding: 16px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #333;">${escapeHtml(banner.title || 'Untitled Banner')}</h3>
+                        <div style="margin-bottom: 12px;">
+                            <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; background: ${isActive ? '#d4edda' : '#f8d7da'}; color: ${isActive ? '#155724' : '#721c24'};">
+                                ${isActive ? 'Active' : 'Inactive'}
+                            </span>
+                            <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; background: #e7f3ff; color: #004085; margin-left: 8px;">
+                                ${escapeHtml(banner.placement || 'banner')}
+                            </span>
+                        </div>
+                        <div style="font-size: 12px; color: #6c757d; margin-bottom: 12px;">
+                            ${banner.noTimeLimit ? '<div><strong>Time Limit:</strong> No time limit</div>' : `<div><strong>Start:</strong> ${startDateStr}</div><div><strong>End:</strong> ${endDateStr}</div>`}
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" style="flex: 1; padding: 8px;" onclick="editBanner('${banner.id}')">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-danger" style="flex: 1; padding: 8px;" onclick="deleteBanner('${banner.id}', '${escapeHtml(banner.title || 'Banner')}')">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
-            
-            gridEl.appendChild(bannerCard);
-        });
-        
+        }).join('');
+
+        gridEl.innerHTML = html;
+        gridEl.style.display = 'grid';
     } catch (error) {
         console.error('Error loading banners:', error);
         loadingEl.style.display = 'none';
@@ -16300,9 +16524,99 @@ async function renderBannerCatalogue() {
     }
 }
 
-// Placeholder functions for edit/delete (you can implement these later)
-function editBanner(bannerId) {
-    showNotification('Edit banner functionality coming soon.', 'info');
+// Edit an existing banner: load it into the create banner form
+async function editBanner(bannerId) {
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+
+        const fns = window.firestoreFunctions;
+        const db = window.db;
+        if (!fns || !db) {
+            showNotification('Firebase is not ready. Please try again.', 'error');
+            return;
+        }
+
+        const bannerRef = fns.doc(db, 'promotionList', bannerId);
+        const snapshot = await fns.getDoc(bannerRef);
+
+        if (!snapshot.exists()) {
+            showNotification('Banner not found. It may have been deleted.', 'error');
+            return;
+        }
+
+        const banner = snapshot.data() || {};
+
+        // Set editing state
+        editingPromotionId = bannerId;
+        existingPromoImageUrl = banner.imageUrl || null;
+        uploadedPromoImageFile = null;
+        uploadedPromoImageDataUrl = null;
+
+        // Show the create/edit banner form
+        showCreateBanner();
+
+        const form = document.getElementById('promotionForm');
+        if (form) {
+            const titleInput = form.querySelector('#promoTitle');
+            const descInput = form.querySelector('#promoDescription');
+            const placementSelect = form.querySelector('#promoPlacement');
+            const startInput = form.querySelector('#promoStartDate');
+            const endInput = form.querySelector('#promoEndDate');
+            const submitBtn = form.querySelector('button[type="submit"]');
+
+            if (titleInput) titleInput.value = banner.title || '';
+            if (descInput) descInput.value = banner.description || '';
+            if (placementSelect && banner.placement) placementSelect.value = banner.placement;
+
+            if (startInput && banner.startDate && typeof banner.startDate.toDate === 'function') {
+                const d = banner.startDate.toDate();
+                startInput.value = formatDateForDatetimeLocal(d);
+            }
+
+            if (endInput && banner.endDate && typeof banner.endDate.toDate === 'function') {
+                const d = banner.endDate.toDate();
+                endInput.value = formatDateForDatetimeLocal(d);
+            }
+
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="fas fa-save"></i> Update Promotion';
+            }
+        }
+
+        // Update image preview but do not force a new upload
+        const imagePreview = document.getElementById('promoImagePreview');
+        const fileInput = document.getElementById('promoImageFileInput');
+        if (imagePreview) {
+            if (existingPromoImageUrl) {
+                imagePreview.innerHTML = `<img src="${escapeHtml(existingPromoImageUrl)}" alt="Promo Image" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px; cursor: pointer; background: #f8f9fa;" onclick="document.getElementById('promoImageFileInput').click()">`;
+                imagePreview.setAttribute('onclick', 'document.getElementById("promoImageFileInput").click()');
+                imagePreview.style.cursor = 'pointer';
+                imagePreview.setAttribute('title', 'Click to change image');
+            } else {
+                // Fall back to default placeholder
+                imagePreview.innerHTML = `
+                    <div class="upload-placeholder">
+                        <i class="fas fa-image"></i>
+                        <span>Click to Select Promo Image</span>
+                    </div>
+                `;
+                imagePreview.setAttribute('onclick', 'document.getElementById("promoImageFileInput").click()');
+                imagePreview.style.cursor = 'pointer';
+                imagePreview.setAttribute('title', 'Click to select image');
+            }
+        }
+
+        if (fileInput) {
+            fileInput.value = '';
+        }
+
+        showNotification('Banner loaded. Update the details and click "Update Promotion".', 'info');
+    } catch (error) {
+        console.error('Error loading banner for edit:', error);
+        showNotification('Failed to load banner for edit. Please try again.', 'error');
+    }
 }
 
 async function deleteBanner(bannerId, bannerTitle) {
@@ -16328,430 +16642,34 @@ async function deleteBanner(bannerId, bannerTitle) {
     }
 }
 
-// ========== TABLE NUMBER MANAGEMENT FUNCTIONS ==========
-
-// Generate UUID v4
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
-// Show table numbers section
-function showIngredientLogs() {
-    // Hide other sections
-    const foodSection = document.getElementById('foodSection');
-    const addFoodSection = document.getElementById('addFoodDashboard');
-    const productDetailSection = document.getElementById('menu-product-detail');
-    const promotionSection = document.getElementById('promotionDashboard');
-    const bannerCatalogueSection = document.getElementById('bannerCatalogue');
-    const menuListWrapper = document.getElementById('menu-list');
-    const menuCatalogueGrid = document.getElementById('menu-catalogue-grid');
-    const tableNumbersSection = document.getElementById('tableNumbers');
-    const ingredientLogsSection = document.getElementById('ingredient-logs');
-    const ingredientLogsTableWrapper = document.getElementById('ingredient-logs-table-wrapper');
-    
-    if (foodSection) foodSection.style.display = 'none';
-    if (addFoodSection) addFoodSection.style.display = 'none';
-    if (productDetailSection) productDetailSection.style.display = 'none';
-    if (promotionSection) promotionSection.style.display = 'none';
-    if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
-    if (menuListWrapper) menuListWrapper.style.display = 'none';
-    if (menuCatalogueGrid) menuCatalogueGrid.style.display = 'none';
-    if (tableNumbersSection) tableNumbersSection.style.display = 'none';
-    if (ingredientLogsSection) ingredientLogsSection.style.display = 'block';
-    if (ingredientLogsTableWrapper) ingredientLogsTableWrapper.style.display = 'block';
-    
-    menuDetailVisible = false;
-    menuDetailEditing = false;
-    updatePageTitle('Menu', 'Ingredient Logs');
-    
-    // Scroll to top of main content to show the table
-    const mainContent = document.querySelector('.main-content');
-    if (mainContent) {
-        mainContent.scrollTop = 0;
-    }
-    
-    // Initialize ingredient logs when section is shown
-    if (typeof initIngredientLogs === 'function') {
-        setTimeout(() => initIngredientLogs(), 100);
-    }
-    
-    // Update hash
-    const currentHash = window.location.hash;
-    if (currentHash !== '#ingredient-logs') {
-        if (history.replaceState) {
-            history.replaceState(null, null, '#ingredient-logs');
-        } else {
-            window.location.hash = '#ingredient-logs';
-        }
-    }
-    
-    // Highlight the Ingredient Logs dropdown item
-    setTimeout(() => {
-        if (window.highlightActiveMenuItem) {
-            window.highlightActiveMenuItem();
-        }
-    }, 50);
-}
-
-function showTableNumbers() {
-    // Hide other sections
-    const foodSection = document.getElementById('foodSection');
-    const addFoodSection = document.getElementById('addFoodDashboard');
-    const productDetailSection = document.getElementById('menu-product-detail');
-    const promotionSection = document.getElementById('promotionDashboard');
-    const bannerCatalogueSection = document.getElementById('bannerCatalogue');
-    const menuListWrapper = document.getElementById('menu-list');
-    const menuCatalogueGrid = document.getElementById('menu-catalogue-grid');
-    const tableNumbersSection = document.getElementById('tableNumbers');
-    const ingredientLogsSection = document.getElementById('ingredient-logs');
-    
-    if (foodSection) foodSection.style.display = 'none';
-    if (addFoodSection) addFoodSection.style.display = 'none';
-    if (productDetailSection) productDetailSection.style.display = 'none';
-    if (promotionSection) promotionSection.style.display = 'none';
-    if (bannerCatalogueSection) bannerCatalogueSection.style.display = 'none';
-    if (menuListWrapper) menuListWrapper.style.display = 'none';
-    if (menuCatalogueGrid) menuCatalogueGrid.style.display = 'none';
-    if (ingredientLogsSection) ingredientLogsSection.style.display = 'none';
-    if (tableNumbersSection) tableNumbersSection.style.display = 'block';
-    
-    menuDetailVisible = false;
-    menuDetailEditing = false;
-    renderMenuDetailsCarousel();
-    updatePageTitle('Menu', 'Table Number');
-    
-    // Load and render table numbers
-    renderTableNumbers();
-    
-    const currentHash = window.location.hash;
-    if (currentHash !== '#tableNumbers') {
-        if (history.replaceState) {
-            history.replaceState(null, null, '#tableNumbers');
-        } else {
-            window.location.hash = '#tableNumbers';
-        }
-    }
-}
-
-// Render table numbers
-async function renderTableNumbers() {
-    const loadingEl = document.getElementById('tableNumberLoading');
-    const emptyEl = document.getElementById('tableNumberEmpty');
-    const gridEl = document.getElementById('tableNumberGrid');
-    
-    if (!loadingEl || !emptyEl || !gridEl) return;
-    
-    loadingEl.style.display = 'block';
-    emptyEl.style.display = 'none';
-    gridEl.style.display = 'none';
-    gridEl.innerHTML = '';
-    
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-        
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        const tableNumbersRef = fns.collection(db, 'TableNumber');
-        const snapshot = await fns.getDocs(tableNumbersRef);
-        
-        const tableNumbers = [];
-        snapshot.forEach(doc => {
-            tableNumbers.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
-        
-        loadingEl.style.display = 'none';
-        
-        if (tableNumbers.length === 0) {
-            emptyEl.style.display = 'block';
-            return;
-        }
-        
-        gridEl.style.display = 'grid';
-        
-        // Sort by creation date (newest first)
-        tableNumbers.sort((a, b) => {
-            const aDate = a.createdAt?.toDate?.() || new Date(0);
-            const bDate = b.createdAt?.toDate?.() || new Date(0);
-            return bDate - aDate;
-        });
-        
-        tableNumbers.forEach(table => {
-            const tableCard = document.createElement('div');
-            tableCard.className = 'table-number-card';
-            tableCard.style.cssText = 'background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 2px solid ' + (table.isActive !== false ? '#7E2021' : '#ccc') + ';';
-            
-            const createdAt = table.createdAt?.toDate?.() || null;
-            const createdAtStr = createdAt ? createdAt.toLocaleDateString() + ' ' + createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—';
-            
-            tableCard.innerHTML = `
-                <div class="table-number-header" style="padding: 16px; background: ${table.isActive !== false ? '#7E2021' : '#6c757d'}; color: white;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; font-size: 20px; font-weight: 600;">
-                            <i class="fas fa-table" style="margin-right: 8px;"></i>
-                            ${escapeHtml(table.name || 'Unnamed Table')}
-                        </h3>
-                        <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; background: ${table.isActive !== false ? '#d4edda' : '#f8d7da'}; color: ${table.isActive !== false ? '#155724' : '#721c24'};">
-                            ${table.isActive !== false ? 'Active' : 'Inactive'}
-                        </span>
-                    </div>
-                </div>
-                <div class="table-number-content" style="padding: 16px;">
-                    <div style="margin-bottom: 12px;">
-                        <div style="font-size: 12px; color: #6c757d; margin-bottom: 4px;">Unique Code:</div>
-                        <div style="font-family: monospace; font-size: 13px; color: #333; background: #f8f9fa; padding: 8px; border-radius: 4px; word-break: break-all;">
-                            ${escapeHtml(table.code || '—')}
-                        </div>
-                    </div>
-                    ${table.description ? `
-                        <div style="margin-bottom: 12px;">
-                            <div style="font-size: 12px; color: #6c757d; margin-bottom: 4px;">Description:</div>
-                            <div style="font-size: 14px; color: #333; line-height: 1.4;">
-                                ${escapeHtml(table.description)}
-                            </div>
-                        </div>
-                    ` : ''}
-                    <div style="font-size: 12px; color: #6c757d; margin-bottom: 12px;">
-                        <div><strong>Created:</strong> ${createdAtStr}</div>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-secondary" style="flex: 1; padding: 8px; background-color: #3d2817; color: #f6c056; border-color: #3d2817;" onclick="editTableNumber('${table.id}')">
-                            <i class="fas fa-edit"></i> Edit
-                        </button>
-                        <button class="btn btn-danger" style="flex: 1; padding: 8px;" onclick="deleteTableNumber('${table.id}', '${escapeHtml(table.name || 'Table')}')">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
-                    </div>
-                </div>
-            `;
-            
-            gridEl.appendChild(tableCard);
-        });
-        
-    } catch (error) {
-        console.error('Error loading table numbers:', error);
-        loadingEl.style.display = 'none';
-        gridEl.innerHTML = `<div style="text-align: center; padding: 40px; color: #dc3545;">
-            <i class="fas fa-exclamation-triangle" style="font-size: 2em; margin-bottom: 16px;"></i>
-            <p>Error loading table numbers: ${error.message}</p>
-        </div>`;
-        showNotification('Failed to load table numbers.', 'error');
-    }
-}
-
-// Show create table number form
-function showCreateTableNumberForm() {
-    const modal = document.getElementById('tableNumberModal');
-    const form = document.getElementById('tableNumberForm');
-    const title = document.getElementById('tableNumberModalTitle');
-    const nameInput = document.getElementById('tableNumberName');
-    const codeInput = document.getElementById('tableNumberCode');
-    const descriptionInput = document.getElementById('tableNumberDescription');
-    const isActiveInput = document.getElementById('tableNumberIsActive');
-    const idInput = document.getElementById('tableNumberId');
-    
-    if (!modal || !form) return;
-    
-    // Reset form
-    form.reset();
-    if (title) title.textContent = 'Create Table Number';
-    if (nameInput) nameInput.value = '';
-    if (codeInput) {
-        codeInput.value = generateUUID();
-    }
-    if (descriptionInput) descriptionInput.value = '';
-    if (isActiveInput) isActiveInput.checked = true;
-    if (idInput) idInput.value = '';
-    
-    modal.style.display = 'block';
-    modal.setAttribute('aria-hidden', 'false');
-    document.body.classList.add('modal-open');
-}
-
-// Close table number modal
-function closeTableNumberModal() {
-    const modal = document.getElementById('tableNumberModal');
-    if (modal) {
-        modal.style.display = 'none';
-        modal.setAttribute('aria-hidden', 'true');
-    }
-    document.body.classList.remove('modal-open');
-    
-    // Reset form
-    const form = document.getElementById('tableNumberForm');
-    if (form) form.reset();
-    const idInput = document.getElementById('tableNumberId');
-    if (idInput) idInput.value = '';
-}
-
-// Generate new table code
-function generateNewTableCode() {
-    const codeInput = document.getElementById('tableNumberCode');
-    if (codeInput) {
-        codeInput.value = generateUUID();
-    }
-}
-
-// Handle table number form submit
-async function handleTableNumberSubmit(event) {
-    event.preventDefault();
-    
-    const form = document.getElementById('tableNumberForm');
-    const nameInput = document.getElementById('tableNumberName');
-    const codeInput = document.getElementById('tableNumberCode');
-    const descriptionInput = document.getElementById('tableNumberDescription');
-    const isActiveInput = document.getElementById('tableNumberIsActive');
-    const idInput = document.getElementById('tableNumberId');
-    
-    if (!form || !nameInput || !codeInput) return;
-    
-    const name = nameInput.value.trim();
-    const code = codeInput.value.trim();
-    const description = descriptionInput ? descriptionInput.value.trim() : '';
-    const isActive = isActiveInput ? isActiveInput.checked : true;
-    const tableId = idInput ? idInput.value : '';
-    
-    if (!name) {
-        showNotification('Please enter a table name.', 'error');
-        return;
-    }
-    
-    if (!code) {
-        showNotification('Please generate a unique code.', 'error');
-        return;
-    }
-    
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-        
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        const tableNumbersRef = fns.collection(db, 'TableNumber');
-        
-        const tableData = {
-            name: name,
-            code: code,
-            description: description || null,
-            isActive: isActive,
-            updatedAt: fns.serverTimestamp()
-        };
-        
-        if (tableId) {
-            // Update existing table
-            const tableRef = fns.doc(db, 'TableNumber', tableId);
-            await fns.updateDoc(tableRef, tableData);
-            showNotification('Table number updated successfully!', 'success');
-        } else {
-            // Create new table
-            tableData.createdAt = fns.serverTimestamp();
-            await fns.addDoc(tableNumbersRef, tableData);
-            showNotification('Table number created successfully!', 'success');
-        }
-        
-        closeTableNumberModal();
-        renderTableNumbers();
-        
-    } catch (error) {
-        console.error('Error saving table number:', error);
-        showNotification('Failed to save table number: ' + error.message, 'error');
-    }
-}
-
-// Edit table number
-async function editTableNumber(tableId) {
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-        
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        const tableRef = fns.doc(db, 'TableNumber', tableId);
-        const tableSnap = await fns.getDoc(tableRef);
-        
-        if (!tableSnap.exists()) {
-            showNotification('Table number not found.', 'error');
-            return;
-        }
-        
-        const tableData = tableSnap.data();
-        const modal = document.getElementById('tableNumberModal');
-        const form = document.getElementById('tableNumberForm');
-        const title = document.getElementById('tableNumberModalTitle');
-        const nameInput = document.getElementById('tableNumberName');
-        const codeInput = document.getElementById('tableNumberCode');
-        const descriptionInput = document.getElementById('tableNumberDescription');
-        const isActiveInput = document.getElementById('tableNumberIsActive');
-        const idInput = document.getElementById('tableNumberId');
-        
-        if (!modal || !form) return;
-        
-        if (title) title.textContent = 'Edit Table Number';
-        if (nameInput) nameInput.value = tableData.name || '';
-        if (codeInput) codeInput.value = tableData.code || generateUUID();
-        if (descriptionInput) descriptionInput.value = tableData.description || '';
-        if (isActiveInput) isActiveInput.checked = tableData.isActive !== false;
-        if (idInput) idInput.value = tableId;
-        
-        modal.style.display = 'block';
-        modal.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('modal-open');
-        
-    } catch (error) {
-        console.error('Error loading table number:', error);
-        showNotification('Failed to load table number: ' + error.message, 'error');
-    }
-}
-
-// Delete table number
-async function deleteTableNumber(tableId, tableName) {
-    if (!confirm(`Are you sure you want to delete "${tableName}"?`)) {
-        return;
-    }
-    
-    try {
-        if (!isFirestoreReady()) {
-            await waitForFirebaseReady();
-        }
-        
-        const fns = window.firestoreFunctions;
-        const db = window.db;
-        const tableRef = fns.doc(db, 'TableNumber', tableId);
-        await fns.deleteDoc(tableRef);
-        
-        showNotification('Table number deleted successfully!', 'success');
-        renderTableNumbers();
-        
-    } catch (error) {
-        console.error('Error deleting table number:', error);
-        showNotification('Failed to delete table number: ' + error.message, 'error');
-    }
-}
 
 window.togglePromotionTabDropdown = togglePromotionTabDropdown;
 window.showCreateBanner = showCreateBanner;
 window.showBannerCatalogue = showBannerCatalogue;
 window.renderBannerCatalogue = renderBannerCatalogue;
+// Toggle date inputs based on "No time limit" checkbox
+function togglePromoDateInputs() {
+    const noTimeLimitCheckbox = document.getElementById('promoNoTimeLimit');
+    const startDateInput = document.getElementById('promoStartDate');
+    const endDateInput = document.getElementById('promoEndDate');
+    
+    if (noTimeLimitCheckbox && startDateInput && endDateInput) {
+        const isChecked = noTimeLimitCheckbox.checked;
+        startDateInput.disabled = isChecked;
+        endDateInput.disabled = isChecked;
+        startDateInput.required = !isChecked;
+        endDateInput.required = !isChecked;
+        
+        if (isChecked) {
+            startDateInput.value = '';
+            endDateInput.value = '';
+        }
+    }
+}
+
 window.editBanner = editBanner;
 window.deleteBanner = deleteBanner;
-window.showTableNumbers = showTableNumbers;
-window.renderTableNumbers = renderTableNumbers;
-window.showCreateTableNumberForm = showCreateTableNumberForm;
-window.closeTableNumberModal = closeTableNumberModal;
-window.generateNewTableCode = generateNewTableCode;
-window.handleTableNumberSubmit = handleTableNumberSubmit;
-window.editTableNumber = editTableNumber;
-window.deleteTableNumber = deleteTableNumber;
+window.togglePromoDateInputs = togglePromoDateInputs;
 window.toggleMenuDetailEdit = toggleMenuDetailEdit;
 window.toggleMenuVariationEdit = toggleMenuVariationEdit;
 window.addUser = addUser;
@@ -17170,6 +17088,10 @@ window.removeImage = removeImage;
 let uploadedPromoImageFile = null;
 let uploadedPromoImageDataUrl = null;
 
+// Promotion editing state
+let editingPromotionId = null;
+let existingPromoImageUrl = null;
+
 function handlePromoImageFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -17279,6 +17201,7 @@ function removePromoImage() {
     
     uploadedPromoImageFile = null;
     uploadedPromoImageDataUrl = null;
+    existingPromoImageUrl = null;
 }
 
 // Upload promotion image to Firebase Storage
@@ -17356,7 +17279,7 @@ async function uploadPromoImageToStorage(file) {
     }
 }
 
-// Handle promotion form submission
+// Handle promotion form submission (create or update)
 async function handlePromotionFormSubmit(event) {
     if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
@@ -17367,10 +17290,10 @@ async function handlePromotionFormSubmit(event) {
 
     // Get form values
     const promoTitle = (form.querySelector('#promoTitle')?.value || '').trim();
-    const promoDescription = (form.querySelector('#promoDescription')?.value || '').trim();
     const promoPlacement = (form.querySelector('#promoPlacement')?.value || 'banner').trim();
     const promoStartDateInput = form.querySelector('#promoStartDate');
     const promoEndDateInput = form.querySelector('#promoEndDate');
+    const promoNoTimeLimit = form.querySelector('#promoNoTimeLimit')?.checked || false;
     
     // Validation
     if (!promoTitle) {
@@ -17378,12 +17301,8 @@ async function handlePromotionFormSubmit(event) {
         return;
     }
     
-    if (!promoDescription) {
-        showNotification('Promotion description is required.', 'error');
-        return;
-    }
-    
-    if (!uploadedPromoImageFile) {
+    // Require an image only when creating a new promotion
+    if (!uploadedPromoImageFile && !existingPromoImageUrl && !editingPromotionId) {
         showNotification('Please select a promotion image.', 'error');
         return;
     }
@@ -17456,60 +17375,112 @@ async function handlePromotionFormSubmit(event) {
     }
     
     try {
-        // Upload image to Firebase Storage first
-        const imageUrl = await uploadPromoImageToStorage(uploadedPromoImageFile);
-        
-        if (!imageUrl) {
-            showNotification('Failed to upload promotion image.', 'error');
-            return;
+        // Decide which image URL to use
+        let imageUrl = existingPromoImageUrl || null;
+
+        // If a new image was selected, upload it and override the existing URL
+        if (uploadedPromoImageFile) {
+            imageUrl = await uploadPromoImageToStorage(uploadedPromoImageFile);
+            
+            if (!imageUrl) {
+                showNotification('Failed to upload promotion image.', 'error');
+                return;
+            }
         }
         
         // Save promotion data to Firestore
         const db = window.db;
-        const promotionData = {
+        const baseData = {
             title: promoTitle,
             description: promoDescription,
             placement: promoPlacement,
-            imageUrl: imageUrl,
             startDate: startDateTimestamp,  // Firestore Timestamp (not null)
-            endDate: endDateTimestamp,      // Firestore Timestamp (not null)
-            createdAt: fns.serverTimestamp(),
-            updatedAt: fns.serverTimestamp()
+            endDate: endDateTimestamp       // Firestore Timestamp (not null)
         };
-        
-        console.log('[Promotion] Saving promotion data:', {
-            ...promotionData,
-            startDate: startDateTimestamp ? 'Firestore Timestamp' : 'null',
-            endDate: endDateTimestamp ? 'Firestore Timestamp' : 'null'
-        });
-        
-        const promotionRef = fns.collection(db, 'promotionList');
-        const promoDocRef = await fns.addDoc(promotionRef, promotionData);
 
-        // Log admin activity for promotion creation
-        logAdminActivity({
-            action: 'promotion_create',
-            entityType: 'promotion',
-            entityId: promoDocRef.id,
-            entityName: promoTitle,
-            description: `Promotion "${promoTitle}" was created.`,
-            metadata: {
-                placement: promoPlacement,
-                startDate: promoStartDateValue,
-                endDate: promoEndDateValue
+        // Include imageUrl if we have one (existing or newly uploaded)
+        if (imageUrl) {
+            baseData.imageUrl = imageUrl;
+        }
+
+        if (editingPromotionId) {
+            // Update existing promotion
+            const bannerRef = fns.doc(db, 'promotionList', editingPromotionId);
+            const updateData = {
+                ...baseData,
+                updatedAt: fns.serverTimestamp()
+            };
+
+            console.log('[Promotion] Updating promotion:', editingPromotionId, updateData);
+            await fns.updateDoc(bannerRef, updateData);
+
+            // Log admin activity for promotion update
+            logAdminActivity({
+                action: 'promotion_update',
+                entityType: 'promotion',
+                entityId: editingPromotionId,
+                entityName: promoTitle,
+                description: `Promotion "${promoTitle}" was updated.`,
+                metadata: {
+                    placement: promoPlacement,
+                    startDate: promoStartDateValue,
+                    endDate: promoEndDateValue
+                }
+            });
+
+            showNotification('Promotion updated successfully!', 'success');
+
+            // Clear editing state
+            editingPromotionId = null;
+            existingPromoImageUrl = null;
+
+            // Reset form and go back to catalogue
+            form.reset();
+            removePromoImage();
+            showBannerCatalogue();
+        } else {
+            // Create new promotion
+            const promotionData = {
+                ...baseData,
+                imageUrl: imageUrl,
+                createdAt: fns.serverTimestamp(),
+                updatedAt: fns.serverTimestamp()
+            };
+            
+            console.log('[Promotion] Saving promotion data:', {
+                ...promotionData,
+                startDate: startDateTimestamp ? 'Firestore Timestamp' : 'null',
+                endDate: endDateTimestamp ? 'Firestore Timestamp' : 'null'
+            });
+            
+            const promotionRef = fns.collection(db, 'promotionList');
+            const promoDocRef = await fns.addDoc(promotionRef, promotionData);
+
+            // Log admin activity for promotion creation
+            logAdminActivity({
+                action: 'promotion_create',
+                entityType: 'promotion',
+                entityId: promoDocRef.id,
+                entityName: promoTitle,
+                description: `Promotion "${promoTitle}" was created.`,
+                metadata: {
+                    placement: promoPlacement,
+                    startDate: promoStartDateValue,
+                    endDate: promoEndDateValue
+                }
+            });
+
+            showNotification('Promotion saved successfully!', 'success');
+            
+            // Reset form
+            form.reset();
+            removePromoImage();
+            
+            // Refresh banner catalogue if it's visible
+            const bannerCatalogueSection = document.getElementById('bannerCatalogue');
+            if (bannerCatalogueSection && bannerCatalogueSection.style.display !== 'none') {
+                renderBannerCatalogue();
             }
-        });
-
-        showNotification('Promotion saved successfully!', 'success');
-        
-        // Reset form
-        form.reset();
-        removePromoImage();
-        
-        // Refresh banner catalogue if it's visible
-        const bannerCatalogueSection = document.getElementById('bannerCatalogue');
-        if (bannerCatalogueSection && bannerCatalogueSection.style.display !== 'none') {
-            renderBannerCatalogue();
         }
         
     } catch (error) {
@@ -18603,10 +18574,14 @@ async function assignDriverToBatch(driverId, orders) {
         // Update all orders in batch
         for (let i = 0; i < orders.length; i++) {
             const order = orders[i];
+            // Mark order as viewed when driver is assigned
+            ViewedOrdersManager.markAsViewed(order.id);
             const orderRef = fns.doc(window.db, 'orders', order.id);
             
             const updateData = {
                 driverId: driver.driverId || driver.id,
+                driverName: driver.name || '',
+                driverPhone: driver.phoneNumber || driver.phone || '',
                 routeId: routeId,
                 routeSequence: i + 1,
                 status: 'out_for_delivery',
@@ -18626,6 +18601,8 @@ async function assignDriverToBatch(driverId, orders) {
                 deliveryId: order.id,
                 orderId: order.id,
                 driverId: driver.driverId || driver.id,
+                driverName: driver.name || '',
+                driverPhone: driver.phoneNumber || driver.phone || '',
                 routeId: routeId,
                 routeSequence: i + 1,
                 timeAssigned: timestamp,
@@ -18750,9 +18727,11 @@ async function assignDriverToOrder(driverId, orderId) {
         const fns = window.firestoreFunctions;
         const orderRef = fns.doc(window.db, 'orders', orderId);
         
-        // Update order with driver assignment
+        // Update order with driver assignment (including driver name and phone number)
         await fns.updateDoc(orderRef, {
             driverId: driver.driverId || driver.id,
+            driverName: driver.name || '',
+            driverPhone: driver.phoneNumber || driver.phone || '',
             status: 'out_for_delivery',
             assignedAt: fns.serverTimestamp(),
             updatedAt: fns.serverTimestamp()
@@ -18770,6 +18749,8 @@ async function assignDriverToOrder(driverId, orderId) {
                     deliveryId: deliveryId,
                     orderId: orderId,
                     driverId: driver.driverId || driver.id,
+                    driverName: driver.name || '',
+                    driverPhone: driver.phoneNumber || driver.phone || '',
                     timeAssigned: fns.serverTimestamp(),
                     timeDelivered: null,
                     createdAt: fns.serverTimestamp(),
@@ -18780,6 +18761,8 @@ async function assignDriverToOrder(driverId, orderId) {
                 // Update existing document if driver changed
                 await fns.updateDoc(deliveryRef, {
                     driverId: driver.driverId || driver.id,
+                    driverName: driver.name || '',
+                    driverPhone: driver.phoneNumber || driver.phone || '',
                     timeAssigned: fns.serverTimestamp(),
                     updatedAt: fns.serverTimestamp()
                 });
@@ -18790,6 +18773,9 @@ async function assignDriverToOrder(driverId, orderId) {
             // Don't fail the whole operation if for_delivery creation fails
             showNotification('Driver assigned, but failed to create delivery record. Please check console.', 'warning');
         }
+        
+        // Mark order as viewed when driver is assigned
+        ViewedOrdersManager.markAsViewed(orderId);
         
         // Print customer receipt (order is now On The Way)
         if (typeof printCustomerReceipt === 'function') {

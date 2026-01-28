@@ -107,7 +107,7 @@
 
         const filtered = orders.filter(o => {
             if (currentFilter === 'all') {
-                return true; // Show all orders including cancelled
+                return true; // Show all orders including declined
             }
             return o.status === currentFilter;
         });
@@ -183,15 +183,15 @@
         }
 
         const rawStatus = (data.status || 'pending').toLowerCase();
-        // Map statuses to filter categories (ongoing vs completed vs cancelled)
-        let status = 'ongoing';
+        // Map statuses to filter categories (pending vs completed vs declined)
+        let status = 'pending';
         if (rawStatus === 'completed' || rawStatus === 'delivered') {
             status = 'completed';
         } else if (rawStatus === 'cancelled' || rawStatus === 'canceled' || rawStatus === 'declined') {
-            status = 'cancelled';
+            status = 'declined';
         } else {
-            // All other statuses (pending, confirmed, preparing, ready, out_for_delivery, etc.) are ongoing
-            status = 'ongoing';
+            // All other statuses (pending, confirmed, preparing, ready, out_for_delivery, etc.) are pending
+            status = 'pending';
         }
 
         // Use orderNumber if available, otherwise use document ID

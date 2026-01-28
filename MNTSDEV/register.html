@@ -118,10 +118,10 @@
                 </div>
 
                 <div class="form-options">
-                    <label class="checkbox-container">
+                    <label class="checkbox-container" id="termsLabel">
                         <input type="checkbox" id="terms" name="terms" required>
                         <span class="checkmark"></span>
-                        I agree to the<a href="#" class="terms-link">Terms of Service</a>
+                        I agree to the<a href="#" class="terms-link" onclick="event.preventDefault(); openTermsModal();">Terms of Condition</a>
                     </label>
                     <span class="error-message" id="termsError"></span>
                 </div>
@@ -152,6 +152,7 @@
             </button>
         </div>
     </div>
+
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script src="js/mobile-menu.js"></script>

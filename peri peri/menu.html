@@ -527,9 +527,6 @@
             border-radius: var(--menu-radius-sm);
             background: rgba(255,255,255,0.5);
         }
-        .ingredient-logs-summary .summary-card { border-radius: var(--menu-radius-sm); }
-        .ingredient-logs-table-wrapper { margin-bottom: var(--menu-space-lg); }
-        .ingredient-logs-table-wrapper .table-container { border-radius: var(--menu-radius-sm); overflow: hidden; }
 
         /* Menu detail section – spacing */
         .menu-detail-section { margin-top: var(--menu-space-lg); }
@@ -763,8 +760,6 @@
                             <li><a href="menu.html#menu-list">Menu List</a></li>
                             <li><a href="menu.html#addFoodDashboard">Add Product</a></li>
                             <li><a href="menu.html#menu-product-detail">Product Detail</a></li>
-                            <li><a href="menu.html#tableNumbers">Table Number</a></li>
-                            <li><a href="menu.html#ingredient-logs">Ingredient Logs</a></li>
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
@@ -799,7 +794,7 @@
                     <li class="nav-item">
                         <a href="settings.html" class="nav-link">
                             <i class="fas fa-cog"></i>
-                            <span>Payment Settings</span>
+                            <span>Site Settings</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -838,7 +833,6 @@
                     <button class="profile-btn" onclick="event.stopPropagation(); toggleDropdown('adminDropdown');">
                         <i class="fas fa-user"></i>
                         <span id="profileName"></span>
-                        <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu" id="adminDropdown">
                         <a href="view-user-profile.html" class="dropdown-item" onclick="showUserProfile(); return false;">Profile Settings</a>
@@ -847,39 +841,6 @@
                 </div>
             </header>
             
-            <!-- Ingredient Logs Table - Positioned directly below the red header box -->
-            <div class="ingredient-logs-table-wrapper" id="ingredient-logs-table-wrapper" style="display: none;">
-                <div class="table-container ingredient-logs-table-container">
-                    <table class="orders-table modern-orders-table inventory-logs-table">
-                        <thead>
-                            <tr>
-                                <th class="sortable" data-sort="timestamp" onclick="sortIngredientLogs('timestamp')">
-                                    Timestamp
-                                    <i class="fas fa-sort sort-icon" id="sortIcon-timestamp"></i>
-                                </th>
-                                <th class="sortable" data-sort="ingredient" onclick="sortIngredientLogs('ingredient')">
-                                    Ingredient
-                                    <i class="fas fa-sort sort-icon" id="sortIcon-ingredient"></i>
-                                </th>
-                                <th class="sortable" data-sort="type" onclick="sortIngredientLogs('type')">
-                                    Type
-                                    <i class="fas fa-sort sort-icon" id="sortIcon-type"></i>
-                                </th>
-                                <th class="sortable" data-sort="amount" onclick="sortIngredientLogs('amount')">
-                                    Amount
-                                    <i class="fas fa-sort sort-icon" id="sortIcon-amount"></i>
-                                </th>
-                                <th>Order/Menu Item</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ingredientLogsTableBody">
-                            <tr>
-                                <td colspan="5" class="empty-table">Loading logs...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
 
             <script>
                 // Update profile name immediately on page load
@@ -1187,93 +1148,6 @@
                 </div>
             </div>
 
-            <!-- Table Number Management Dashboard -->
-            <div class="add-food-dashboard" id="tableNumbers" style="display: none;">
-                <div class="add-food-header">
-                    <h2>Table Number Management</h2>
-                    <button type="button" class="btn btn-primary" onclick="showCreateTableNumberForm()" style="background-color: #7E2021; border-color: #7E2021;">
-                        <i class="fas fa-plus"></i> Create Table Number
-                    </button>
-                </div>
-                
-                <div class="table-number-container" id="tableNumberContainer">
-                    <div class="loading-state" id="tableNumberLoading" style="text-align: center; padding: 40px;">
-                        <i class="fas fa-spinner fa-spin" style="font-size: 2em; color: #6c757d; margin-bottom: 16px;"></i>
-                        <p>Loading table numbers...</p>
-                    </div>
-                    <div class="empty-state" id="tableNumberEmpty" style="display: none; text-align: center; padding: 40px; color: #6c757d;">
-                        <i class="fas fa-table" style="font-size: 2em; margin-bottom: 16px;"></i>
-                        <p>No table numbers have been created yet.</p>
-                        <button type="button" class="btn btn-primary" onclick="showCreateTableNumberForm()" style="margin-top: 16px; background-color: #7E2021; border-color: #7E2021;">
-                            <i class="fas fa-plus"></i> Create Your First Table Number
-                        </button>
-                    </div>
-                    <div class="table-number-grid" id="tableNumberGrid" style="display: none;">
-                        <!-- Table numbers will be rendered here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Create/Edit Table Number Modal -->
-            <div id="tableNumberModal" class="modal" style="display: none;">
-                <div class="modal-content" style="max-width: 500px;">
-                    <div class="modal-header">
-                        <h3 id="tableNumberModalTitle">Create Table Number</h3>
-                        <button type="button" class="modal-close" onclick="closeTableNumberModal()">&times;</button>
-                    </div>
-                    <form id="tableNumberForm" onsubmit="handleTableNumberSubmit(event)">
-                        <div class="modal-body">
-                            <div class="form-group">
-                                <label for="tableNumberName">Table Name/Number <span style="color: #dc3545;">*</span></label>
-                                <input type="text" id="tableNumberName" class="form-control" required 
-                                       placeholder="e.g., Table 1, Table A, VIP Table 1" 
-                                       maxlength="50">
-                                <small class="form-hint">Enter a descriptive name for this table</small>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="tableNumberCode">Unique Code</label>
-                                <div style="display: flex; gap: 8px; align-items: center;">
-                                    <input type="text" id="tableNumberCode" class="form-control" 
-                                           placeholder="Auto-generated UUID" readonly
-                                           style="background-color: #f8f9fa; cursor: not-allowed;">
-                                    <button type="button" class="btn btn-secondary" onclick="generateNewTableCode()" 
-                                            style="background-color: #3d2817; color: #f6c056; border-color: #3d2817; white-space: nowrap;">
-                                        <i class="fas fa-sync-alt"></i> Regenerate
-                                    </button>
-                                </div>
-                                <small class="form-hint">Unique identifier for this table (UUID format)</small>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="tableNumberDescription">Description (Optional)</label>
-                                <textarea id="tableNumberDescription" class="form-control" rows="3" 
-                                          placeholder="Add any additional notes about this table..."
-                                          maxlength="200"></textarea>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="tableNumberIsActive" checked> 
-                                    Active
-                                </label>
-                                <small class="form-hint">Inactive tables will not appear in selection lists</small>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" onclick="closeTableNumberModal()" 
-                                    style="background-color: #3d2817; color: #f6c056; border-color: #3d2817;">
-                                Cancel
-                            </button>
-                            <button type="submit" class="btn btn-primary" 
-                                    style="background-color: #7E2021; border-color: #7E2021;">
-                                <i class="fas fa-save"></i> Save Table Number
-                            </button>
-                        </div>
-                        <input type="hidden" id="tableNumberId" value="">
-                    </form>
-                </div>
-            </div>
 
             <!-- Menu Catalogue / List Section -->
             <div class="food-section" id="foodSection" style="display: none;">
@@ -1521,15 +1395,15 @@
                                     Change Image
                                 </button>
                             </div>
-                            <div class="detail-row" id="menuDetailLinkSaucesRow" style="display: none; margin-top: 24px; padding-top: 24px; border-top: 1px solid #e9ecef;">
+                            <div class="detail-row" id="menuDetailLinkSaucesRow" style="display: block; margin-top: 24px; padding-top: 24px; border-top: 1px solid #e9ecef;">
                                 <div style="width: 100%;">
-                                    <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #3d2817; font-size: 0.9375rem;">Link Sauces (Optional)</label>
-                                    <div id="menuDetailIncludedSaucesContainer" class="checkbox-group" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 8px; background-color: #f8f9fa;">
+                                    <label style="display: block; margin-bottom: 12px; font-weight: 600; color: #3d2817; font-size: 0.9375rem;">Linked Sauces</label>
+                                    <div id="menuDetailIncludedSaucesContainer" class="sauce-selection-container" style="border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin-bottom: 8px; background-color: #f8f9fa; min-height: 100px;">
                                         <div class="empty-state" style="text-align: center; color: #999; padding: 20px;">
                                             No sauces available. Add sauce items to the menu first.
                                         </div>
                                     </div>
-                                    <small class="form-hint" style="display: block; margin-top: 8px; color: #666; font-size: 0.8125rem; line-height: 1.4;">Check the sauces that come free with this meal. Customers can choose which ones they want when ordering.</small>
+                                    <small class="form-hint" id="menuDetailLinkSaucesHint" style="display: block; margin-top: 8px; color: #666; font-size: 0.8125rem; line-height: 1.4;">Select the sauces that come free with this meal. Customers can choose which ones they want when ordering. Changes will be saved when you click Save.</small>
                                 </div>
                             </div>
                             <div class="menu-detail-actions" style="margin-top: 24px; display: flex; gap: 10px;">
@@ -1710,68 +1584,6 @@
         </div>
             </div>
 
-            <!-- Ingredient Logs Section - Filters and controls -->
-            <div class="food-section ingredient-logs-container" id="ingredient-logs" style="display: none;">
-                <div class="inventory-logs-section">
-                    <div class="inventory-table-header">
-                        <div>
-                            <h3>Ingredient Activity Logs</h3>
-                            <p class="inventory-subtitle">Real-time tracking of ingredients used and received</p>
-                        </div>
-                        <div class="inventory-table-actions">
-                            <input type="text" id="ingredientLogSearch" class="form-control ingredient-log-filter-input" 
-                                   placeholder="Search..." oninput="filterIngredientLogs()" 
-                                   style="min-width: 200px;">
-                            <input type="date" id="ingredientLogDateFilter" class="form-control ingredient-log-filter-input" onchange="filterIngredientLogs()">
-                            <select id="ingredientLogFilter" class="form-control ingredient-log-filter-select" onchange="filterIngredientLogs()">
-                                <option value="">All Ingredients</option>
-                            </select>
-                            <select id="ingredientLogTypeFilter" class="form-control ingredient-log-filter-select" onchange="filterIngredientLogs()">
-                                <option value="">All Types</option>
-                                <option value="used">Used Only</option>
-                                <option value="received">Received Only</option>
-                            </select>
-                            <button class="btn btn-secondary btn-sm" onclick="clearIngredientLogFilters()" style="white-space: nowrap;">
-                                <i class="fas fa-times"></i> Clear
-                            </button>
-                            <button class="export-btn" onclick="exportIngredientLogs()">
-                                <i class="fas fa-download"></i>
-                                <span class="export-btn-text">Export Logs</span>
-                            </button>
-                        </div>
-                    </div>
-                    <!-- Summary Statistics -->
-                    <div class="ingredient-logs-summary" id="ingredientLogsSummary" style="display: none;">
-                        <div class="summary-card">
-                            <div class="summary-icon used-icon">
-                                <i class="fas fa-arrow-up"></i>
-                            </div>
-                            <div class="summary-content">
-                                <span class="summary-label">Total Used</span>
-                                <span class="summary-value" id="totalUsed">0</span>
-                            </div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="summary-icon received-icon">
-                                <i class="fas fa-arrow-down"></i>
-                            </div>
-                            <div class="summary-content">
-                                <span class="summary-label">Total Received</span>
-                                <span class="summary-value" id="totalReceived">0</span>
-                            </div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="summary-icon net-icon">
-                                <i class="fas fa-balance-scale"></i>
-                            </div>
-                            <div class="summary-content">
-                                <span class="summary-label">Net Usage</span>
-                                <span class="summary-value" id="netUsage">0</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
     <!-- Image Gallery Modal -->
     <div id="imageGalleryModal" class="modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.5);">

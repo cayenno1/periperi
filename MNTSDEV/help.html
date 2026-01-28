@@ -59,7 +59,7 @@
   </header>
 
   <main class="main-container">
-    <a href="menu.html" class="back-button">
+    <a href="menu.html" class="back-button" style="color: #000000;">
       <i class="fas fa-arrow-left"></i>
       <span>Back to Menu</span>
     </a>
@@ -78,17 +78,15 @@
           <div class="support-card contact-card">
             <div class="support-card-title"><i class="fas fa-headset"></i> Contact Us</div>
             <div class="support-actions">
-              <a class="support-cta email" href="mailto:Pabloperiperi.com"><i class="fas fa-envelope"></i><span>Email support@example.com</span></a>
-              <a class="support-cta facebook" href="#"><i class="fab fa-facebook"></i><span>Facebook</span></a>
+              <a class="support-cta email" href="mailto:pablosperiperi@gmail.com"><i class="fas fa-envelope"></i><span>Email pablosperiperi@gmail.com</span></a>
+              <a class="support-cta facebook" href="https://web.facebook.com/PablosPeriPeriPH" target="_blank"><i class="fab fa-facebook"></i><span>Facebook</span></a>
             </div>
           </div>
 
           <div class="support-card resources-card">
-            <div class="support-card-title"><i class="fas fa-book"></i> Resources</div>
+            <div class="support-card-title"><i class="fas fa-file-contract"></i> Terms and Conditions</div>
             <div class="support-links">
-              <a class="support-link" href="#"><i class="fas fa-file-contract"></i><span>Terms & Conditions</span><i class="fas fa-arrow-right"></i></a>
-              <a class="support-link" href="#"><i class="fas fa-shield-halved"></i><span>Privacy Policy</span><i class="fas fa-arrow-right"></i></a>
-              <a class="support-link" href="#"><i class="fas fa-truck"></i><span>Delivery Information</span><i class="fas fa-arrow-right"></i></a>
+              <a class="support-link" href="#" onclick="event.preventDefault(); openTermsInNewTab();"><i class="fas fa-file-contract"></i><span>Terms & Conditions</span><i class="fas fa-arrow-right"></i></a>
             </div>
           </div>
         </div>
@@ -106,7 +104,7 @@
             </div>
             <div class="faq-item">
               <button class="faq-q"><span>Do you deliver to my area?</span><i class="fas fa-chevron-down"></i></button>
-              <div class="faq-a">Enter your address at checkout to check if delivery is available to your location.</div>
+              <div class="faq-a">We can only deliver in North Caloocan and Quezon City.</div>
             </div>
           </div>
         </div>
@@ -116,6 +114,7 @@
   </main>
 
   <script type="module" src="js/firebase-init.js"></script>
+  <script src="js/utils.js" defer></script>
   <script src="js/profile-login.js"></script>
   <script src="js/profile-authentication.js"></script>
 
@@ -123,6 +122,136 @@
     function goHome(){ window.location.href = 'index.html'; }
     function goToMenu(){ window.location.href = 'menu.html'; }
     function goToCart(){ window.location.href = 'cart_review.html'; }
+
+    // Terms of Condition Functions
+    async function fetchTermsAndConditions() {
+        try {
+            await window.utils.waitForFirebaseReady();
+            
+            const db = window.firebaseDb;
+            const docFn = window.doc;
+            const getDocFn = window.getDoc;
+            const collectionFn = window.collection;
+            const getDocsFn = window.getDocs;
+            
+            if (!db || !docFn || !getDocFn || !collectionFn || !getDocsFn) {
+                throw new Error('Firebase not ready');
+            }
+
+            console.log('Fetching terms and conditions document...');
+            // Fetch the main termsAndConditions document
+            const termsRef = docFn(db, 'settings', 'termsAndConditions');
+            const termsSnap = await getDocFn(termsRef);
+            
+            if (!termsSnap.exists()) {
+                throw new Error('Terms and conditions document not found in Firestore');
+            }
+
+            const termsData = termsSnap.data();
+            console.log('Terms document data:', termsData);
+            
+            const currentVersion = termsData.currentVersion || 1;
+            const currentVersionUrl = termsData.currentVersionUrl || '';
+
+            console.log('Current version:', currentVersion);
+            console.log('Current version URL:', currentVersionUrl);
+
+            let versionData = null;
+            let pdfUrl = currentVersionUrl;
+
+            // Try to fetch the version details from the versions subcollection
+            try {
+                const versionsCol = collectionFn(termsRef, 'versions');
+                const versionsSnap = await getDocsFn(versionsCol);
+                
+                console.log('Versions subcollection size:', versionsSnap.size);
+                
+                // Try to find the document matching currentVersion
+                versionsSnap.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    console.log('Version document:', docSnap.id, data);
+                    const versionNum = typeof data.version === 'number' ? data.version : Number(data.version);
+                    if (versionNum === currentVersion) {
+                        versionData = data;
+                        console.log('Found matching version data:', versionData);
+                    }
+                });
+
+                // If no version data found matching currentVersion, try to get any version
+                if (!versionData && !versionsSnap.empty) {
+                    versionsSnap.forEach((docSnap) => {
+                        if (!versionData) {
+                            versionData = docSnap.data();
+                            console.log('Using first available version data:', versionData);
+                        }
+                    });
+                }
+            } catch (subcollectionError) {
+                console.warn('Error fetching versions subcollection:', subcollectionError);
+                // Continue with main document data
+            }
+
+            // If we have version data with downloadUrl, use it
+            if (versionData && versionData.downloadUrl) {
+                pdfUrl = versionData.downloadUrl;
+            }
+
+            // Clean up the URL - remove any extra parameters or fix encoding
+            if (pdfUrl) {
+                pdfUrl = pdfUrl.trim();
+                // If URL contains 'alt=media' without proper query separator, fix it
+                if (pdfUrl.includes('alt=media') && !pdfUrl.includes('?') && pdfUrl.includes('&')) {
+                    pdfUrl = pdfUrl.replace('&alt=media', '?alt=media');
+                }
+            }
+            
+            console.log('Final PDF URL:', pdfUrl);
+            
+            if (!pdfUrl || pdfUrl === '') {
+                throw new Error('No PDF URL found in terms and conditions data');
+            }
+            
+            return pdfUrl;
+        } catch (error) {
+            console.error('Error fetching terms and conditions:', error);
+            throw error;
+        }
+    }
+
+    async function openTermsInNewTab() {
+        try {
+            console.log('Fetching terms and conditions...');
+            const pdfUrl = await fetchTermsAndConditions();
+            console.log('Terms PDF URL fetched:', pdfUrl);
+            
+            if (!pdfUrl) {
+                alert('Unable to load Terms of Condition. Please try again later.');
+                return;
+            }
+
+            // Clean and format the PDF URL
+            let finalUrl = pdfUrl.trim();
+            
+            // If it's a Firebase Storage URL, ensure it's properly formatted
+            if (finalUrl.includes('firebasestorage.googleapis.com')) {
+                // Make sure the URL is complete
+                if (!finalUrl.startsWith('http')) {
+                    finalUrl = 'https://' + finalUrl;
+                }
+            }
+            
+            console.log('Opening PDF in new tab:', finalUrl);
+            
+            // Open PDF in new browser tab
+            window.open(finalUrl, '_blank');
+        } catch (error) {
+            console.error('Error loading terms:', error);
+            alert('Unable to load Terms of Condition. Please try again later.');
+        }
+    }
+
+    // Expose function to window
+    window.openTermsInNewTab = openTermsInNewTab;
 
     // Simple accordion for new FAQ
     (function initSupport(){

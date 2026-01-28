@@ -94,8 +94,6 @@
                             <li><a href="menu.html#menu-list">Menu List</a></li>
                             <li><a href="menu.html#addFoodDashboard">Add Product</a></li>
                             <li><a href="menu.html#menu-product-detail">Product Detail</a></li>
-                            <li><a href="menu.html#tableNumbers">Table Number</a></li>
-                            <li><a href="menu.html#ingredient-logs">Ingredient Logs</a></li>
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
@@ -130,7 +128,7 @@
                     <li class="nav-item">
                         <a href="settings.html" class="nav-link">
                             <i class="fas fa-cog"></i>
-                            <span>Payment Settings</span>
+                            <span>Site Settings</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -161,7 +159,6 @@
                     <button class="profile-btn" onclick="event.stopPropagation(); toggleDropdown('adminDropdown');">
                         <i class="fas fa-user"></i>
                         <span id="profileName"></span>
-                        <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu" id="adminDropdown">
                         <a href="view-user-profile.html" class="dropdown-item" onclick="showUserProfile(); return false;">Profile Settings</a>
@@ -198,6 +195,30 @@
                     }
                 })();
             </script>
+
+            <!-- Activity Logs - Date Filter & Actions -->
+            <div class="filter-section activity-logs">
+                <div class="activity-logs-summary">
+                    <i class="fas fa-clipboard-list"></i>
+                    <div class="summary-text">
+                        <span class="summary-title">Admin Activity Timeline</span>
+                        <span class="summary-subtitle" id="activityLogsSummaryText">Showing recent admin activity</span>
+                    </div>
+                </div>
+                <div class="activity-logs-controls">
+                    <label for="activityLogsDate" class="control-label">Date</label>
+                    <input type="date" id="activityLogsDate" class="form-control">
+                    <button class="filter-btn" onclick="applyActivityLogsDateFilter()">
+                        <i class="fas fa-filter"></i> Apply
+                    </button>
+                    <button class="filter-btn secondary" onclick="clearActivityLogsDateFilter()">
+                        <i class="fas fa-undo"></i> Clear
+                    </button>
+                    <button class="filter-btn primary" onclick="generateActivityLogsPdfForSelectedDate()">
+                        <i class="fas fa-file-pdf"></i> Download PDF
+                    </button>
+                </div>
+            </div>
 
             <!-- Activity Logs -->
             <div class="activity-logs" id="activityLogsContainer">

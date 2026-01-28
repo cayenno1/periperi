@@ -601,6 +601,27 @@
             </div>
           `);
         }
+        // Driver information for delivery orders
+        if (type === 'delivery') {
+          const driverName = order.driverName || '';
+          const driverPhone = order.driverPhone || '';
+          if (driverName) {
+            rows.push(`
+              <div class="od-kv-row">
+                <div class="od-kv-key"><i class="fas fa-user" aria-hidden="true"></i><span>Driver</span></div>
+                <div class="od-kv-val">${driverName}</div>
+              </div>
+            `);
+          }
+          if (driverPhone) {
+            rows.push(`
+              <div class="od-kv-row">
+                <div class="od-kv-key"><i class="fas fa-phone" aria-hidden="true"></i><span>Driver Phone</span></div>
+                <div class="od-kv-val"><a href="tel:${driverPhone}" style="color: #007bff; text-decoration: none;">${driverPhone}</a></div>
+              </div>
+            `);
+          }
+        }
         if ((type === 'dinein' || type === 'dine-in') && di.tableNumber) {
           rows.push(`
             <div class="od-kv-row">

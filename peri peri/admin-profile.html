@@ -55,8 +55,6 @@
                             <li><a href="menu.html#menu-list">Menu List</a></li>
                             <li><a href="menu.html#addFoodDashboard">Add Product</a></li>
                             <li><a href="menu.html#menu-product-detail">Product Detail</a></li>
-                            <li><a href="menu.html#tableNumbers">Table Number</a></li>
-                            <li><a href="menu.html#ingredient-logs">Ingredient Logs</a></li>
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
@@ -91,7 +89,7 @@
                     <li class="nav-item">
                         <a href="settings.html" class="nav-link">
                             <i class="fas fa-cog"></i>
-                            <span>Payment Settings</span>
+                            <span>Site Settings</span>
                         </a>
                     </li>
                     <li class="nav-item active">
@@ -122,7 +120,6 @@
                     <button class="profile-btn" onclick="event.stopPropagation(); toggleDropdown('adminDropdown');">
                         <i class="fas fa-user"></i>
                         <span id="profileName"></span>
-                        <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu" id="adminDropdown">
                         <a href="view-user-profile.html" class="dropdown-item" onclick="showUserProfile(); return false;">Profile Settings</a>
@@ -180,15 +177,15 @@
                             <div class="user-name-section">
                                 <h3>John Pablo <i class="fas fa-chevron-right"></i></h3>
                                 <div class="user-dropdown">
-                                    <a href="#" class="dropdown-item">Restrict User</a>
-                                    <a href="#" class="dropdown-item">Delete User</a>
-                                    <a href="#" class="dropdown-item">Create New User</a>
+                                    <a href="#" class="dropdown-item" onclick="event.preventDefault(); restrictCurrentUser(); return false;">Restrict User</a>
+                                    <a href="#" class="dropdown-item" onclick="event.preventDefault(); deleteCurrentUser(); return false;">Delete User</a>
+                                    <a href="staff-register.html" class="dropdown-item">Create New User</a>
                                 </div>
                             </div>
                             <p class="user-role">@System_Admin</p>
                             <div class="user-id-section">
-                                <span>User ID: 2023-822749</span>
-                                <button class="copy-btn">Copy ID</button>
+                                <span id="userProfileId">User ID: 2023-822749</span>
+                                <button class="copy-btn" onclick="copyUserId()">Copy ID</button>
                             </div>
                         </div>
                     </div>
@@ -197,7 +194,7 @@
                     <div class="personal-info-section">
                         <div class="section-header">
                             <h3>Profile's Personal Information</h3>
-                            <button class="edit-btn">EDIT</button>
+                            <button class="edit-btn" onclick="editUserProfile()">EDIT</button>
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
@@ -408,18 +405,17 @@
                         
                         console.log('Creating card for:', displayName, role, 'Email:', userEmail, 'ID:', staffId);
 
-                        // Create profile card
+                        // Create profile card (name-only UI, no avatar icon)
                         const profileCard = document.createElement('div');
                         profileCard.className = 'profile-card' + (isCurrentUser ? ' current-user' : '');
                         profileCard.innerHTML = `
-                            <div class="profile-avatar">
-                                <img src="user.png" alt="${displayName}">
-                            </div>
                             <div class="profile-info">
-                                <h3>${displayName}</h3>
-                                <p>@${emailPrefix || role.replace(/\s+/g, '_')}</p>
-                                <span class="role">${role}</span>
-                                ${isCurrentUser ? '<span class="current-user-badge">YOU</span>' : ''}
+                                <div>
+                                    <h3>${displayName}</h3>
+                                    <p>@${emailPrefix || role.replace(/\s+/g, '_')}</p>
+                                    <span class="role">${role}</span>
+                                    ${isCurrentUser ? '<span class="current-user-badge">YOU</span>' : ''}
+                                </div>
                             </div>
                             <div class="profile-actions-container">
                                 <button class="profile-actions" onclick="toggleDropdown('profile${staffId}Dropdown')">
@@ -427,7 +423,7 @@
                                 </button>
                                 <div class="dropdown-menu" id="profile${staffId}Dropdown">
                                     <a href="view-user-profile.html?id=${staffId}" class="dropdown-item">View Profile</a>
-                                    ${!isCurrentUser ? '<a href="#" class="dropdown-item">Restrict Access</a>' : ''}
+                                    ${!isCurrentUser ? '<a href="#" class="dropdown-item" onclick="event.preventDefault(); restrictStaffAccess(\'' + staffId + '\'); return false;">Restrict Access</a>' : ''}
                                 </div>
                             </div>
                         `;
@@ -522,6 +518,20 @@
                     deletedAt: new Date().toISOString()
                 });
 
+                // Log admin activity for staff deactivation if logger is available
+                if (typeof logAdminActivity === 'function') {
+                    logAdminActivity({
+                        action: 'staff_delete',
+                        entityType: 'staff',
+                        entityId: staffId,
+                        entityName: staffId,
+                        description: `Staff profile ${staffId} was marked as deleted from Admin Profiles list.`,
+                        metadata: {
+                            staffId
+                        }
+                    });
+                }
+                
                 alert('Staff member has been deactivated.');
                 loadStaffProfiles(); // Reload the list
             } catch (error) {
@@ -530,10 +540,10 @@
             }
         }
 
-        // Edit staff function (placeholder)
+        // Edit staff function
         function editStaff(staffId) {
-            // TODO: Implement edit functionality
-            alert('Edit functionality coming soon for staff ID: ' + staffId);
+            // Reuse the View Profile screen for editing the selected staff account
+            window.location.href = 'view-user-profile.html?id=' + encodeURIComponent(staffId);
         }
 
         // Make loadStaffProfiles globally accessible
@@ -621,6 +631,358 @@
                 }
             });
         });
+
+        // Copy User ID function
+        function copyUserId() {
+            const userIdElement = document.getElementById('userProfileId');
+            if (!userIdElement) {
+                // Try to get from current session
+                const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+                if (session) {
+                    const staffSession = JSON.parse(session);
+                    const userId = staffSession.staffId || 'N/A';
+                    navigator.clipboard.writeText(userId).then(() => {
+                        alert('User ID copied to clipboard: ' + userId);
+                    }).catch(() => {
+                        alert('Failed to copy User ID. ID: ' + userId);
+                    });
+                } else {
+                    alert('User ID not available');
+                }
+                return;
+            }
+            
+            const userIdText = userIdElement.textContent.replace('User ID: ', '').trim();
+            navigator.clipboard.writeText(userIdText).then(() => {
+                alert('User ID copied to clipboard: ' + userIdText);
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = userIdText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert('User ID copied to clipboard: ' + userIdText);
+                } catch (err) {
+                    alert('Failed to copy User ID. ID: ' + userIdText);
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+
+        // Edit User Profile function
+        function editUserProfile() {
+            const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+            if (session) {
+                const staffSession = JSON.parse(session);
+                const staffId = staffSession.staffId;
+                if (staffId) {
+                    window.location.href = 'view-user-profile.html?id=' + encodeURIComponent(staffId);
+                } else {
+                    window.location.href = 'view-user-profile.html';
+                }
+            } else {
+                window.location.href = 'view-user-profile.html';
+            }
+        }
+
+        // Restrict Current User function
+        async function restrictCurrentUser() {
+            if (!confirm('Are you sure you want to restrict access for your own account? This will prevent you from accessing the admin dashboard.')) {
+                return;
+            }
+            
+            const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+            if (!session) {
+                alert('Session not found');
+                return;
+            }
+
+            try {
+                const staffSession = JSON.parse(session);
+                const staffId = staffSession.staffId;
+                
+                if (!staffId) {
+                    alert('Staff ID not found');
+                    return;
+                }
+
+                // Wait for Firebase
+                let attempts = 0;
+                while ((!window.db || !window.firestoreFunctions) && attempts < 30) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+
+                if (!window.db || !window.firestoreFunctions) {
+                    alert('Firebase not initialized');
+                    return;
+                }
+
+                const db = window.db;
+                const { doc, updateDoc } = window.firestoreFunctions;
+                const staffRef = doc(db, 'staff', staffId);
+                
+                await updateDoc(staffRef, {
+                    status: 'restricted',
+                    restrictedAt: new Date().toISOString()
+                });
+
+                alert('Your account has been restricted. You will be logged out.');
+                
+                // Log admin activity if logger is available
+                if (typeof logAdminActivity === 'function') {
+                    logAdminActivity({
+                        action: 'staff_restrict',
+                        entityType: 'staff',
+                        entityId: staffId,
+                        entityName: staffId,
+                        description: `Staff member ${staffId} restricted their own access.`,
+                        metadata: { staffId }
+                    });
+                }
+                
+                // Logout
+                if (typeof logout === 'function') {
+                    logout();
+                } else {
+                    sessionStorage.removeItem('staffSession');
+                    localStorage.removeItem('staffSession');
+                    window.location.href = 'staff-login.html';
+                }
+            } catch (error) {
+                console.error('Error restricting user:', error);
+                alert('Error restricting user. Please try again.');
+            }
+        }
+
+        // Delete Current User function
+        async function deleteCurrentUser() {
+            if (!confirm('Are you sure you want to delete your own account? This action cannot be undone.')) {
+                return;
+            }
+            
+            if (!confirm('This will permanently delete your account. Are you absolutely sure?')) {
+                return;
+            }
+
+            const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+            if (!session) {
+                alert('Session not found');
+                return;
+            }
+
+            try {
+                const staffSession = JSON.parse(session);
+                const staffId = staffSession.staffId;
+                
+                if (!staffId) {
+                    alert('Staff ID not found');
+                    return;
+                }
+
+                // Wait for Firebase
+                let attempts = 0;
+                while ((!window.db || !window.firestoreFunctions) && attempts < 30) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+
+                if (!window.db || !window.firestoreFunctions) {
+                    alert('Firebase not initialized');
+                    return;
+                }
+
+                const db = window.db;
+                const { doc, updateDoc } = window.firestoreFunctions;
+                const staffRef = doc(db, 'staff', staffId);
+                
+                // Mark as deleted instead of actually deleting
+                await updateDoc(staffRef, {
+                    status: 'deleted',
+                    deletedAt: new Date().toISOString()
+                });
+
+                alert('Your account has been deleted. You will be logged out.');
+                
+                // Log admin activity if logger is available
+                if (typeof logAdminActivity === 'function') {
+                    logAdminActivity({
+                        action: 'staff_delete',
+                        entityType: 'staff',
+                        entityId: staffId,
+                        entityName: staffId,
+                        description: `Staff member ${staffId} deleted their own account.`,
+                        metadata: { staffId }
+                    });
+                }
+                
+                // Logout
+                if (typeof logout === 'function') {
+                    logout();
+                } else {
+                    sessionStorage.removeItem('staffSession');
+                    localStorage.removeItem('staffSession');
+                    window.location.href = 'staff-login.html';
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                alert('Error deleting user. Please try again.');
+            }
+        }
+
+        // Restrict Staff Access function
+        async function restrictStaffAccess(staffId) {
+            if (!staffId) {
+                alert('Staff ID not provided');
+                return;
+            }
+
+            if (!confirm('Are you sure you want to restrict access for this staff member?')) {
+                return;
+            }
+
+            try {
+                // Wait for Firebase
+                let attempts = 0;
+                while ((!window.db || !window.firestoreFunctions) && attempts < 30) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+
+                if (!window.db || !window.firestoreFunctions) {
+                    alert('Firebase not initialized');
+                    return;
+                }
+
+                const db = window.db;
+                const { doc, updateDoc } = window.firestoreFunctions;
+                const staffRef = doc(db, 'staff', staffId);
+                
+                await updateDoc(staffRef, {
+                    status: 'restricted',
+                    restrictedAt: new Date().toISOString()
+                });
+
+                alert('Staff member access has been restricted.');
+                
+                // Log admin activity if logger is available
+                if (typeof logAdminActivity === 'function') {
+                    logAdminActivity({
+                        action: 'staff_restrict',
+                        entityType: 'staff',
+                        entityId: staffId,
+                        entityName: staffId,
+                        description: `Staff member ${staffId} was restricted from Admin Profiles.`,
+                        metadata: { staffId }
+                    });
+                }
+                
+                // Reload the list
+                if (typeof loadStaffProfiles === 'function') {
+                    loadStaffProfiles();
+                }
+            } catch (error) {
+                console.error('Error restricting staff access:', error);
+                alert('Error restricting staff access. Please try again.');
+            }
+        }
+
+        // Populate user profile dashboard with current user data
+        function populateUserProfileDashboard() {
+            const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+            if (!session) {
+                return;
+            }
+
+            try {
+                const staffSession = JSON.parse(session);
+                
+                // Update user name
+                const userNameElement = document.querySelector('.user-name-section h3');
+                if (userNameElement) {
+                    let displayName = '';
+                    if (staffSession.firstName && staffSession.lastName) {
+                        displayName = staffSession.firstName + ' ' + staffSession.lastName;
+                        if (staffSession.suffix) {
+                            displayName += ' ' + staffSession.suffix;
+                        }
+                    } else if (staffSession.email) {
+                        const emailName = staffSession.email.split('@')[0];
+                        displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+                    } else {
+                        displayName = staffSession.staffId || 'User';
+                    }
+                    userNameElement.innerHTML = `${displayName} <i class="fas fa-chevron-right"></i>`;
+                }
+
+                // Update user role
+                const userRoleElement = document.querySelector('.user-role');
+                if (userRoleElement) {
+                    const role = staffSession.role || 'Staff';
+                    userRoleElement.textContent = '@' + role.replace(/\s+/g, '_');
+                }
+
+                // Update user ID
+                const userIdElement = document.getElementById('userProfileId');
+                if (userIdElement && staffSession.staffId) {
+                    userIdElement.textContent = 'User ID: ' + staffSession.staffId;
+                }
+
+                // Update form fields
+                const firstNameInput = document.querySelector('input[placeholder*="first name" i]');
+                if (firstNameInput) {
+                    firstNameInput.value = staffSession.firstName || '';
+                }
+
+                const middleNameInput = document.querySelector('input[placeholder*="middle name" i]');
+                if (middleNameInput) {
+                    middleNameInput.value = staffSession.middleName || '';
+                }
+
+                const lastNameInput = document.querySelector('input[placeholder*="last name" i]');
+                if (lastNameInput) {
+                    lastNameInput.value = staffSession.lastName || '';
+                }
+
+                const phoneInput = document.querySelector('input[placeholder*="phone number" i]');
+                if (phoneInput) {
+                    phoneInput.value = staffSession.phoneNumber || '+63';
+                }
+            } catch (e) {
+                console.warn('Could not populate user profile dashboard:', e);
+            }
+        }
+
+        // Override showUserProfile to populate data
+        const originalShowUserProfile = window.showUserProfile;
+        if (typeof originalShowUserProfile === 'function') {
+            window.showUserProfile = function() {
+                originalShowUserProfile();
+                // Populate dashboard after showing
+                setTimeout(populateUserProfileDashboard, 100);
+            };
+        } else {
+            // If showUserProfile doesn't exist, create it
+            window.showUserProfile = function() {
+                const dashboard = document.getElementById('userProfileDashboard');
+                const container = document.getElementById('adminProfilesContainer');
+                if (dashboard && container) {
+                    container.style.display = 'none';
+                    dashboard.style.display = 'block';
+                    populateUserProfileDashboard();
+                }
+            };
+        }
+
+        // Make functions globally available
+        window.copyUserId = copyUserId;
+        window.editUserProfile = editUserProfile;
+        window.restrictCurrentUser = restrictCurrentUser;
+        window.deleteCurrentUser = deleteCurrentUser;
+        window.restrictStaffAccess = restrictStaffAccess;
+        window.populateUserProfileDashboard = populateUserProfileDashboard;
     </script>
 </body>
 </html>

@@ -240,8 +240,72 @@
             }
             
             if (!terms) {
-                window.auth.showError('terms', 'Please agree to the Terms of Service and Privacy Policy');
                 hasErrors = true;
+                
+                // Show error using auth helper first
+                const errorMessage = 'You must agree to the Terms of Condition to create an account';
+                window.auth.showError('terms', errorMessage);
+                
+                // Get elements
+                const termsErrorElement = document.getElementById('termsError');
+                const termsLabel = document.getElementById('termsLabel');
+                const termsCheckbox = document.getElementById('terms');
+                
+                // Apply highlighted styling to error message
+                if (termsErrorElement) {
+                    termsErrorElement.style.cssText = `
+                        display: block !important;
+                        color: #e53935 !important;
+                        font-size: 1rem !important;
+                        font-weight: 600 !important;
+                        background-color: #fff5f5 !important;
+                        padding: 12px 14px !important;
+                        border-radius: 6px !important;
+                        border: 2px solid #e53935 !important;
+                        margin-top: 10px !important;
+                        line-height: 1.5 !important;
+                    `;
+                }
+                
+                // Add visual flag to checkbox container
+                if (termsLabel) {
+                    termsLabel.style.cssText = `
+                        border: 2px solid #e53935 !important;
+                        border-radius: 6px !important;
+                        padding: 10px !important;
+                        background-color: #fff5f5 !important;
+                        display: block !important;
+                    `;
+                }
+                
+                // Add error class to checkbox
+                if (termsCheckbox) {
+                    termsCheckbox.classList.add('error');
+                }
+                
+                // Scroll to the checkbox to ensure user sees it
+                setTimeout(() => {
+                    if (termsLabel) {
+                        termsLabel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            } else {
+                // Clear visual flag when checked
+                const termsLabel = document.getElementById('termsLabel');
+                const termsErrorElement = document.getElementById('termsError');
+                const termsCheckbox = document.getElementById('terms');
+                
+                if (termsLabel) {
+                    termsLabel.style.cssText = '';
+                }
+                
+                if (termsErrorElement) {
+                    termsErrorElement.style.cssText = '';
+                }
+                
+                if (termsCheckbox) {
+                    termsCheckbox.classList.remove('error');
+                }
             }
             
             if (hasErrors) return;
@@ -437,9 +501,163 @@
         }
 
         if (termsInput) {
-            termsInput.addEventListener('change', () => window.auth.clearError('terms'));
+            termsInput.addEventListener('change', function() {
+                if (this.checked) {
+                    // Clear all error styling when checkbox is checked
+                    const termsLabel = document.getElementById('termsLabel');
+                    const termsErrorElement = document.getElementById('termsError');
+                    
+                    window.auth.clearError('terms');
+                    
+                    if (termsLabel) {
+                        termsLabel.style.cssText = '';
+                    }
+                    
+                    if (termsErrorElement) {
+                        termsErrorElement.style.cssText = '';
+                        termsErrorElement.textContent = '';
+                    }
+                }
+            });
         }
     }
+
+    // Terms of Condition Modal Functions
+    async function fetchTermsAndConditions() {
+        try {
+            await window.utils.waitForFirebaseReady();
+            
+            const db = window.firebaseDb;
+            const docFn = window.doc;
+            const getDocFn = window.getDoc;
+            const collectionFn = window.collection;
+            const getDocsFn = window.getDocs;
+            
+            if (!db || !docFn || !getDocFn || !collectionFn || !getDocsFn) {
+                throw new Error('Firebase not ready');
+            }
+
+            console.log('Fetching terms and conditions document...');
+            // Fetch the main termsAndConditions document
+            const termsRef = docFn(db, 'settings', 'termsAndConditions');
+            const termsSnap = await getDocFn(termsRef);
+            
+            if (!termsSnap.exists()) {
+                throw new Error('Terms and conditions document not found in Firestore');
+            }
+
+            const termsData = termsSnap.data();
+            console.log('Terms document data:', termsData);
+            
+            const currentVersion = termsData.currentVersion || 1;
+            const currentVersionUrl = termsData.currentVersionUrl || '';
+
+            console.log('Current version:', currentVersion);
+            console.log('Current version URL:', currentVersionUrl);
+
+            let versionData = null;
+            let pdfUrl = currentVersionUrl;
+
+            // Try to fetch the version details from the versions subcollection
+            try {
+                const versionsCol = collectionFn(termsRef, 'versions');
+                const versionsSnap = await getDocsFn(versionsCol);
+                
+                console.log('Versions subcollection size:', versionsSnap.size);
+                
+                // Try to find the document matching currentVersion
+                versionsSnap.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    console.log('Version document:', docSnap.id, data);
+                    const versionNum = typeof data.version === 'number' ? data.version : Number(data.version);
+                    if (versionNum === currentVersion) {
+                        versionData = data;
+                        console.log('Found matching version data:', versionData);
+                    }
+                });
+
+                // If no version data found matching currentVersion, try to get any version
+                if (!versionData && !versionsSnap.empty) {
+                    versionsSnap.forEach((docSnap) => {
+                        if (!versionData) {
+                            versionData = docSnap.data();
+                            console.log('Using first available version data:', versionData);
+                        }
+                    });
+                }
+            } catch (subcollectionError) {
+                console.warn('Error fetching versions subcollection:', subcollectionError);
+                // Continue with main document data
+            }
+
+            // If we have version data with downloadUrl, use it
+            if (versionData && versionData.downloadUrl) {
+                pdfUrl = versionData.downloadUrl;
+            }
+
+            // Clean up the URL - remove any extra parameters or fix encoding
+            if (pdfUrl) {
+                pdfUrl = pdfUrl.trim();
+                // If URL contains 'alt=media' without proper query separator, fix it
+                if (pdfUrl.includes('alt=media') && !pdfUrl.includes('?') && pdfUrl.includes('&')) {
+                    pdfUrl = pdfUrl.replace('&alt=media', '?alt=media');
+                }
+            }
+            
+            console.log('Final PDF URL:', pdfUrl);
+            
+            if (!pdfUrl || pdfUrl === '') {
+                throw new Error('No PDF URL found in terms and conditions data');
+            }
+            
+            const result = {
+                version: versionData?.version || currentVersion,
+                pdfUrl: pdfUrl,
+                uploadedAt: versionData?.uploadedAt || null
+            };
+            
+            console.log('Returning terms data:', result);
+            return result;
+        } catch (error) {
+            console.error('Error fetching terms and conditions:', error);
+            throw error;
+        }
+    }
+
+    async function openTermsInNewTab() {
+        try {
+            console.log('Fetching terms and conditions...');
+            const termsData = await fetchTermsAndConditions();
+            console.log('Terms data fetched:', termsData);
+            
+            if (!termsData || !termsData.pdfUrl) {
+                alert('Unable to load Terms of Condition. Please try again later.');
+                return;
+            }
+
+            // Clean and format the PDF URL
+            let pdfUrl = termsData.pdfUrl.trim();
+            
+            // If it's a Firebase Storage URL, ensure it's properly formatted
+            if (pdfUrl.includes('firebasestorage.googleapis.com')) {
+                // Make sure the URL is complete
+                if (!pdfUrl.startsWith('http')) {
+                    pdfUrl = 'https://' + pdfUrl;
+                }
+            }
+            
+            console.log('Opening PDF in new tab:', pdfUrl);
+            
+            // Open PDF in new browser tab
+            window.open(pdfUrl, '_blank');
+        } catch (error) {
+            console.error('Error loading terms:', error);
+            alert('Unable to load Terms of Condition. Please try again later.');
+        }
+    }
+
+    // Expose openTermsInNewTab to window for onclick handler
+    window.openTermsModal = openTermsInNewTab;
 
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {

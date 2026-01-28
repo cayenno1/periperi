@@ -464,6 +464,26 @@
                 // Save to sessionStorage
                 sessionStorage.setItem('staffSession', JSON.stringify(staffSession));
 
+                // Log admin activity for staff login if logger is available
+                if (typeof logAdminActivity === 'function') {
+                    const fullName = [staffData.firstName, staffData.middleName, staffData.lastName, staffData.suffix]
+                        .filter(Boolean)
+                        .join(' ')
+                        .trim();
+                    logAdminActivity({
+                        action: 'staff_login',
+                        entityType: 'staff',
+                        entityId: staffData.staffId || staffDoc.id,
+                        entityName: fullName || staffData.email || staffData.staffId || staffDoc.id,
+                        description: `Staff ${fullName || staffData.staffId || staffDoc.id} logged in.`,
+                        metadata: {
+                            staffId: staffData.staffId,
+                            email: staffData.email,
+                            role: staffData.role
+                        }
+                    });
+                }
+
                 // Show success message
                 const successMessage = document.getElementById('successMessage');
                 successMessage.classList.add('show');
@@ -544,6 +564,8 @@
         // Check for existing session on page load
         document.addEventListener('DOMContentLoaded', checkExistingSession);
     </script>
+    <!-- Shared admin helpers (logging, etc.) -->
+    <script src="script.js"></script>
 </body>
 </html>
 

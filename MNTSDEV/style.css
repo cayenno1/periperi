@@ -1115,7 +1115,7 @@ body {
   border-color: #ffc72c;
 }
 
-.orders-page .orders-list .review-item[data-status="cancelled"] {
+.orders-page .orders-list .review-item[data-status="declined"] {
   border-color: #ff6b6b;
 }
 

@@ -184,6 +184,7 @@ service cloud.firestore {
       allow read: if true;
 
       // Allow creation of new log entries from the admin UI, with basic shape validation.
+      // Note: createdAt/updatedAt may use serverTimestamp(), so we DO NOT enforce timestamp type here.
       allow create: if
         request.resource.data.action is string &&
         request.resource.data.action.size() > 0 &&
@@ -196,8 +197,7 @@ service cloud.firestore {
         (!('staffName' in request.resource.data) || request.resource.data.staffName is string || request.resource.data.staffName == null) &&
         (!('staffRole' in request.resource.data) || request.resource.data.staffRole is string || request.resource.data.staffRole == null) &&
         (!('staffEmail' in request.resource.data) || request.resource.data.staffEmail is string || request.resource.data.staffEmail == null) &&
-        (!('metadata' in request.resource.data) || request.resource.data.metadata is map || request.resource.data.metadata == null) &&
-        hasValidTimestamps(request.resource.data);
+        (!('metadata' in request.resource.data) || request.resource.data.metadata is map || request.resource.data.metadata == null);
 
       // Prevent client-side updates/deletes of existing log entries to keep an audit trail.
       allow update: if false;

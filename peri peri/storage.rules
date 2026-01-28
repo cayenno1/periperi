@@ -87,6 +87,23 @@ service firebase.storage {
                    );
     }
     
+    // Allow read/write access to Terms and Conditions PDFs (with versioning)
+    match /termsAndConditions/{fileName} {
+      // Allow public read: Terms and Conditions need to be visible to customers
+      allow read: if true;
+      
+      // Allow write: Since app uses custom session auth (not Firebase Auth),
+      // allow writes with file size and content type restrictions for PDFs
+      allow write: if request.resource.size < 10 * 1024 * 1024  // Max 10MB for PDFs
+                   && (
+                     // Allow if content type is missing, empty, or PDF
+                     !('contentType' in request.resource) ||
+                     request.resource.contentType == '' ||
+                     request.resource.contentType == 'application/pdf' ||
+                     request.resource.contentType.matches('application/pdf.*')
+                   );
+    }
+    
     // Default: deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

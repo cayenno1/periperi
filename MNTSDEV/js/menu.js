@@ -382,14 +382,13 @@
                 const items = await fetchItemsByIds(ids);
                 menuContent.innerHTML = items.length
                     ? items.map(renderCardHtml).join('')
-                    : `
-                        <div class="empty-state show">
-                            <i class="fas fa-heart"></i>
-                            <h4>No favorites yet</h4>
-                            <p>Tap the heart on a menu item to save it here.</p>
-                        </div>
-                    `;
-                updateEmptyState();
+                    : '';
+                // Hide empty state for favorites - show nothing when empty
+                const emptyState = document.getElementById('emptyState');
+                if (emptyState) {
+                    emptyState.hidden = true;
+                    emptyState.classList.remove('show');
+                }
                 setFavoritesToggleState();
                 return;
             }

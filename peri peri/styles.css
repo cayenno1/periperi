@@ -559,6 +559,60 @@ select {
     box-shadow: 0 2px 4px rgba(61, 40, 23, 0.1);
 }
 
+/* New Order Highlighting */
+.modern-orders-table tbody tr.new-order-row {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    border-top-color: #ffc107;
+    border-bottom-color: #ffc107;
+    animation: newOrderPulse 2s ease-in-out infinite;
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+}
+
+.modern-orders-table tbody tr.new-order-row:hover {
+    background-color: #ffe69c;
+    border-left-color: #ff9800;
+    box-shadow: 0 3px 12px rgba(255, 152, 0, 0.4);
+}
+
+@keyframes newOrderPulse {
+    0%, 100% {
+        box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+    }
+    50% {
+        box-shadow: 0 2px 12px rgba(255, 193, 7, 0.5);
+    }
+}
+
+/* New Order Notification Badge */
+.new-order-badge {
+    display: inline-block;
+    margin-right: 8px;
+    color: #dc3545;
+    font-size: 10px;
+    animation: badgeBlink 1.5s ease-in-out infinite;
+    vertical-align: middle;
+}
+
+.new-order-badge i {
+    font-size: 8px;
+}
+
+@keyframes badgeBlink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.order-id-column {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 .modern-orders-table tbody tr[style*="cursor: pointer"] {
     transition: all 0.2s ease;
 }
@@ -4889,6 +4943,22 @@ select {
     margin-top: 20px;
 }
 
+/* Admin Profile Cards - consistent sizing and no avatar icon */
+.admin-profiles .profile-card,
+.admin-profiles .add-user-card {
+    min-height: 150px;
+}
+
+.admin-profiles .profile-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.admin-profiles .profile-avatar {
+    display: none;
+}
+
 .profile-card {
     background: white;
     border-radius: 12px;
@@ -5070,9 +5140,113 @@ select {
 .filter-section.activity-logs {
     display: flex;
     align-items: center;
-    gap: 15px;
+    justify-content: space-between;
+    gap: 20px;
     margin-bottom: 25px;
+    padding: 14px 18px;
+    background: #ffe2b3;
+    border-radius: 10px;
     color: #495057;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.activity-logs-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.activity-logs-summary i {
+    font-size: 20px;
+    color: #7E2021;
+}
+
+.activity-logs-summary .summary-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.activity-logs-summary .summary-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: #343a40;
+}
+
+.activity-logs-summary .summary-subtitle {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.activity-logs-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.activity-logs-controls .control-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+}
+
+.activity-logs-controls .form-control {
+    min-width: 180px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    font-size: 13px;
+}
+
+.activity-logs-controls .filter-btn {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    background: #f1b15e;
+    color: #7E2021;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.activity-logs-controls .filter-btn.primary {
+    background: #7E2021;
+    color: #fff;
+}
+
+.activity-logs-controls .filter-btn.secondary {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.activity-logs-controls .filter-btn:hover {
+    transform: translateY(-1px);
+    background: #f7b96b;
+}
+
+.activity-logs-controls .filter-btn.primary:hover {
+    background: #951f20;
+}
+
+.activity-logs-controls .filter-btn.secondary:hover {
+    background: #dde2e6;
+}
+
+@media (max-width: 768px) {
+    .filter-section.activity-logs {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .activity-logs-controls {
+        justify-content: flex-start;
+    }
 }
 
 /* Menu Filter Section */
@@ -6881,6 +7055,7 @@ label[for="description"]::after {
     text-align: left;
     font-weight: 600;
     font-size: 14px;
+    color: #ffffff;
 }
 
 .daily-report-table tbody td {

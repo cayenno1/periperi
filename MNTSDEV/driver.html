@@ -145,7 +145,7 @@
       color: #dc2626;
     }
 
-    .driver-section-count.ongoing {
+    .driver-section-count.pending {
       background: #fef3c7;
       color: #d97706;
     }
@@ -187,7 +187,7 @@
       border-left: 4px solid #dc2626;
     }
 
-    .driver-order-card.ongoing {
+    .driver-order-card.pending {
       border-left: 4px solid #f59e0b;
     }
 
@@ -227,7 +227,7 @@
       color: #dc2626;
     }
 
-    .driver-order-status.ongoing {
+    .driver-order-status.pending {
       background: #fef3c7;
       color: #d97706;
     }
@@ -499,6 +499,96 @@
       flex-shrink: 0;
     }
 
+    /* Custom Confirm/Prompt Modal */
+    .driver-custom-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 4000;
+      padding: 16px;
+    }
+
+    .driver-custom-modal-overlay.show {
+      display: flex;
+    }
+
+    .driver-custom-modal {
+      background: #ffffff;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .driver-custom-modal-content {
+      padding: 24px;
+    }
+
+    .driver-custom-modal-message {
+      font-size: 1rem;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    .driver-custom-modal-input {
+      width: 100%;
+      padding: 12px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 1rem;
+      color: #1a1a1a;
+      margin-bottom: 20px;
+      box-sizing: border-box;
+    }
+
+    .driver-custom-modal-input:focus {
+      outline: none;
+      border-color: #e53935;
+    }
+
+    .driver-custom-modal-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .driver-custom-modal-btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .driver-custom-modal-btn-secondary {
+      background: #f3f4f6;
+      color: #1a1a1a;
+    }
+
+    .driver-custom-modal-btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .driver-custom-modal-btn-primary {
+      background: #e53935;
+      color: #ffffff;
+    }
+
+    .driver-custom-modal-btn-primary:hover {
+      background: #c62828;
+    }
+
     /* Toast Notifications */
     .driver-toast-container {
       position: fixed;
@@ -614,7 +704,7 @@
     }
   </style>
   <meta name="theme-color" content="#ffffff">
-  <meta name="description" content="Driver dashboard to manage new, ongoing, and completed orders.">
+  <meta name="description" content="Driver dashboard to manage new, pending, and completed orders.">
   <script type="module" src="js/firebase-init.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
@@ -644,7 +734,6 @@
                   <span class="profile-email" id="profileEmail">driver@example.com</span>
                 </div>
               </div>
-              <button class="profile-item" id="driverAccountBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;"><span>Account info</span></button>
               <div class="profile-divider"></div>
               <button class="profile-item" id="shiftToggleBtn" style="width:100%; background:none; border:none; text-align:left; cursor:pointer;">
                 <i class="fas fa-clock"></i><span id="shiftToggleText">Start Shift</span>
@@ -679,8 +768,8 @@
       <button class="driver-tab-btn active" role="tab" aria-selected="true" data-view="all">
         <span>All</span>
       </button>
-      <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="ongoing">
-        <span>Ongoing</span>
+      <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="pending">
+        <span>Pending</span>
       </button>
       <button class="driver-tab-btn" role="tab" aria-selected="false" data-view="completed">
         <span>Completed</span>
@@ -689,14 +778,14 @@
 
     <!-- Orders Grid -->
     <div class="driver-orders-grid">
-      <!-- Ongoing Orders -->
-      <section class="driver-order-section" id="ongoingSection" aria-label="Ongoing orders">
+      <!-- Pending Orders -->
+      <section class="driver-order-section" id="pendingSection" aria-label="Pending orders">
         <div class="driver-section-header">
-          <div class="driver-section-title">Ongoing</div>
-          <div class="driver-section-count ongoing" id="ongoingCount">0</div>
+          <div class="driver-section-title">Pending</div>
+          <div class="driver-section-count pending" id="pendingCount">0</div>
         </div>
-        <div class="driver-orders-list" id="ongoingOrdersList"></div>
-        <div class="driver-empty-state" id="ongoingOrdersEmpty" style="display: none;">No ongoing deliveries.</div>
+        <div class="driver-orders-list" id="pendingOrdersList"></div>
+        <div class="driver-empty-state" id="pendingOrdersEmpty" style="display: none;">No pending deliveries.</div>
       </section>
 
       <!-- Completed Orders -->
@@ -723,6 +812,17 @@
       </div>
       <div class="driver-modal-body" id="orderModalBody"></div>
       <div class="driver-modal-actions" id="orderModalActions"></div>
+    </div>
+  </div>
+
+  <!-- Custom Confirm/Prompt Modal -->
+  <div class="driver-custom-modal-overlay" id="customModalOverlay">
+    <div class="driver-custom-modal">
+      <div class="driver-custom-modal-content">
+        <div class="driver-custom-modal-message" id="customModalMessage"></div>
+        <input type="text" class="driver-custom-modal-input" id="customModalInput" style="display: none;" placeholder="Enter code">
+        <div class="driver-custom-modal-buttons" id="customModalButtons"></div>
+      </div>
     </div>
   </div>
 
@@ -789,6 +889,98 @@
 
   <script>
     const DRIVER_STORAGE_KEY = 'ppp_driver';
+
+    // Custom Modal Functions
+    function showCustomConfirm(message, onConfirm, onCancel) {
+      const overlay = document.getElementById('customModalOverlay');
+      const messageEl = document.getElementById('customModalMessage');
+      const inputEl = document.getElementById('customModalInput');
+      const buttonsEl = document.getElementById('customModalButtons');
+      
+      messageEl.textContent = message;
+      inputEl.style.display = 'none';
+      
+      buttonsEl.innerHTML = `
+        <button class="driver-custom-modal-btn driver-custom-modal-btn-secondary" id="customModalCancel">Cancel</button>
+        <button class="driver-custom-modal-btn driver-custom-modal-btn-primary" id="customModalOK">OK</button>
+      `;
+      
+      overlay.classList.add('show');
+      
+      document.getElementById('customModalOK').onclick = function() {
+        overlay.classList.remove('show');
+        if (onConfirm) onConfirm();
+      };
+      
+      document.getElementById('customModalCancel').onclick = function() {
+        overlay.classList.remove('show');
+        if (onCancel) onCancel();
+      };
+      
+      // Close on overlay click
+      overlay.onclick = function(e) {
+        if (e.target === overlay) {
+          overlay.classList.remove('show');
+          if (onCancel) onCancel();
+        }
+      };
+    }
+
+    function showCustomPrompt(message, placeholder, onConfirm, onCancel) {
+      const overlay = document.getElementById('customModalOverlay');
+      const messageEl = document.getElementById('customModalMessage');
+      const inputEl = document.getElementById('customModalInput');
+      const buttonsEl = document.getElementById('customModalButtons');
+      
+      messageEl.textContent = message;
+      inputEl.style.display = 'block';
+      inputEl.value = '';
+      inputEl.placeholder = placeholder || '';
+      
+      buttonsEl.innerHTML = `
+        <button class="driver-custom-modal-btn driver-custom-modal-btn-secondary" id="customModalCancel">Cancel</button>
+        <button class="driver-custom-modal-btn driver-custom-modal-btn-primary" id="customModalOK">OK</button>
+      `;
+      
+      overlay.classList.add('show');
+      
+      // Focus input
+      setTimeout(() => inputEl.focus(), 100);
+      
+      // Handle Enter key
+      const handleEnter = function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const value = inputEl.value.trim();
+          overlay.classList.remove('show');
+          inputEl.removeEventListener('keydown', handleEnter);
+          if (onConfirm) onConfirm(value);
+        }
+      };
+      inputEl.addEventListener('keydown', handleEnter);
+      
+      document.getElementById('customModalOK').onclick = function() {
+        const value = inputEl.value.trim();
+        overlay.classList.remove('show');
+        inputEl.removeEventListener('keydown', handleEnter);
+        if (onConfirm) onConfirm(value);
+      };
+      
+      document.getElementById('customModalCancel').onclick = function() {
+        overlay.classList.remove('show');
+        inputEl.removeEventListener('keydown', handleEnter);
+        if (onCancel) onCancel();
+      };
+      
+      // Close on overlay click
+      overlay.onclick = function(e) {
+        if (e.target === overlay) {
+          overlay.classList.remove('show');
+          inputEl.removeEventListener('keydown', handleEnter);
+          if (onCancel) onCancel();
+        }
+      };
+    }
 
     function getCurrentDriver() {
       try {
@@ -869,50 +1061,25 @@
         logoutBtn.addEventListener('click', async function(){
           dropdown.classList.remove('show');
           
-          if (currentDriver && currentDriver.id) {
-            try {
-              const db = window.firebaseDb;
-              const updateDocFn = window.updateDoc;
-              const docFn = window.doc;
-              const serverTimestampFn = window.serverTimestamp;
-              
-              if (db && updateDocFn && docFn && serverTimestampFn) {
-                try {
-                  const driverRef = docFn(db, 'drivers', currentDriver.id);
-                  await updateDocFn(driverRef, {
-                    availability: 'off',
-                    lastLogoutAt: serverTimestampFn(),
-                    updatedAt: serverTimestampFn()
-                  });
-                } catch (driverError) {
-                  const staffRef = docFn(db, 'staff', currentDriver.id);
-                  await updateDocFn(staffRef, {
-                    availability: 'off',
-                    lastLogoutAt: serverTimestampFn(),
-                    updatedAt: serverTimestampFn()
-                  });
-                }
+          // Sign out from Firebase Auth if user is logged in
+          try {
+            if (window.firebaseAuth && window.signOut) {
+              const currentUser = window.firebaseAuth.currentUser;
+              if (currentUser) {
+                await window.signOut(window.firebaseAuth);
               }
-            } catch (e) {
-              console.error('Error updating driver availability on logout:', e);
             }
+          } catch (authError) {
+            console.error('Error signing out from Firebase Auth:', authError);
           }
           
           try {
             localStorage.removeItem(DRIVER_STORAGE_KEY);
+            localStorage.removeItem('ppp_user');
           } catch (e) {
-            console.error('Error clearing driver storage:', e);
+            console.error('Error clearing storage:', e);
           }
           window.location.href = 'login.html';
-        });
-      }
-
-      const driverAccountBtn = document.getElementById('driverAccountBtn');
-      if (driverAccountBtn) {
-        driverAccountBtn.addEventListener('click', function(e){
-          e.stopPropagation();
-          dropdown.classList.remove('show');
-          openDriverAccount();
         });
       }
     })();
@@ -1153,7 +1320,7 @@
 
     async function startShift() {
       if (!currentDriver || !currentDriver.id) {
-        notify('Driver information not available', 'error');
+        window.alert('Driver information not available');
         return;
       }
       
@@ -1164,7 +1331,7 @@
         const serverTimestampFn = window.serverTimestamp;
         
         if (!db || !collectionFn || !addDocFn || !serverTimestampFn) {
-          notify('Firebase not ready', 'error');
+          window.alert('Firebase not ready');
           return;
         }
         
@@ -1190,7 +1357,7 @@
         
         await setDriverAvailabilityInFirebase('on');
         updateShiftUI();
-        notify('Shift started successfully', 'success');
+        window.alert('Shift started successfully');
         
         setTimeout(() => {
           loadShiftStatus();
@@ -1200,13 +1367,13 @@
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
         console.error('Error starting shift:', error);
-        notify('Error starting shift. Please try again.', 'error');
+        window.alert('Error starting shift. Please try again.');
       }
     }
 
     async function endShift() {
       if (!shiftState.isActive || !shiftState.currentShiftId) {
-        notify('No active shift to end', 'error');
+        window.alert('No active shift to end');
         return;
       }
       
@@ -1217,7 +1384,7 @@
         const serverTimestampFn = window.serverTimestamp;
         
         if (!db || !docFn || !updateDocFn || !serverTimestampFn) {
-          notify('Firebase not ready', 'error');
+          window.alert('Firebase not ready');
           return;
         }
         
@@ -1241,38 +1408,52 @@
         
         await setDriverAvailabilityInFirebase('off');
         updateShiftUI();
-        notify('Shift ended successfully', 'success');
+        window.alert('Shift ended successfully');
         
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
         console.error('Error ending shift:', error?.code, error?.message, error);
         const msg = (error?.code === 'not-found') ? 'Shift record not found. It may have been removed.' : (error?.message || error?.code || 'Please try again.');
-        notify('Error ending shift: ' + msg, 'error');
+        window.alert('Error ending shift: ' + msg);
         if (error?.code === 'not-found') loadShiftStatus();
       }
     }
 
     function toggleShift() {
       if (shiftState.isActive) {
-        // Clock-out: ask for code or remote
-        const useCode = confirm('Do you want to enter a clock-out code?\nOK = enter code\nCancel = remote clock-out');
-        if (useCode) {
-          promptAndHandleCode('clock_out');
-        } else {
-          endShiftRemote();
-        }
+        // Clock-out: ask for code or remote using custom modal
+        showCustomConfirm(
+          'Do you want to enter a clock-out code?\nOK = enter code\nCancel = remote clock-out',
+          function() {
+            // OK clicked - enter code
+            promptAndHandleCode('clock_out');
+          },
+          function() {
+            // Cancel clicked - remote clock-out
+            endShiftRemote();
+          }
+        );
       } else {
-        // Clock-in: require code entry
+        // Clock-in: require code entry using custom modal
         promptAndHandleCode('clock_in');
       }
     }
 
-    // Prompt driver for numeric code and process
+    // Prompt driver for numeric code and process using custom modal
     async function promptAndHandleCode(type) {
-      const input = prompt(`Enter the ${type === 'clock_in' ? 'clock-in' : 'clock-out'} code shown in the store:`);
-      if (!input) return;
-      await handleQRCodeScanned(input.trim(), type);
+      showCustomPrompt(
+        `Enter the ${type === 'clock_in' ? 'clock-in' : 'clock-out'} code shown in the store:`,
+        'Enter code',
+        async function(input) {
+          if (input) {
+            await handleQRCodeScanned(input.trim(), type);
+          }
+        },
+        function() {
+          // Cancel - do nothing
+        }
+      );
     }
 
     // Gracefully stop any QR/scan session (no-op fallback for now)
@@ -1400,7 +1581,7 @@
       // Check if driver already has active shift
       const hasActiveShift = await checkDriverActiveShift();
       if (hasActiveShift) {
-        notify('You already have an active shift', 'error');
+        window.alert('You already have an active shift');
         return;
       }
       
@@ -1460,7 +1641,7 @@
         
         await setDriverAvailabilityInFirebase('on');
         updateShiftUI();
-        notify('Shift started successfully', 'success');
+        window.alert('Shift started successfully');
         
         setTimeout(() => {
           loadShiftStatus();
@@ -1470,21 +1651,21 @@
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
         console.error('Error starting shift:', error);
-        notify('Error starting shift. Please try again.', 'error');
+        window.alert('Error starting shift. Please try again.');
       }
     }
 
     // End shift with QR code
     async function endShiftWithQR(qrCodeData, qrCodeId) {
       if (!shiftState.isActive || !shiftState.currentShiftId) {
-        notify('No active shift to end', 'error');
+        window.alert('No active shift to end');
         return;
       }
       
       // Check if all deliveries completed
       const hasPendingDeliveries = await checkPendingDeliveries();
       if (hasPendingDeliveries) {
-        notify('Please complete all assigned deliveries before clocking out', 'error');
+        window.alert('Please complete all assigned deliveries before clocking out');
         return;
       }
       
@@ -1534,14 +1715,14 @@
         
         await setDriverAvailabilityInFirebase('off');
         updateShiftUI();
-        notify('Shift ended successfully', 'success');
+        window.alert('Shift ended successfully');
         
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
         console.error('Error ending shift:', error?.code, error?.message, error);
         const msg = (error?.code === 'not-found') ? 'Shift record not found. It may have been removed.' : (error?.message || error?.code || 'Please try again.');
-        notify('Error ending shift: ' + msg, 'error');
+        window.alert('Error ending shift: ' + msg);
         if (error?.code === 'not-found') loadShiftStatus();
       }
     }
@@ -1549,19 +1730,31 @@
     // End shift remotely (without QR code)
     async function endShiftRemote() {
       if (!shiftState.isActive || !shiftState.currentShiftId) {
-        notify('No active shift to end', 'error');
+        window.alert('No active shift to end');
         return;
       }
       
       // Check if all deliveries completed
       const hasPendingDeliveries = await checkPendingDeliveries();
       if (hasPendingDeliveries) {
-        notify('Please complete all assigned deliveries before clocking out', 'error');
+        window.alert('Please complete all assigned deliveries before clocking out');
         return;
       }
       
-      const confirmed = confirm('Are you sure you want to end your shift remotely?');
-      if (!confirmed) {
+      showCustomConfirm(
+        'Are you sure you want to end your shift remotely?',
+        async function() {
+          // OK clicked - proceed with remote clock-out
+          await proceedWithRemoteClockOut();
+        },
+        function() {
+          // Cancel clicked - do nothing
+        }
+      );
+    }
+
+    async function proceedWithRemoteClockOut() {
+      if (!shiftState.isActive || !shiftState.currentShiftId) {
         return;
       }
       
@@ -1597,14 +1790,14 @@
         
         await setDriverAvailabilityInFirebase('off');
         updateShiftUI();
-        notify('Shift ended successfully', 'success');
+        window.alert('Shift ended successfully');
         
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('show');
       } catch (error) {
         console.error('Error ending shift:', error?.code, error?.message, error);
         const msg = (error?.code === 'not-found') ? 'Shift record not found. It may have been removed.' : (error?.message || error?.code || 'Please try again.');
-        notify('Error ending shift: ' + msg, 'error');
+        window.alert('Error ending shift: ' + msg);
         if (error?.code === 'not-found') loadShiftStatus();
       }
     }
@@ -1722,12 +1915,12 @@
 
     function applyView(){
       const map = {
-        all: ['ongoingSection','completedSection'],
-        ongoing: ['ongoingSection'],
+        all: ['pendingSection','completedSection'],
+        pending: ['pendingSection'],
         completed: ['completedSection']
       };
       const toShow = new Set(map[currentView] || map.all);
-      ['ongoingSection','completedSection'].forEach(id => {
+      ['pendingSection','completedSection'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.style.display = toShow.has(id) ? '' : 'none';
@@ -1737,7 +1930,7 @@
     // Data
     const statusSteps = ['Transit'];
     let driverAvailability = 'available';
-    let ongoingOrders = [];
+    let pendingOrders = [];
     let completedOrders = [];
     
     async function loadDriverOrders() {
@@ -1770,7 +1963,7 @@
         
         if (onSnapshotFn) {
           onSnapshotFn(ordersQuery, (snapshot) => {
-            ongoingOrders = [];
+            pendingOrders = [];
             completedOrders = [];
             
             snapshot.forEach((docSnap) => {
@@ -1821,7 +2014,7 @@
               } else if (orderStatus === 'out for delivery' || orderStatus === 'out_for_delivery' || 
                          orderStatus === 'out-for-delivery' || orderStatus === 'in-transit' || 
                          orderStatus === 'in_transit') {
-                ongoingOrders.push(order);
+                pendingOrders.push(order);
               }
             });
             
@@ -1836,23 +2029,23 @@
     }
 
     function renderAll(){ 
-      renderOngoing(); 
+      renderPending(); 
       renderCompleted(); 
       applyView(); 
     }
 
-    function renderOngoing(){
-      const container = document.getElementById('ongoingOrdersList');
-      const empty = document.getElementById('ongoingOrdersEmpty');
-      const count = document.getElementById('ongoingCount');
-      if (count) count.textContent = ongoingOrders.length;
-      if (!ongoingOrders.length){ 
+    function renderPending(){
+      const container = document.getElementById('pendingOrdersList');
+      const empty = document.getElementById('pendingOrdersEmpty');
+      const count = document.getElementById('pendingCount');
+      if (count) count.textContent = pendingOrders.length;
+      if (!pendingOrders.length){ 
         container.innerHTML = ''; 
         empty.style.display = 'block'; 
         return; 
       }
       empty.style.display = 'none';
-      container.innerHTML = ongoingOrders.map(order => cardTemplate(order, 'ongoing')).join('');
+      container.innerHTML = pendingOrders.map(order => cardTemplate(order, 'pending')).join('');
     }
 
     function renderCompleted(){
@@ -1870,7 +2063,7 @@
     }
 
     function cardTemplate(order, list){
-      const statusClass = list === 'completed' ? 'completed' : 'ongoing';
+      const statusClass = list === 'completed' ? 'completed' : 'pending';
       const statusText = list==='completed' ? 'Completed' : 'Transit';
       return `
         <div class="driver-order-card ${statusClass}" onclick="viewDetails('${order.id}','${list}')" style="cursor: pointer;">
@@ -1895,8 +2088,8 @@
           <div class="driver-order-footer">
             <div class="driver-order-price">₱${order.total}.00</div>
             <div class="driver-order-actions" onclick="event.stopPropagation();">
-              ${list==='ongoing' ? `
-                <button class="driver-btn driver-btn-secondary" onclick="viewDetails('${order.id}','ongoing')">Details</button>
+              ${list==='pending' ? `
+                <button class="driver-btn driver-btn-secondary" onclick="viewDetails('${order.id}','pending')">Details</button>
                 <button class="driver-btn driver-btn-success" onclick="event.stopPropagation(); handleMarkAsDone('${order.id}')">Mark as Done</button>
               `: ''}
               ${list==='completed' ? `
@@ -1910,12 +2103,12 @@
 
     function handleMarkAsDone(id) {
       // Check payment method - if cash, open modal; if GCash, complete directly
-      const order = ongoingOrders.find(o => o.id === id);
+      const order = pendingOrders.find(o => o.id === id);
       if (order) {
         const paymentMethod = (order.payment?.method || 'Cash').toLowerCase();
         if (paymentMethod === 'cash') {
           // Open modal to enter cash amount
-          viewDetails(id, 'ongoing');
+          viewDetails(id, 'pending');
         } else {
           // GCash - complete directly
           completeOrder(id);
@@ -1932,7 +2125,7 @@
     }
 
     function setOrderStatus(id, value){
-      const order = ongoingOrders.find(o=>o.id===id);
+      const order = pendingOrders.find(o=>o.id===id);
       if (!order) return;
       const idx = parseInt(value, 10);
       if (isNaN(idx) || idx < 0 || idx >= statusSteps.length) return;
@@ -1942,9 +2135,9 @@
     }
 
     async function completeOrder(id){
-      const idx = ongoingOrders.findIndex(o=>o.id===id);
+      const idx = pendingOrders.findIndex(o=>o.id===id);
       if (idx === -1) return;
-      const order = ongoingOrders[idx];
+      const order = pendingOrders[idx];
       
       try {
         const db = window.firebaseDb;
@@ -1984,13 +2177,13 @@
       }
       
       closeOrderModal();
-      const completedOrder = ongoingOrders.splice(idx,1)[0];
+      const completedOrder = pendingOrders.splice(idx,1)[0];
       completedOrder.completedAt = new Date().toLocaleString();
       completedOrder.completedAtTs = Date.now();
       completedOrders.unshift(completedOrder);
       
       notify('Delivery completed for ' + (order.trackingId || order.id), 'success');
-      if (ongoingOrders.length === 0) { 
+      if (pendingOrders.length === 0) { 
         driverAvailability = 'available'; 
         updateStatusDisplay();
         
@@ -2023,7 +2216,7 @@
     }
 
     function viewDetails(id, list){
-      const source = list==='ongoing' ? ongoingOrders : completedOrders;
+      const source = list==='pending' ? pendingOrders : completedOrders;
       const order = source.find(o=>o.id===id);
       if (!order) return;
       const modal = document.getElementById('orderModal');
@@ -2126,7 +2319,7 @@
       `;
 
       actions.innerHTML = '';
-      if (list==='ongoing'){
+      if (list==='pending'){
         const paymentMethod = (order.payment?.method || 'Cash').toLowerCase();
         const isCash = paymentMethod === 'cash';
         
@@ -2218,9 +2411,9 @@
         return;
       }
       
-      const idx = ongoingOrders.findIndex(o=>o.id===orderId);
+      const idx = pendingOrders.findIndex(o=>o.id===orderId);
       if (idx === -1) return;
-      const order = ongoingOrders[idx];
+      const order = pendingOrders[idx];
       
       try {
         const db = window.firebaseDb;
@@ -2284,7 +2477,7 @@
       
       closeOrderModal();
       // Update local order object
-      const completedOrder = ongoingOrders.splice(idx,1)[0];
+      const completedOrder = pendingOrders.splice(idx,1)[0];
       completedOrder.completedAt = new Date().toLocaleString();
       completedOrder.completedAtTs = Date.now();
       if (!completedOrder.payment) completedOrder.payment = {};
@@ -2293,7 +2486,7 @@
       completedOrders.unshift(completedOrder);
       
       notify('Delivery completed for ' + (order.trackingId || order.id), 'success');
-      if (ongoingOrders.length === 0) { 
+      if (pendingOrders.length === 0) { 
         driverAvailability = 'available'; 
         updateStatusDisplay();
         
@@ -2379,7 +2572,7 @@
 
       const assignedOrdersList = document.getElementById('assignedOrdersList');
       if (assignedOrdersList) {
-        const allAssigned = [...ongoingOrders];
+        const allAssigned = [...pendingOrders];
         if (allAssigned.length === 0) {
           assignedOrdersList.innerHTML = '<div style="color: #6b7280; font-size: 0.9rem; text-align: center; padding: 20px;">No assigned orders at the moment.</div>';
         } else {
@@ -2388,7 +2581,7 @@
               <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 4px solid #f59e0b;">
                 <div style="font-weight: 700; margin-bottom: 4px;">${order.trackingId || order.id}</div>
                 <div style="font-size: 0.9rem; color: #6b7280;">${order.dropoff.name} - ${order.dropoff.address}</div>
-                <div style="font-size: 0.85rem; color: #9ca3af; margin-top: 4px;">Status: Ongoing</div>
+                <div style="font-size: 0.85rem; color: #9ca3af; margin-top: 4px;">Status: Pending</div>
               </div>
             `;
           }).join('');

@@ -366,8 +366,6 @@
                             <li><a href="menu.html#menu-list">Menu List</a></li>
                             <li><a href="menu.html#addFoodDashboard">Add Product</a></li>
                             <li><a href="menu.html#menu-product-detail">Product Detail</a></li>
-                            <li><a href="menu.html#tableNumbers">Table Number</a></li>
-                            <li><a href="menu.html#ingredient-logs">Ingredient Logs</a></li>
                         </ul>
                     </li>
                     <li class="nav-item menu-nav-dropdown">
@@ -402,7 +400,7 @@
                     <li class="nav-item">
                         <a href="settings.html" class="nav-link">
                             <i class="fas fa-cog"></i>
-                            <span>Payment Settings</span>
+                            <span>Site Settings</span>
                         </a>
                     </li>
                     <li class="nav-item active">
@@ -433,7 +431,6 @@
                     <button class="profile-btn" onclick="event.stopPropagation(); toggleDropdown('adminDropdown');">
                         <i class="fas fa-user"></i>
                         <span id="profileName"></span>
-                        <i class="fas fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu" id="adminDropdown">
                         <a href="view-user-profile.html" class="dropdown-item" onclick="showUserProfile(); return false;">Profile Settings</a>
@@ -1363,6 +1360,31 @@
                     throw updateError;
                 }
                 
+                // Log admin activity for staff profile update (if logger is available)
+                if (typeof logAdminActivity === 'function') {
+                    let before = {};
+                    let after = {};
+                    // Capture only changed keys for metadata
+                    const changedKeys = Object.keys(updatedData);
+                    changedKeys.forEach(key => {
+                        before[key] = currentUserData[key];
+                        after[key] = updatedData[key];
+                    });
+                    const displayName = `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim() || currentUserData.email || currentUserData.staffId || currentUserData.id;
+                    logAdminActivity({
+                        action: 'staff_update',
+                        entityType: 'staff',
+                        entityId: currentUserData.id,
+                        entityName: displayName,
+                        description: `Staff profile ${displayName} was updated.`,
+                        metadata: {
+                            changedKeys: changedKeys,
+                            before: before,
+                            after: after
+                        }
+                    });
+                }
+                
                 // Update current data immediately for responsive UI
                 // Preserve shift times in the correct format
                 const updatedUserData = { ...currentUserData, ...updatedData };
@@ -1436,6 +1458,21 @@
                     status: 'deleted',
                     deletedAt: new Date().toISOString()
                 });
+
+                // Log admin activity for staff delete/deactivate
+                if (typeof logAdminActivity === 'function') {
+                    const displayName = `${currentUserData.firstName || ''} ${currentUserData.lastName || ''}`.trim() || currentUserData.email || currentUserData.staffId || currentUserData.id;
+                    logAdminActivity({
+                        action: 'staff_delete',
+                        entityType: 'staff',
+                        entityId: currentUserData.id,
+                        entityName: displayName,
+                        description: `Staff profile ${displayName} was marked as deleted.`,
+                        metadata: {
+                            previousStatus: currentUserData.status || null
+                        }
+                    });
+                }
                 
                 alert('User has been deleted successfully.');
                 
