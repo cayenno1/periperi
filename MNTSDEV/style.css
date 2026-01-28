@@ -6284,6 +6284,24 @@ select.restaurant-form-input {
   flex: 1;
 }
 
+.cart-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+#clearCartBtn {
+  border-radius: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  line-height: 1;
+}
+
+#clearCartBtn i {
+  margin-right: 6px;
+}
+
 .cart-title {
   font-size: 2.2em;
   font-weight: 800;
@@ -7057,6 +7075,15 @@ select.restaurant-form-input {
   .cart-header {
     flex-direction: column;
     gap: 16px;
+  }
+
+  .cart-header-right {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  #clearCartBtn {
+    align-self: flex-end;
   }
   
   .cart-status {

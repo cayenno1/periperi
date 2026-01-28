@@ -562,11 +562,10 @@
             const cartItemsCol = window.collection(customerRef, 'cartItems');
             const snap = await window.getDocs(cartItemsCol);
 
-            for (const docSnap of snap.docs) {
+            // Build rows first so we can sort by price before rendering.
+            const rows = snap.docs.map((docSnap) => {
                 const data = docSnap.data() || {};
                 const docId = docSnap.id;
-
-                const name = data.name || 'Item';
                 const quantity =
                     typeof data.quantity === 'number'
                         ? data.quantity
@@ -578,19 +577,67 @@
                 const unitPrice =
                     quantity > 0 ? totalPrice / quantity : totalPrice;
 
+                const isFree = !!data.freeWithPeriRibs;
+                const sortPrice = isFree ? 0 : totalPrice; // hierarchy by line total; free items at bottom/under parent
+
+                // Best-effort parent key to keep free sauces grouped under their main item.
+                const parentKey = data.parentId || data.linkedToMainItem || data.menuId || '';
+
+                return {
+                    docId,
+                    data,
+                    quantity,
+                    totalPrice,
+                    unitPrice,
+                    isFree,
+                    sortPrice,
+                    parentKey
+                };
+            });
+
+            const mains = rows.filter((r) => !r.isFree);
+            const frees = rows.filter((r) => r.isFree);
+
+            mains.sort((a, b) => (b.sortPrice - a.sortPrice) || String(a.data?.name || '').localeCompare(String(b.data?.name || '')));
+            frees.sort((a, b) => String(a.data?.name || '').localeCompare(String(b.data?.name || '')));
+
+            const childrenByParent = new Map();
+            for (const freeRow of frees) {
+                const key = freeRow.parentKey || '';
+                if (!childrenByParent.has(key)) childrenByParent.set(key, []);
+                childrenByParent.get(key).push(freeRow);
+            }
+
+            const orderedRows = [];
+            for (const mainRow of mains) {
+                orderedRows.push(mainRow);
+                const key = mainRow.data?.menuId || mainRow.data?.itemId || mainRow.data?.parentId || '';
+                const kids = childrenByParent.get(key) || [];
+                orderedRows.push(...kids);
+                childrenByParent.delete(key);
+            }
+            // Any remaining free items without a matched parent go at the bottom.
+            for (const leftover of childrenByParent.values()) orderedRows.push(...leftover);
+
+            for (const row of orderedRows) {
+                const data = row.data || {};
+                const docId = row.docId;
+
+                const name = data.name || 'Item';
                 const imageUrl = data.imageUrl || 'food_img.png';
+
                 // Support both old variation object and new isVariation/variationIndex structure
                 // For customer-cart.js items: if isVariation is true, create variation object from variationIndex
                 let variation = null;
                 if (data.variation) {
                     variation = data.variation;
                 } else if (data.isVariation === true && data.variationIndex !== undefined && data.variationIndex >= 0) {
-                    // Create variation object from customer-cart.js structure
                     variation = {
                         index: data.variationIndex,
                         id: data.itemId || null
                     };
                 }
+
                 const itemId = data.itemId || null;
                 // For variations, menuId is the parent menu item ID (used to fetch all variations)
                 // For non-variations, menuId equals itemId
@@ -599,19 +646,18 @@
                 const itemEl = document.createElement('div');
                 itemEl.className = 'cart-item';
                 itemEl.dataset.cartDocId = docId;
-                itemEl.dataset.unitPrice = String(unitPrice);
+                itemEl.dataset.unitPrice = String(row.unitPrice);
                 itemEl.dataset.source = 'user';
                 itemEl.dataset.itemId = itemId || '';
                 itemEl.dataset.menuId = menuId || '';
                 itemEl.dataset.parentId = data.parentId || menuId || '';
                 itemEl.dataset.lineId = data.lineId || '';
-                itemEl.dataset.freeWithPeriRibs = String(data.freeWithPeriRibs || false);
+                itemEl.dataset.freeWithPeriRibs = String(row.isFree);
                 itemEl.dataset.isVariation = String(data.isVariation || false);
                 itemEl.dataset.variationIndex = String(data.variationIndex !== undefined ? data.variationIndex : -1);
 
-                const isFree = data.freeWithPeriRibs || false;
-                const priceDisplay = isFree ? 'Free' : `₱${unitPrice.toFixed(2)}`;
-                const pricePerUnitDisplay = isFree ? 'Free' : `₱${unitPrice.toFixed(2)} each`;
+                const priceDisplay = row.isFree ? 'Free' : `₱${row.unitPrice.toFixed(2)}`;
+                const pricePerUnitDisplay = row.isFree ? 'Free' : `₱${row.unitPrice.toFixed(2)} each`;
 
                 itemEl.innerHTML = `
                     <div class="item-image-container">
@@ -620,7 +666,7 @@
                     <div class="cart-item-details">
                         <div class="item-info">
                             <h3 class="cart-item-title">${name}</h3>
-                            ${isFree ? '<span class="free-badge" style="display:inline-block;padding:4px 8px;background:#4caf50;color:#fff;border-radius:4px;font-size:0.75em;font-weight:600;margin-left:8px;">Free</span>' : ''}
+                            ${row.isFree ? '<span class="free-badge" style="display:inline-block;padding:4px 8px;background:#4caf50;color:#fff;border-radius:4px;font-size:0.75em;font-weight:600;margin-left:8px;">Free</span>' : ''}
                         </div>
                         <div class="item-options"></div>
                         <div class="item-price-section">
@@ -629,21 +675,21 @@
                         </div>
                     </div>
                     <div class="cart-item-controls">
-                        <button class="qty-btn minus-btn ${isFree ? 'disabled-input' : ''}" onclick="cartReview.updateQuantity(this, -1)" ${isFree ? 'disabled' : ''}>
+                        <button class="qty-btn minus-btn ${row.isFree ? 'disabled-input' : ''}" onclick="cartReview.updateQuantity(this, -1)" ${row.isFree ? 'disabled' : ''}>
                             <i class="fas fa-minus"></i>
                         </button>
                         <input
-                            class="qty-display qty-input ${isFree ? 'disabled-input' : ''}"
+                            class="qty-display qty-input ${row.isFree ? 'disabled-input' : ''}"
                             type="text"
                             inputmode="numeric"
                             pattern="\\d{1,2}"
                             maxlength="2"
                             aria-label="Quantity"
-                            value="${quantity}"
-                            ${isFree ? 'readonly disabled' : 'oninput="cartReview.onQtyInput(this)" onblur="cartReview.onQtyBlur(this)"'}
-                            style="${isFree ? 'background:#f5f5f5;color:#999;cursor:not-allowed;' : ''}"
+                            value="${row.quantity}"
+                            ${row.isFree ? 'readonly disabled' : 'oninput="cartReview.onQtyInput(this)" onblur="cartReview.onQtyBlur(this)"'}
+                            style="${row.isFree ? 'background:#f5f5f5;color:#999;cursor:not-allowed;' : ''}"
                         />
-                        <button class="qty-btn plus-btn ${isFree ? 'disabled-input' : ''}" onclick="cartReview.updateQuantity(this, 1)" ${isFree ? 'disabled' : ''}>
+                        <button class="qty-btn plus-btn ${row.isFree ? 'disabled-input' : ''}" onclick="cartReview.updateQuantity(this, 1)" ${row.isFree ? 'disabled' : ''}>
                             <i class="fas fa-plus"></i>
                         </button>
                     </div>
@@ -653,11 +699,9 @@
                 `;
 
                 cartItemsList.appendChild(itemEl);
-                
+
                 // Render variation dropdown if applicable (2+ variations)
-                // Use menuId (parent menu item) to get all variations, not the variation ID
-                // Only show variation dropdown for main items (not free sauces)
-                if (menuId && !isFree) {
+                if (menuId && !row.isFree) {
                     await renderVariationDropdown(menuId, variation, itemEl, 'user');
                 }
             }
@@ -680,8 +724,8 @@
             return;
         }
 
-        for (const data of cart) {
-            const name = data.name || 'Item';
+        // Sort guest cart by price (highest first), keeping linked free sauces under their main item.
+        const rows = (Array.isArray(cart) ? cart : []).map((data) => {
             const quantity =
                 typeof data.quantity === 'number'
                     ? data.quantity
@@ -690,13 +734,46 @@
                 typeof data.price === 'number'
                     ? data.price
                     : Number(data.price) || 0;
+            const isFree = !!data.freeWithPeriRibs;
+            const sortPrice = isFree ? 0 : lineTotal;
+            const parentKey = data.linkedToMainItem || data.parentId || data.menuId || '';
+            return { data, quantity, lineTotal, isFree, sortPrice, parentKey };
+        });
+
+        const mains = rows.filter((r) => !r.isFree);
+        const frees = rows.filter((r) => r.isFree);
+        mains.sort((a, b) => (b.sortPrice - a.sortPrice) || String(a.data?.name || '').localeCompare(String(b.data?.name || '')));
+        frees.sort((a, b) => String(a.data?.name || '').localeCompare(String(b.data?.name || '')));
+
+        const childrenByParent = new Map();
+        for (const freeRow of frees) {
+            const key = freeRow.parentKey || '';
+            if (!childrenByParent.has(key)) childrenByParent.set(key, []);
+            childrenByParent.get(key).push(freeRow);
+        }
+
+        const orderedRows = [];
+        for (const mainRow of mains) {
+            orderedRows.push(mainRow);
+            const key = mainRow.data?.menuId || mainRow.data?.itemId || mainRow.data?.parentId || '';
+            const kids = childrenByParent.get(key) || [];
+            orderedRows.push(...kids);
+            childrenByParent.delete(key);
+        }
+        for (const leftover of childrenByParent.values()) orderedRows.push(...leftover);
+
+        for (const row of orderedRows) {
+            const data = row.data || {};
+            const name = data.name || 'Item';
+            const quantity = row.quantity;
+            const lineTotal = row.lineTotal;
             const unitPrice = quantity > 0 ? lineTotal / quantity : lineTotal;
             const imageUrl = data.imageUrl || 'food_img.png';
             const guestId = data.id || data.itemId || `guest-${name}`;
             const variation = data.variation || null;
             const itemId = data.itemId || null;
             const menuId = data.menuId || itemId || null;
-            const isFree = data.freeWithPeriRibs || false;
+            const isFree = row.isFree;
 
             const itemEl = document.createElement('div');
             itemEl.className = 'cart-item';
@@ -1248,11 +1325,77 @@
         window.location.href = 'checkout.html';
     }
 
+    async function clearCart() {
+        // Clears all items from cart (Firestore for signed-in users, localStorage for guests)
+        const clearBtn = document.getElementById('clearCartBtn');
+        if (clearBtn && (clearBtn.disabled || clearBtn.dataset.processing === 'true')) return;
+        if (clearBtn) {
+            clearBtn.disabled = true;
+            clearBtn.dataset.processing = 'true';
+        }
+
+        try {
+            await window.utils?.waitForFirebaseReady?.();
+        } catch (e) {}
+
+        const user = window.firebaseAuth?.currentUser || null;
+
+        // Guest cart
+        if (!user) {
+            try {
+                window.localStorage?.removeItem(GUEST_CART_KEY);
+                window.localStorage?.setItem('ppp_cart_count', '0');
+                document.dispatchEvent(new CustomEvent('cart:count-changed', { detail: { count: 0 } }));
+            } catch (e) {}
+
+            const cartItemsList = document.querySelector('.cart-items-list');
+            if (cartItemsList) cartItemsList.innerHTML = '';
+            updateCartSummary();
+            return;
+        }
+
+        // Signed-in cart (Firestore)
+        try {
+            const db = window.firebaseDb;
+            if (!db || !window.doc || !window.collection || !window.getDocs || !window.deleteDoc) {
+                console.warn('Firebase not fully initialized for clear cart');
+                return;
+            }
+
+            const customerRef = window.doc(db, 'customers', user.uid);
+            const cartItemsCol = window.collection(customerRef, 'cartItems');
+            const snap = await window.getDocs(cartItemsCol);
+            for (const docSnap of snap.docs) {
+                await window.deleteDoc(docSnap.ref);
+            }
+
+            try {
+                window.localStorage?.setItem('ppp_cart_count', '0');
+                document.dispatchEvent(new CustomEvent('cart:count-changed', { detail: { count: 0 } }));
+            } catch (e) {}
+
+            await loadCartFromFirestore(user);
+        } catch (error) {
+            console.error('Error clearing cart:', error);
+            if (window.showAlert) {
+                window.showAlert('Could not clear cart right now. Please try again.', 'error');
+            } else {
+                alert('Could not clear cart right now. Please try again.');
+            }
+        } finally {
+            if (clearBtn) {
+                clearBtn.disabled = false;
+                delete clearBtn.dataset.processing;
+            }
+        }
+    }
+
     // Expose functions to window
     window.cartReview = {
         updateQuantity,
         removeItem,
         addMoreItems,
+        clearCart,
         proceedToCheckout,
         changeVariation,
         onQtyInput,
