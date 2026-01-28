@@ -14044,6 +14044,32 @@ async function updateIdVerificationTab(customerId) {
         const idName = discountInfo.idName || customerData.idName || '';
         const idNumber = discountInfo.idNumber || customerData.idNumber || '';
         
+        // Get ID type (PWD or Senior) from discountInfo or top-level fields
+        const idType = discountInfo.type || discountInfo.idType || customerData.idType || customerData.discountType || '';
+        const isPWD = idType && (idType.toLowerCase() === 'pwd' || idType.toLowerCase().includes('pwd'));
+        
+        // Get ID expiration date (only for PWD IDs)
+        let idExpiration = null;
+        let idExpirationText = 'N/A';
+        if (isPWD) {
+            const expirationDate = discountInfo.idExpiration || customerData.idExpiration || null;
+            if (expirationDate) {
+                try {
+                    // Handle Firestore Timestamp or Date object
+                    const expDate = expirationDate.toDate ? expirationDate.toDate() : new Date(expirationDate);
+                    idExpiration = expDate;
+                    idExpirationText = expDate.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric'
+                    });
+                } catch (e) {
+                    console.warn('Error parsing expiration date:', e);
+                    idExpirationText = 'Invalid Date';
+                }
+            }
+        }
+        
         if (discountInfo && typeof discountInfo === 'object') {
             // Check for proofUrl first (full URL) - ID picture
             foundImageUrl = discountInfo.proofUrl || discountInfo.proofURL || '';
@@ -14233,6 +14259,10 @@ async function updateIdVerificationTab(customerId) {
                                     <div style="font-size: 16px; color: #333; font-weight: 600; font-family: monospace; letter-spacing: 1px;">${escapeHtml(idNumber)}</div>
                                 </div>
                             ` : ''}
+                            <div style="background: #f8f9fa; border-radius: 8px; padding: 16px;">
+                                <div style="font-size: 12px; color: #666; margin-bottom: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">ID Expiration</div>
+                                <div style="font-size: 16px; color: #333; font-weight: 600;">${escapeHtml(idExpirationText)}</div>
+                            </div>
                         </div>
                     </div>
                 ` : ''}

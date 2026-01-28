@@ -11,6 +11,8 @@
     let notifUnsubscribe = null;   // unsubscribe for notifs onSnapshot
     let isInitialized = false;
     let previousOrderStates = new Map(); // orderId -> previous order data
+    let discountInfoUnsubscribe = null; // unsubscribe for discountInfo listener
+    let previousDiscountInfo = null; // previous discountInfo state
     let currentPage = 1;
     const NOTIFICATIONS_PER_PAGE = 10;
     let selectedNotifications = new Set(); // Set of notification IDs
@@ -39,6 +41,7 @@
         if (user) {
             subscribeToNotifs(user.uid);
             setupOrderListeners(user);
+            setupDiscountInfoListener(user);
         }
 
         // Listen for auth state changes
@@ -47,6 +50,7 @@
                 if (user) {
                     subscribeToNotifs(user.uid);
                     setupOrderListeners(user);
+                    setupDiscountInfoListener(user);
                 } else {
                     clearNotifications();
                 }
@@ -236,6 +240,84 @@
         }
     }
 
+    // Setup real-time listener for customer's discountInfo changes
+    function setupDiscountInfoListener(user) {
+        if (!user || !window.firebaseDb || !window.doc || !window.onSnapshot) {
+            console.warn('Firebase functions not available for discountInfo listener');
+            return;
+        }
+
+        // Clean up existing listener
+        if (discountInfoUnsubscribe) {
+            try { discountInfoUnsubscribe(); } catch (e) { console.warn('Error unsubscribing discountInfo listener:', e); }
+            discountInfoUnsubscribe = null;
+        }
+        previousDiscountInfo = null;
+
+        try {
+            const customerRef = window.doc(window.firebaseDb, 'customers', user.uid);
+            
+            discountInfoUnsubscribe = window.onSnapshot(customerRef, (snapshot) => {
+                if (!snapshot.exists()) {
+                    previousDiscountInfo = null;
+                    return;
+                }
+
+                const customerData = snapshot.data();
+                const currentDiscountInfo = customerData.discountInfo || {};
+                const oldDiscountInfo = previousDiscountInfo || {};
+
+                // Only process if discountInfo exists and this is not the first load
+                // (previousDiscountInfo being null indicates first load)
+                if (Object.keys(currentDiscountInfo).length > 0 && previousDiscountInfo !== null) {
+                    handleDiscountInfoChange(oldDiscountInfo, currentDiscountInfo);
+                }
+
+                // Update previous state
+                previousDiscountInfo = { ...currentDiscountInfo };
+            }, (error) => {
+                console.warn('Error in discountInfo listener:', error);
+            });
+        } catch (error) {
+            console.error('Error setting up discountInfo listener:', error);
+        }
+    }
+
+    // Handle discount info (ID verification) changes
+    function handleDiscountInfoChange(oldDiscountInfo, newDiscountInfo) {
+        if (!newDiscountInfo) return;
+
+        const oldVerification = oldDiscountInfo.IDverification;
+        const newVerification = newDiscountInfo.IDverification;
+        const discountType = newDiscountInfo.type || oldDiscountInfo.type || '';
+        const discountLabel = discountType.toLowerCase() === 'pwd' ? 'PWD' : 'Senior Citizen';
+
+        // Check if ID was verified (changed to true)
+        if (newVerification === true && oldVerification !== true) {
+            addNotification({
+                type: NOTIFICATION_TYPES.DISCOUNT_VERIFIED,
+                title: 'ID Verified Successfully',
+                message: `Your ${discountLabel} ID was verified successfully. Your discount is now active.`,
+                actionRequired: false
+            });
+            return;
+        }
+
+        // Check if ID was declined (idVerificationReason is set and IDverification is false)
+        const oldReason = String(oldDiscountInfo.idVerificationReason || '').trim();
+        const newReason = String(newDiscountInfo.idVerificationReason || '').trim();
+        const reasonChanged = newReason.length > 0 && oldReason !== newReason;
+
+        if (reasonChanged && newVerification !== true) {
+            addNotification({
+                type: NOTIFICATION_TYPES.DISCOUNT_DECLINED,
+                title: 'ID Verification Declined',
+                message: `Your ${discountLabel} ID was declined. Reason: ${newReason}`,
+                actionRequired: true
+            });
+        }
+    }
+
     // Add a new notification to Firestore (customers/{uid}/notifs)
     // Badge only increases when this creates a new unread doc; on refresh we load from Firestore and only count unread
     async function addNotification(payload) {
@@ -244,12 +326,18 @@
             return;
         }
 
-        // Dedupe: same orderId + type within 5 seconds
-        const exists = notifications.some(n =>
-            n.orderId === payload.orderId &&
-            n.type === payload.type &&
-            (Date.now() - n.timestamp) < 5000
-        );
+        // Dedupe: same orderId + type within 5 seconds (for order notifications)
+        // or same type within 5 seconds (for discount/system notifications)
+        const exists = notifications.some(n => {
+            const timeDiff = (Date.now() - n.timestamp) < 5000;
+            if (payload.orderId) {
+                // Order notification: check orderId + type
+                return n.orderId === payload.orderId && n.type === payload.type && timeDiff;
+            } else {
+                // Discount/system notification: check type only
+                return n.type === payload.type && timeDiff;
+            }
+        });
         if (exists) return;
 
         const notifsCol = window.collection(window.doc(window.firebaseDb, 'customers', user.uid), NOTIFS_SUBCOLLECTION);
@@ -615,8 +703,13 @@
             console.warn('Error marking notification as read:', e);
         }
 
+        // Redirect based on notification type
         if (notif.orderId) {
+            // Order notifications redirect to order details
             window.location.href = `order_details.html?orderId=${encodeURIComponent(notif.orderId)}`;
+        } else if (notif.type === NOTIFICATION_TYPES.DISCOUNT_VERIFIED || notif.type === NOTIFICATION_TYPES.DISCOUNT_DECLINED) {
+            // Discount verification notifications redirect to account page
+            window.location.href = 'account.html';
         }
     }
 
@@ -699,6 +792,12 @@
         });
         orderListeners.clear();
         previousOrderStates.clear();
+
+        if (discountInfoUnsubscribe) {
+            try { discountInfoUnsubscribe(); } catch (e) { console.warn('Error unsubscribing discountInfo listener:', e); }
+            discountInfoUnsubscribe = null;
+        }
+        previousDiscountInfo = null;
 
         renderNotifications();
         updateUnreadCount();

@@ -1720,10 +1720,12 @@
     let discountSelfieInput = null;
     let discountIdNameInput = null;
     let discountIdNumberInput = null;
+    let discountIdExpirationInput = null;
     let selfieUploadGroup = null;
     let idPictureGroup = null;
     let idNameGroup = null;
     let idNumberGroup = null;
+    let idExpirationGroup = null;
     let uploadDiscountBtn = null;
     let uploadDiscountBtnText = null;
     let removeDiscountBtn = null;
@@ -2086,6 +2088,7 @@
         const selfieFile = discountSelfieInput?.files?.[0];
         const idName = discountIdNameInput?.value.trim() || '';
         const idNumber = discountIdNumberInput?.value.trim() || '';
+        const idExpiration = discountIdExpirationInput?.value || '';
 
         // Validation
         let hasError = false;
@@ -2191,6 +2194,11 @@
             if (idNumber) {
                 discountInfoData.idNumber = idNumber;
             }
+            
+            // Add ID expiration date if provided (only for PWD)
+            if (idExpiration && discountType === 'pwd') {
+                discountInfoData.idExpiration = idExpiration;
+            }
 
             if (selfieDownloadURL) {
                 discountInfoData.selfieUrl = selfieDownloadURL;
@@ -2213,11 +2221,13 @@
             if (idPictureGroup) idPictureGroup.style.display = 'none';
             if (idNameGroup) idNameGroup.style.display = 'none';
             if (idNumberGroup) idNumberGroup.style.display = 'none';
+            if (idExpirationGroup) idExpirationGroup.style.display = 'none';
             clearDiscountError('discountType');
             clearDiscountError('discountProof');
             clearDiscountError('discountSelfie');
             clearDiscountError('discountIdName');
             clearDiscountError('discountIdNumber');
+            clearDiscountError('discountIdExpiration');
             showDiscountSuccess();
 
             // The real-time listener will update the UI automatically
@@ -3107,10 +3117,12 @@
         discountSelfieInput = document.getElementById('discountSelfie');
         discountIdNameInput = document.getElementById('discountIdName');
         discountIdNumberInput = document.getElementById('discountIdNumber');
+        discountIdExpirationInput = document.getElementById('discountIdExpiration');
         selfieUploadGroup = document.getElementById('selfieUploadGroup');
         idPictureGroup = document.getElementById('idPictureGroup');
         idNameGroup = document.getElementById('idNameGroup');
         idNumberGroup = document.getElementById('idNumberGroup');
+        idExpirationGroup = document.getElementById('idExpirationGroup');
         uploadDiscountBtn = document.getElementById('uploadDiscountBtn');
         uploadDiscountBtnText = document.getElementById('uploadDiscountBtnText');
         removeDiscountBtn = document.getElementById('removeDiscountBtn');
@@ -3135,6 +3147,7 @@
                 }
                 const selectedType = this.value;
                 const isPwdOrSenior = selectedType === 'pwd' || selectedType === 'senior';
+                const isPwd = selectedType === 'pwd';
                 
                 // Show/hide ID picture, ID name, and ID number fields
                 if (idPictureGroup) {
@@ -3145,6 +3158,11 @@
                 }
                 if (idNumberGroup) {
                     idNumberGroup.style.display = isPwdOrSenior ? 'block' : 'none';
+                }
+                
+                // Show/hide ID expiration date field (only for PWD)
+                if (idExpirationGroup) {
+                    idExpirationGroup.style.display = isPwd ? 'block' : 'none';
                 }
                 
                 // Show/hide selfie upload for both PWD and Senior Citizen
@@ -3177,6 +3195,9 @@
                     }
                     if (discountIdNumberInput) {
                         discountIdNumberInput.value = '';
+                    }
+                    if (discountIdExpirationInput) {
+                        discountIdExpirationInput.value = '';
                     }
                     // Clear preview
                     const discountPreviewEl = document.getElementById('discountPreview');
