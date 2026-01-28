@@ -1718,7 +1718,12 @@
     let discountTypeSelect = null;
     let discountProofInput = null;
     let discountSelfieInput = null;
+    let discountIdNameInput = null;
+    let discountIdNumberInput = null;
     let selfieUploadGroup = null;
+    let idPictureGroup = null;
+    let idNameGroup = null;
+    let idNumberGroup = null;
     let uploadDiscountBtn = null;
     let uploadDiscountBtnText = null;
     let removeDiscountBtn = null;
@@ -1882,11 +1887,23 @@
     function showDiscountError(fieldId, message) {
         const errorElement = document.getElementById(fieldId + 'Error');
         if (errorElement) errorElement.textContent = message;
+        
+        // Add error class to the input field
+        const inputElement = document.getElementById(fieldId);
+        if (inputElement) {
+            inputElement.classList.add('error');
+        }
     }
 
     function clearDiscountError(fieldId) {
         const errorElement = document.getElementById(fieldId + 'Error');
         if (errorElement) errorElement.textContent = '';
+        
+        // Remove error class from the input field
+        const inputElement = document.getElementById(fieldId);
+        if (inputElement) {
+            inputElement.classList.remove('error');
+        }
     }
 
     function showDiscountSuccess() {
@@ -2067,6 +2084,8 @@
         const discountType = discountTypeSelect.value.trim();
         const idFile = discountProofInput.files?.[0];
         const selfieFile = discountSelfieInput?.files?.[0];
+        const idName = discountIdNameInput?.value.trim() || '';
+        const idNumber = discountIdNumberInput?.value.trim() || '';
 
         // Validation
         let hasError = false;
@@ -2074,35 +2093,44 @@
             showDiscountError('discountType', 'Please select a discount type');
             hasError = true;
         }
-        if (!idFile) {
-            showDiscountError('discountProof', 'Please select an ID picture to upload');
-            hasError = true;
-        } else {
-            // Check file size (5MB max)
-            const maxSize = 5 * 1024 * 1024; // 5MB
-            if (idFile.size > maxSize) {
-                showDiscountError('discountProof', 'ID picture size must be less than 5MB');
+        
+        // Only validate ID fields if PWD or Senior Citizen is selected
+        if (discountType === 'pwd' || discountType === 'senior') {
+            if (!idFile) {
+                showDiscountError('discountProof', 'Please select an ID picture to upload');
                 hasError = true;
-            }
-            // Check file type
-            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-            if (!validTypes.includes(idFile.type)) {
-                showDiscountError('discountProof', 'Please upload a JPG or PNG file for ID picture');
-                hasError = true;
+            } else {
+                // Check file size (5MB max)
+                const maxSize = 5 * 1024 * 1024; // 5MB
+                if (idFile.size > maxSize) {
+                    showDiscountError('discountProof', 'ID picture size must be less than 5MB');
+                    hasError = true;
+                }
+                // Check file type
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                if (!validTypes.includes(idFile.type)) {
+                    showDiscountError('discountProof', 'Please upload a JPG or PNG file for ID picture');
+                    hasError = true;
+                }
             }
         }
 
-        // Validate selfie if PWD type
-        if (discountType === 'pwd' && selfieFile) {
-            const maxSize = 5 * 1024 * 1024; // 5MB
-            if (selfieFile.size > maxSize) {
-                showDiscountError('discountSelfie', 'Selfie size must be less than 5MB');
+        // Validate selfie if PWD or Senior Citizen type (required for both)
+        if (discountType === 'pwd' || discountType === 'senior') {
+            if (!selfieFile) {
+                showDiscountError('discountSelfie', 'Please upload a selfie');
                 hasError = true;
-            }
-            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-            if (!validTypes.includes(selfieFile.type)) {
-                showDiscountError('discountSelfie', 'Please upload a JPG or PNG file for selfie');
-                hasError = true;
+            } else {
+                const maxSize = 5 * 1024 * 1024; // 5MB
+                if (selfieFile.size > maxSize) {
+                    showDiscountError('discountSelfie', 'Selfie size must be less than 5MB');
+                    hasError = true;
+                }
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                if (!validTypes.includes(selfieFile.type)) {
+                    showDiscountError('discountSelfie', 'Please upload a JPG or PNG file for selfie');
+                    hasError = true;
+                }
             }
         }
 
@@ -2156,6 +2184,14 @@
                 IDverification: false  // Set to false initially, admin will verify
             };
 
+            // Add ID name and ID number if provided
+            if (idName) {
+                discountInfoData.idName = idName;
+            }
+            if (idNumber) {
+                discountInfoData.idNumber = idNumber;
+            }
+
             if (selfieDownloadURL) {
                 discountInfoData.selfieUrl = selfieDownloadURL;
                 discountInfoData.selfiePath = selfiePath;
@@ -2174,9 +2210,14 @@
             if (discountUploadForm) discountUploadForm.reset();
             updateDiscountPreview(null, null);
             if (selfieUploadGroup) selfieUploadGroup.style.display = 'none';
+            if (idPictureGroup) idPictureGroup.style.display = 'none';
+            if (idNameGroup) idNameGroup.style.display = 'none';
+            if (idNumberGroup) idNumberGroup.style.display = 'none';
             clearDiscountError('discountType');
             clearDiscountError('discountProof');
             clearDiscountError('discountSelfie');
+            clearDiscountError('discountIdName');
+            clearDiscountError('discountIdNumber');
             showDiscountSuccess();
 
             // The real-time listener will update the UI automatically
@@ -3064,7 +3105,12 @@
         discountTypeSelect = document.getElementById('discountType');
         discountProofInput = document.getElementById('discountProof');
         discountSelfieInput = document.getElementById('discountSelfie');
+        discountIdNameInput = document.getElementById('discountIdName');
+        discountIdNumberInput = document.getElementById('discountIdNumber');
         selfieUploadGroup = document.getElementById('selfieUploadGroup');
+        idPictureGroup = document.getElementById('idPictureGroup');
+        idNameGroup = document.getElementById('idNameGroup');
+        idNumberGroup = document.getElementById('idNumberGroup');
         uploadDiscountBtn = document.getElementById('uploadDiscountBtn');
         uploadDiscountBtnText = document.getElementById('uploadDiscountBtnText');
         removeDiscountBtn = document.getElementById('removeDiscountBtn');
@@ -3079,13 +3125,31 @@
             discountToggleBtn.addEventListener('click', toggleDiscountSection);
         }
 
-        // Show/hide selfie upload based on discount type
+        // Show/hide fields based on discount type
         if (discountTypeSelect) {
             discountTypeSelect.addEventListener('change', function() {
                 clearDiscountError('discountType');
+                // Remove error class when a valid value is selected
+                if (this.value) {
+                    this.classList.remove('error');
+                }
                 const selectedType = this.value;
+                const isPwdOrSenior = selectedType === 'pwd' || selectedType === 'senior';
+                
+                // Show/hide ID picture, ID name, and ID number fields
+                if (idPictureGroup) {
+                    idPictureGroup.style.display = isPwdOrSenior ? 'block' : 'none';
+                }
+                if (idNameGroup) {
+                    idNameGroup.style.display = isPwdOrSenior ? 'block' : 'none';
+                }
+                if (idNumberGroup) {
+                    idNumberGroup.style.display = isPwdOrSenior ? 'block' : 'none';
+                }
+                
+                // Show/hide selfie upload for both PWD and Senior Citizen
                 if (selfieUploadGroup) {
-                    if (selectedType === 'pwd') {
+                    if (isPwdOrSenior) {
                         selfieUploadGroup.style.display = 'block';
                         if (discountSelfieInput) {
                             discountSelfieInput.setAttribute('required', 'required');
@@ -3096,9 +3160,31 @@
                             discountSelfieInput.removeAttribute('required');
                             discountSelfieInput.value = '';
                         }
-                        // Clear selfie preview if switching away from PWD
+                        // Clear selfie preview if switching away
                         const selfiePreviewRow = document.getElementById('selfiePreviewRow');
                         if (selfiePreviewRow) selfiePreviewRow.style.display = 'none';
+                    }
+                }
+                
+                // Clear ID picture if switching away
+                if (!isPwdOrSenior) {
+                    if (discountProofInput) {
+                        discountProofInput.value = '';
+                        discountProofInput.removeAttribute('required');
+                    }
+                    if (discountIdNameInput) {
+                        discountIdNameInput.value = '';
+                    }
+                    if (discountIdNumberInput) {
+                        discountIdNumberInput.value = '';
+                    }
+                    // Clear preview
+                    const discountPreviewEl = document.getElementById('discountPreview');
+                    if (discountPreviewEl) discountPreviewEl.style.display = 'none';
+                } else {
+                    // Make ID picture required when PWD or Senior Citizen is selected
+                    if (discountProofInput) {
+                        discountProofInput.setAttribute('required', 'required');
                     }
                 }
             });

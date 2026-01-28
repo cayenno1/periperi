@@ -10719,6 +10719,106 @@ body.food-item-page {
   font-size: 0.85rem;
 }
 
+/* Discount form improvements */
+.account-page .discount-upload-form .restaurant-form-group {
+  margin-bottom: 20px;
+}
+
+.account-page .discount-upload-form .restaurant-form-label {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Select dropdown styling - remove red border when not focused/errored */
+.account-page .discount-upload-form select.restaurant-form-input:not(:focus):not(.error) {
+  border-color: #e0e0e0;
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+}
+
+.account-page .discount-upload-form select.restaurant-form-input:not(:focus):not(.error):not([value=""]) {
+  border-color: #d0d0d0;
+  background: #fff;
+  color: #222;
+}
+
+/* File input styling improvements */
+.account-page .discount-upload-form input[type="file"].restaurant-form-input {
+  padding: 12px 16px;
+  cursor: pointer;
+  background: #fff;
+  border: 2px solid #e0e0e0;
+}
+
+.account-page .discount-upload-form input[type="file"].restaurant-form-input:hover {
+  border-color: #d0d0d0;
+  background: #fafafa;
+}
+
+.account-page .discount-upload-form input[type="file"].restaurant-form-input:focus {
+  border-color: #e53935;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(229, 57, 53, 0.1);
+}
+
+.account-page .discount-upload-form input[type="file"].restaurant-form-input::file-selector-button {
+  padding: 8px 16px;
+  margin-right: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #f8f9fa;
+  color: #333;
+  font-weight: 600;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.account-page .discount-upload-form input[type="file"].restaurant-form-input::file-selector-button:hover {
+  background: #e9ecef;
+  border-color: #d0d0d0;
+}
+
+/* Text input improvements */
+.account-page .discount-upload-form input[type="text"].restaurant-form-input {
+  background: #fff;
+  border: 2px solid #e0e0e0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.account-page .discount-upload-form input[type="text"].restaurant-form-input:focus {
+  border-color: #e53935;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(229, 57, 53, 0.1);
+}
+
+/* Ensure ID Name and ID Number fields are perfectly aligned */
+.account-page .discount-upload-form #idNameGroup,
+.account-page .discount-upload-form #idNumberGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.account-page .discount-upload-form #idNameGroup .restaurant-form-label,
+.account-page .discount-upload-form #idNumberGroup .restaurant-form-label {
+  width: 100%;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+  font-size: 1em;
+}
+
+.account-page .discount-upload-form #idNameGroup .restaurant-form-input,
+.account-page .discount-upload-form #idNumberGroup .restaurant-form-input {
+  width: 100%;
+  padding: 16px 20px;
+  box-sizing: border-box;
+}
+
 .account-page .discount-preview,
 .account-page .discount-current-proof {
   margin-top: 16px;

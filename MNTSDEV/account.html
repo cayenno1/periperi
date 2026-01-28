@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>My Account - PABLO'S PERI PERI</title>
+  <link rel="icon" href="logo.jpg" type="image/jpeg">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -168,7 +169,21 @@
                   <span class="error-message" id="discountTypeError"></span>
                 </div>
 
-                <div class="restaurant-form-group mb-3">
+                <!-- ID Name and ID Number fields (shown when PWD or Senior Citizen is selected) -->
+                <div class="restaurant-form-group mb-3" id="idNameGroup" style="display: none;">
+                  <label for="discountIdName" class="restaurant-form-label">ID Name</label>
+                  <input type="text" id="discountIdName" name="discountIdName" class="restaurant-form-input" placeholder="Enter Name">
+                  <span class="error-message" id="discountIdNameError"></span>
+                </div>
+
+                <div class="restaurant-form-group mb-3" id="idNumberGroup" style="display: none;">
+                  <label for="discountIdNumber" class="restaurant-form-label">ID Number</label>
+                  <input type="text" id="discountIdNumber" name="discountIdNumber" class="restaurant-form-input" placeholder="Enter ID Number">
+                  <span class="error-message" id="discountIdNumberError"></span>
+                </div>
+
+                <!-- ID Picture upload (shown when PWD or Senior Citizen is selected) -->
+                <div class="restaurant-form-group mb-3" id="idPictureGroup" style="display: none;">
                   <label for="discountProof" class="restaurant-form-label">Upload ID Picture</label>
                   <div class="file-upload-container">
                     <input type="file" id="discountProof" name="discountProof" class="restaurant-form-input" accept="image/*" required>
@@ -179,7 +194,7 @@
                   <span class="error-message" id="discountProofError"></span>
                 </div>
 
-                <!-- Selfie upload (only for PWD) -->
+                <!-- Selfie upload (for both PWD and Senior Citizen) -->
                 <div class="restaurant-form-group mb-3" id="selfieUploadGroup" style="display: none;">
                   <label for="discountSelfie" class="restaurant-form-label">Upload Selfie</label>
                   <div class="file-upload-container">

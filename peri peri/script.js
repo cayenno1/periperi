@@ -14040,6 +14040,10 @@ async function updateIdVerificationTab(customerId) {
         let foundSelfiePath = '';
         let discountInfo = customerData.discountInfo || {};
         
+        // Get ID name and number from discountInfo or top-level fields
+        const idName = discountInfo.idName || customerData.idName || '';
+        const idNumber = discountInfo.idNumber || customerData.idNumber || '';
+        
         if (discountInfo && typeof discountInfo === 'object') {
             // Check for proofUrl first (full URL) - ID picture
             foundImageUrl = discountInfo.proofUrl || discountInfo.proofURL || '';
@@ -14204,6 +14208,31 @@ async function updateIdVerificationTab(customerId) {
                                 <strong style="color: #856404; display: block; margin-bottom: 4px;">Decline Reason</strong>
                                 <p style="margin: 0; color: #856404; line-height: 1.5;">${escapeHtml(verificationReason)}</p>
                             </div>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${(idName || idNumber) ? `
+                    <div style="background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-info-circle" style="color: #fff; font-size: 18px;"></i>
+                            </div>
+                            <h6 style="margin: 0; color: #333; font-weight: 600; font-size: 16px;">ID Information</h6>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                            ${idName ? `
+                                <div style="background: #f8f9fa; border-radius: 8px; padding: 16px;">
+                                    <div style="font-size: 12px; color: #666; margin-bottom: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">ID Name</div>
+                                    <div style="font-size: 16px; color: #333; font-weight: 600;">${escapeHtml(idName)}</div>
+                                </div>
+                            ` : ''}
+                            ${idNumber ? `
+                                <div style="background: #f8f9fa; border-radius: 8px; padding: 16px;">
+                                    <div style="font-size: 12px; color: #666; margin-bottom: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">ID Number</div>
+                                    <div style="font-size: 16px; color: #333; font-weight: 600; font-family: monospace; letter-spacing: 1px;">${escapeHtml(idNumber)}</div>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 ` : ''}
