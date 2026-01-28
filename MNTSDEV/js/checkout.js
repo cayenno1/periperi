@@ -1,7 +1,4 @@
-// ============================================
-// CHECKOUT PAGE FUNCTIONALITY
-// Handles checkout form, payment, and order placement
-// ============================================
+
 
 (function() {
     'use strict';

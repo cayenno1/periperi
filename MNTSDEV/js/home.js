@@ -1,7 +1,4 @@
-// ============================================
-// HOME PAGE FUNCTIONALITY
-// Home page specific JavaScript
-// ============================================
+
 
 (function() {
     'use strict';

@@ -1,7 +1,4 @@
-// ============================================
-// FOOD ITEM PAGE FUNCTIONALITY
-// Food item detail page specific JavaScript
-// ============================================
+
 
 (function() {
     'use strict';

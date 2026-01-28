@@ -1,7 +1,4 @@
-// ============================================
-// CART REVIEW PAGE FUNCTIONALITY
-// Handles cart display, item management, and navigation to checkout
-// ============================================
+
 
 (function() {
     'use strict';

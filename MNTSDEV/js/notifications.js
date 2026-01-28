@@ -1,11 +1,4 @@
-// ============================================
-// NOTIFICATION SYSTEM
-// Handles order notifications, system updates, and declined order recomply
-// Persisted in Firestore: customers/{uid}/notifs (subcollection)
-// - Read/mark-all-as-read state is saved; no re-notifying on refresh for read items
-// - Badge only shows for NEW unread notifications
-// - Notifications auto-deleted after 7 days (Cloud Function)
-// ============================================
+
 
 (function() {
     'use strict';

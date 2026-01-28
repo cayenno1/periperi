@@ -1,7 +1,4 @@
-// ============================================
-// COMPLETION RECEIPT PAGE FUNCTIONALITY
-// Handles order completion page and receipt display
-// ============================================
+
 
 (function() {
     'use strict';

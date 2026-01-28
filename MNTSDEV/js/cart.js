@@ -1,7 +1,4 @@
-// ============================================
-// CART FUNCTIONALITY
-// Handles both guest cart (localStorage) and Firestore cart
-// ============================================
+
 
 (function() {
     'use strict';

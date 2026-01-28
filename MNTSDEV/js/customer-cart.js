@@ -1,7 +1,4 @@
-// ============================================
-// CUSTOMER-SIDE ONLINE ORDERING SYSTEM
-// Complete cart functionality with linked sauce selection
-// ============================================
+
 
 (function() {
     'use strict';

@@ -1,7 +1,4 @@
-// ============================================
-// FIRESTORE OPERATIONS
-// All Firestore database operations
-// ============================================
+
 
 (function() {
     'use strict';
