@@ -423,7 +423,6 @@
                                 </button>
                                 <div class="dropdown-menu" id="profile${staffId}Dropdown">
                                     <a href="view-user-profile.html?id=${staffId}" class="dropdown-item">View Profile</a>
-                                    ${!isCurrentUser ? '<a href="#" class="dropdown-item" onclick="event.preventDefault(); restrictStaffAccess(\'' + staffId + '\'); return false;">Restrict Access</a>' : ''}
                                 </div>
                             </div>
                         `;

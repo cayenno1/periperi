@@ -109,6 +109,30 @@ function logout() {
     redirectToLogin();
 }
 
+// Attach logout handlers to all logout buttons
+function attachLogoutHandlers() {
+    // Find all elements that might be logout buttons
+    const allElements = document.querySelectorAll('a.dropdown-item, .dropdown-item, a[href="#"]');
+    
+    allElements.forEach(element => {
+        const text = element.textContent.trim().toLowerCase();
+        // Check if this is a logout button
+        if (text === 'logout' || text.includes('logout')) {
+            // Check if handler is already attached to avoid duplicates
+            if (!element.hasAttribute('data-logout-handler-attached')) {
+                element.setAttribute('data-logout-handler-attached', 'true');
+                
+                // Attach logout handler
+                element.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    logout();
+                });
+            }
+        }
+    });
+}
+
 // Check role-based access
 function checkRoleAccess(session, requiredRoles) {
     if (!requiredRoles || requiredRoles.length === 0) {
@@ -241,6 +265,9 @@ async function initSessionCheck() {
     
     // Hide navigation items based on role (update after Firebase verification)
     hideRestrictedNavigation(updatedSession);
+    
+    // Attach logout handlers to all logout buttons
+    attachLogoutHandlers();
 }
 
 // Update UI with session information
@@ -313,8 +340,15 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
         hideRestrictedNavigationImmediately();
         initSessionCheck();
+        // Also attach logout handlers when DOM is ready
+        attachLogoutHandlers();
     });
 } else {
     initSessionCheck();
+    // Attach logout handlers immediately if DOM is already ready
+    attachLogoutHandlers();
 }
+
+// Also attach logout handlers after a short delay to catch dynamically added elements
+setTimeout(attachLogoutHandlers, 500);
 
