@@ -13,6 +13,8 @@ import {
   EmailAuthProvider,
   deleteUser,
   sendPasswordResetEmail,
+  linkWithCredential,
+  fetchSignInMethodsForEmail,
   // OAuth / Social providers
   signInWithPopup,
   GoogleAuthProvider,
@@ -98,6 +100,8 @@ window.reauthenticateWithCredential = reauthenticateWithCredential;
 window.EmailAuthProvider = EmailAuthProvider;
 window.deleteUser = deleteUser;
 window.sendPasswordResetEmail = sendPasswordResetEmail;
+window.linkWithCredential = linkWithCredential;
+window.fetchSignInMethodsForEmail = fetchSignInMethodsForEmail;
 
 window.collection = collection;
 window.getDocs = getDocs;

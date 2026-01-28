@@ -331,6 +331,14 @@
                     'Create Account'
                 );
 
+                // Handle account linking scenario
+                if (result.error?.code === 'auth/email-already-in-use' && result.error?.canLink) {
+                    const errorMessage = result.error.message || 'This email is already registered with Google. Please sign in with Google first, then you can link your email/password account.';
+                    window.auth.showError('email', errorMessage);
+                    // Optionally redirect to login page
+                    return;
+                }
+
                 const errorMessage = window.auth.getErrorMessage(result.error);
                 const errorField = result.error?.code === 'auth/weak-password' ? 'password' : 'email';
                 window.auth.showError(errorField, errorMessage);
@@ -376,6 +384,13 @@
         oauthButtons.forEach((btn) => {
             try { btn.disabled = false; } catch (e) {}
         });
+
+        // Handle account linking scenario
+        if (result.error?.code === 'auth/account-exists-with-different-credential' && result.error?.canLink) {
+            const errorMessage = result.error.message || 'This email is already registered with email/password. Please sign in with your password first, then you can link your Google account.';
+            window.auth.showError('email', errorMessage);
+            return;
+        }
 
         const errorMessage = window.auth.getErrorMessage(result.error);
         window.auth.showError('email', errorMessage);

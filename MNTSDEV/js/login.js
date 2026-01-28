@@ -286,6 +286,18 @@
             try { btn.disabled = false; } catch (e) {}
         });
 
+        // Handle account linking scenario
+        if (result.error?.code === 'auth/account-exists-with-different-credential' && result.error?.canLink) {
+            const errorMessage = result.error.message || 'This email is already registered with email/password. Please sign in with your password first, then you can link your Google account.';
+            window.auth.showError('email', errorMessage);
+            // Show additional info about linking
+            const emailInput = document.getElementById('email');
+            if (emailInput) {
+                emailInput.value = result.error.email || '';
+            }
+            return;
+        }
+
         const errorMessage = window.auth.getErrorMessage(result.error);
         window.auth.showError('email', errorMessage);
     }

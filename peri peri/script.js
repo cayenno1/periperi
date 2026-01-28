@@ -14051,6 +14051,7 @@ async function updateIdVerificationTab(customerId) {
         // Get ID expiration date (only for PWD IDs)
         let idExpiration = null;
         let idExpirationText = 'N/A';
+        let isIdExpired = false;
         if (isPWD) {
             const expirationDate = discountInfo.idExpiration || customerData.idExpiration || null;
             if (expirationDate) {
@@ -14063,6 +14064,12 @@ async function updateIdVerificationTab(customerId) {
                         month: 'long', 
                         day: 'numeric'
                     });
+                    // Check if ID is expired
+                    const now = new Date();
+                    now.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+                    const expDateOnly = new Date(expDate);
+                    expDateOnly.setHours(0, 0, 0, 0);
+                    isIdExpired = expDateOnly < now;
                 } catch (e) {
                     console.warn('Error parsing expiration date:', e);
                     idExpirationText = 'Invalid Date';
@@ -14259,9 +14266,12 @@ async function updateIdVerificationTab(customerId) {
                                     <div style="font-size: 16px; color: #333; font-weight: 600; font-family: monospace; letter-spacing: 1px;">${escapeHtml(idNumber)}</div>
                                 </div>
                             ` : ''}
-                            <div style="background: #f8f9fa; border-radius: 8px; padding: 16px;">
+                            <div style="background: #f8f9fa; border-radius: 8px; padding: 16px; ${isIdExpired ? 'border: 2px solid #dc3545; background: #fff5f5;' : ''}">
                                 <div style="font-size: 12px; color: #666; margin-bottom: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">ID Expiration</div>
-                                <div style="font-size: 16px; color: #333; font-weight: 600;">${escapeHtml(idExpirationText)}</div>
+                                <div style="font-size: 16px; color: ${isIdExpired ? '#dc3545' : '#333'}; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                    ${escapeHtml(idExpirationText)}
+                                    ${isIdExpired ? '<span style="background: #dc3545; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700;">EXPIRED</span>' : ''}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -14320,13 +14330,33 @@ async function updateIdVerificationTab(customerId) {
                         </button>
                     </div>
                 ` : `
-                    <div class="id-verification-actions" style="text-align: center; padding: 32px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                        <div style="display: inline-flex; align-items: center; gap: 12px; color: #155724;">
-                            <i class="fas fa-check-circle" style="font-size: 32px;"></i>
-                            <div style="text-align: left;">
-                                <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">ID Verification Complete</div>
-                                <div style="font-size: 14px; opacity: 0.8;">This ID has been ${verificationStatus === 'verified' ? 'verified' : verificationStatus}</div>
+                    ${isPWD && isIdExpired && verificationStatus === 'verified' ? `
+                        <div class="alert alert-danger" style="margin-bottom: 24px; padding: 20px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <div style="display: flex; align-items: start; gap: 12px;">
+                                <i class="fas fa-exclamation-triangle" style="color: #dc3545; font-size: 24px; margin-top: 2px;"></i>
+                                <div style="flex: 1;">
+                                    <strong style="color: #721c24; display: block; margin-bottom: 8px; font-size: 16px;">PWD ID Has Expired</strong>
+                                    <p style="margin: 0 0 16px 0; color: #721c24; line-height: 1.5;">This PWD ID expired on ${escapeHtml(idExpirationText)}. The discount should be revoked.</p>
+                                </div>
                             </div>
+                        </div>
+                    ` : ''}
+                    <div class="id-verification-actions" style="padding: 32px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                            <div style="display: flex; align-items: center; gap: 12px; color: #155724;">
+                                <i class="fas fa-check-circle" style="font-size: 32px; color: #28a745;"></i>
+                                <div style="text-align: center;">
+                                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">ID Verification Complete</div>
+                                    <div style="font-size: 14px; opacity: 0.8;">This ID has been ${verificationStatus === 'verified' ? 'verified' : verificationStatus}</div>
+                                </div>
+                            </div>
+                            ${isPWD && verificationStatus === 'verified' ? `
+                                <div style="width: 100%; margin-top: 8px; padding-top: 20px; border-top: 1px solid rgba(21, 87, 36, 0.2); display: flex; justify-content: center;">
+                                    <button class="btn btn-danger" onclick="revokePwdDiscount('${customerId}')" style="min-width: 180px; padding: 12px 24px; font-size: 15px; font-weight: 600; border-radius: 8px; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); cursor: pointer; color: #fff; display: inline-flex; align-items: center; justify-content: center;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
+                                        <i class="fas fa-ban" style="margin-right: 8px;"></i> Revoke Discount
+                                    </button>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 `}
@@ -14496,6 +14526,87 @@ async function confirmId(customerId, imageUrl) {
     } catch (error) {
         console.error('Error confirming ID:', error);
         showNotification('Failed to confirm ID: ' + error.message, 'error');
+    }
+}
+
+async function revokePwdDiscount(customerId) {
+    if (!confirm('Are you sure you want to revoke the PWD discount? This will remove the discount eligibility for this customer.')) {
+        return;
+    }
+    
+    try {
+        if (!isFirestoreReady()) {
+            await waitForFirebaseReady();
+        }
+        
+        const fns = window.firestoreFunctions;
+        if (!fns || !window.db) {
+            throw new Error('Firestore not ready');
+        }
+        
+        // Get current user info for revokedBy
+        const session = sessionStorage.getItem('staffSession') || localStorage.getItem('staffSession');
+        let revokedBy = 'Admin';
+        if (session) {
+            try {
+                const staffSession = JSON.parse(session);
+                if (staffSession.firstName && staffSession.lastName) {
+                    revokedBy = `${staffSession.firstName} ${staffSession.lastName}`;
+                } else if (staffSession.email) {
+                    revokedBy = staffSession.email;
+                }
+            } catch (e) {
+                console.warn('Could not parse staff session:', e);
+            }
+        }
+        
+        const customerDocRef = fns.doc(window.db, 'customers', customerId);
+        
+        // Get current customer data
+        const customerSnapshot = await fns.getDoc(customerDocRef);
+        const customerData = customerSnapshot.exists() ? customerSnapshot.data() : {};
+        const currentDiscountInfo = customerData.discountInfo || {};
+        
+        // Revoke discount by setting IDverification to false and adding revocation reason
+        await fns.updateDoc(customerDocRef, {
+            'discountInfo.IDverification': false,
+            'discountInfo.idRevokedAt': fns.serverTimestamp(),
+            'discountInfo.idRevokedBy': revokedBy,
+            'discountInfo.idVerificationReason': 'PWD ID expired - discount revoked',
+            // Also update top-level fields for compatibility
+            idVerificationStatus: 'revoked',
+            idRevokedAt: fns.serverTimestamp(),
+            idRevokedBy: revokedBy,
+            idVerificationReason: 'PWD ID expired - discount revoked'
+        });
+        
+        // Log admin activity for discount revocation
+        if (typeof logAdminActivity === 'function') {
+            const displayName = customerData.fullName || customerData.name || customerData.email || customerId;
+            logAdminActivity({
+                action: 'pwd_discount_revoke',
+                entityType: 'customer',
+                entityId: customerId,
+                entityName: displayName || customerId,
+                description: `PWD discount revoked for ${displayName || customerId} due to expired ID.`,
+                metadata: {
+                    revokedBy,
+                    reason: 'PWD ID expired'
+                }
+            });
+        }
+
+        showNotification('PWD discount revoked successfully', 'success');
+        
+        // Refresh the customer data and update the tab/list so badges update
+        await loadCustomers();
+        if (typeof renderCustomersList === 'function') {
+            renderCustomersList();
+        }
+        await updateIdVerificationTab(customerId);
+    } catch (error) {
+        console.error('Error revoking PWD discount:', error);
+        showNotification('Failed to revoke discount: ' + error.message, 'error');
     }
 }
 
