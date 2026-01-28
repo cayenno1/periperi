@@ -802,42 +802,14 @@ function selectServiceType(type) {
         btn.classList.remove('active');
     });
     
-    const tableNumberSection = document.getElementById('tableNumberSection');
-    
     if (type === 'dine-in') {
         document.getElementById('dineInBtn').classList.add('active');
-        // Show table number section for dine-in
-        if (tableNumberSection) {
-            tableNumberSection.style.display = 'flex';
-        }
     } else if (type === 'take-out') {
         document.getElementById('takeOutBtn').classList.add('active');
-        // Hide table number section for take-out
-        if (tableNumberSection) {
-            tableNumberSection.style.display = 'none';
-        }
-        // Clear table number when switching to take-out
-        const tableInput = document.getElementById('posTableNumber');
-        if (tableInput) {
-            tableInput.value = '';
-        }
     }
 }
 
-// Validate table number (1-10)
-function validateTableNumber() {
-    const tableInput = document.getElementById('posTableNumber');
-    if (!tableInput) return;
-    
-    let value = parseInt(tableInput.value, 10);
-    
-    if (isNaN(value) || value < 1) {
-        tableInput.value = '';
-    } else if (value > 10) {
-        tableInput.value = 10;
-        alert('Maximum table number is 10.');
-    }
-}
+// Table number validation removed - no longer required for dine-in
 
 // Select payment method
 function selectPaymentMethod(method) {
@@ -941,7 +913,6 @@ function clearAll() {
         posCart = [];
         document.getElementById('posCashReceived').value = '';
         document.getElementById('posCustomerName').value = '';
-        document.getElementById('posTableNumber').value = '';
         document.getElementById('posDiscountToggle').checked = false;
         document.getElementById('posProductSearch').value = '';
         selectPaymentMethod('cash'); // Reset to cash
@@ -986,17 +957,8 @@ async function processPayment() {
         }
     }
     
-    // Get table number (only for dine-in, 1-10)
+    // Table number is no longer required for dine-in orders
     let tableNumber = null;
-    if (posServiceType === 'dine-in') {
-        const tableInput = document.getElementById('posTableNumber').value.trim();
-        if (tableInput) {
-            const tableNum = parseInt(tableInput, 10);
-            if (!isNaN(tableNum) && tableNum >= 1 && tableNum <= 10) {
-                tableNumber = tableNum.toString();
-            }
-        }
-    }
     
     try {
         if (!isFirestoreReady()) {
@@ -1123,7 +1085,6 @@ async function processPayment() {
         posCart = [];
         document.getElementById('posCashReceived').value = '';
         document.getElementById('posCustomerName').value = '';
-        document.getElementById('posTableNumber').value = '';
         document.getElementById('posDiscountToggle').checked = false;
         selectPaymentMethod('cash'); // Reset to cash
         selectServiceType('dine-in'); // Reset to dine-in
