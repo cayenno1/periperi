@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Yosef Capalaran — UI/UX & Graphic Designer</title>
+  <meta name="description" content="Portfolio of Yosef Capalaran: UI/UX design, graphic art and projects." />
+  <meta name="theme-color" content="#f7f5f0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <header class="nav-wrap">
+    <nav class="nav" aria-label="Main">
+      <a href="#top" class="logo" aria-label="Yosef Capalaran, home"><span class="logo-mark">YC</span><span class="logo-text">Yosef Capalaran</span></a>
+      <ul class="nav-links">
+        <li><a href="#uiux">UI/UX</a></li>
+        <li><a href="#graphics">Graphic Art</a></li>
+        <li><a href="#projects">Projects</a></li>
+      </ul>
+      <a href="#contact" class="btn btn-dark btn-sm">Get in touch</a>
+    </nav>
+  </header>
+
+  <main id="top">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="blob blob-a"></div>
+      <div class="blob blob-b"></div>
+      <div class="blob blob-c"></div>
+
+      <div class="hero-inner">
+        <p class="eyebrow reveal">Portfolio · 2026</p>
+        <h1 class="reveal">Design that feels<br /><em>personal</em>, built to be used.</h1>
+        <p class="lead reveal">I'm Yosef — a UI/UX designer and graphic artist crafting clear interfaces, bold visuals and thoughtful digital experiences.</p>
+        <div class="hero-cta reveal">
+          <a href="#uiux" class="btn btn-dark">See my work</a>
+          <a href="#contact" class="btn btn-ghost">Contact me</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- UI / UX -->
+    <section id="uiux" class="section">
+      <div class="container">
+        <header class="section-head reveal">
+          <span class="section-num">01</span>
+          <div>
+            <h2>UI/UX Design</h2>
+            <p>Case studies and screens — from research and flows to polished, high-fidelity interfaces.</p>
+          </div>
+        </header>
+
+        <div class="uiux-projects">
+          <article class="uiux-project reveal" data-dir="uiuxProjects" data-base="donut">
+            <div class="up-info">
+              <div class="tags"><span>Mobile App</span><span>3D Assets</span><span>PBR Textures</span></div>
+              <h3>Donut — Texture Library</h3>
+              <p>A mobile app texture library that gives 3D artists quick access to PBR textures for modeling. Every asset in this project, including the donut and its 3D models, was made by me.</p>
+            </div>
+            <div class="screens" data-count="3"><p class="empty-note">Add donut1.png, donut2.png… to the uiuxProjects folder</p></div>
+          </article>
+
+          <article class="uiux-project reveal" data-dir="uiuxProjects" data-base="plant">
+            <div class="up-info">
+              <div class="tags"><span>E-commerce</span><span>Web</span><span>Experience Design</span></div>
+              <h3>Plant Shop</h3>
+              <p>An online plant shop whose interface feels like wandering a library or a cozy home, so choosing a plant becomes an experience instead of a chore.</p>
+            </div>
+            <div class="screens" data-count="3"><p class="empty-note">Add plant1.png, plant2.png… to the uiuxProjects folder</p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRAPHIC ART -->
+    <section id="graphics" class="section section-tint">
+      <div class="container">
+        <header class="section-head reveal">
+          <span class="section-num">02</span>
+          <div>
+            <h2>Graphic Art</h2>
+            <p>My illustrations. Click any piece to view it larger.</p>
+          </div>
+        </header>
+
+        <div class="gallery masonry" id="gallery">
+          <p class="empty-note">Add your illustrations to the graphicArt folder, then list their file names in script.js</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROJECTS -->
+    <section id="projects" class="section">
+      <div class="container">
+        <header class="section-head reveal">
+          <span class="section-num">03</span>
+          <div>
+            <h2>Projects</h2>
+            <p>Things I've built, shipped and learned from.</p>
+          </div>
+        </header>
+
+        <ul class="projects">
+          <li class="project reveal">
+            <span class="p-num">01</span>
+            <div class="p-main">
+              <h3>HalamanHub</h3>
+              <p>A smart irrigation and online shopping platform built for Agnay Farm in Batangas. It tracks soil moisture, salinity, EC and NPK levels, and uses collected rainwater for watering.</p>
+              <div class="tags"><span>IoT</span><span>React</span><span>Express</span><span>MongoDB</span><span>Tailwind CSS</span></div>
+            </div>
+            <div class="p-links">
+              <a href="https://github.com/Zzzzepol/PBL-HalamanHub" target="_blank" rel="noopener">GitHub ↗</a>
+            </div>
+          </li>
+          <li class="project reveal">
+            <span class="p-num">02</span>
+            <div class="p-main">
+              <h3>Pablo Peri Peri Ordering</h3>
+              <p>An online ordering system for Pablo Peri Peri in North Caloocan, letting customers browse the menu and place orders from their phones.</p>
+              <div class="tags"><span>HTML</span><span>CSS</span><span>JavaScript</span><span>PHP</span><span>React</span></div>
+            </div>
+            <div class="p-links">
+              <a href="https://github.com/cayenno1/periperi" target="_blank" rel="noopener">GitHub ↗</a>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- CONTACT (bottom of page) -->
+    <section id="contact" class="contact">
+      <div class="blob blob-d"></div>
+      <div class="container contact-inner">
+        <p class="eyebrow light reveal">Contact</p>
+        <h2 class="contact-title reveal">Let's make something<br /><em>worth looking at.</em></h2>
+        <p class="contact-lead reveal">Open to freelance work, collaborations and full-time opportunities. Reach out any time.</p>
+
+        <div class="contact-cards reveal">
+          <div class="contact-card">
+            <span class="c-label">Email</span>
+            <a class="c-value" href="mailto:yosefcapalaran26@gmail.com">yosefcapalaran26@gmail.com</a>
+            <div class="c-actions">
+              <a class="btn btn-light btn-sm" href="mailto:yosefcapalaran26@gmail.com">Send email</a>
+              <button class="btn btn-outline btn-sm" data-copy="yosefcapalaran26@gmail.com" type="button">Copy</button>
+            </div>
+          </div>
+          <div class="contact-card">
+            <span class="c-label">Phone</span>
+            <a class="c-value" href="tel:+639695384477">0969 538 4477</a>
+            <div class="c-actions">
+              <a class="btn btn-light btn-sm" href="tel:+639695384477">Call</a>
+              <button class="btn btn-outline btn-sm" data-copy="09695384477" type="button">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <footer class="footer">
+          <span>© <span id="year">2026</span> Yosef Capalaran</span>
+          <a href="#top">Back to top ↑</a>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <!-- LIGHTBOX -->
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lb-close" type="button" aria-label="Close">×</button>
+    <img alt="" id="lb-img" />
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">Copied!</div>
+
+  <script src="script.js"></script>
+</body>
+</html>
